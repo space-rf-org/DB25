@@ -1,20 +1,38 @@
-# PostgreSQL Query Library (C++17)
+# DB25: HTAP Database System (Uses PostgreSQL Query Library Adapted for C++17)
 
-A comprehensive C++17 library that integrates with `libpg_query` to provide SQL query parsing, validation, and database schema management capabilities.
+DB25 is a modern Hybrid Transactional/Analytical Processing (HTAP) database system built on the PostgreSQL Query Library foundation. It provides a comprehensive C++17 implementation that unifies OLTP and OLAP workloads, featuring SQL query parsing, logical/physical planning, vectorized execution, and computational storage integration.
 
 ## Features
 
+### Core Database Engine
 - **SQL Query Parsing**: Parse and validate SQL queries using libpg_query
 - **Query Normalization**: Normalize queries and generate fingerprints
 - **Schema Management**: Define and manage complete database schemas
 - **Query Validation**: Validate queries against defined schemas
 - **Query Analysis**: Analyze query structure and dependencies
 - **Index Suggestions**: Get optimization recommendations
+
+### HTAP Query Processing Pipeline
 - **Logical Planning**: Advanced query planning with cost-based optimization
+- **Physical Planning**: Convert logical plans to executable physical plans
+- **Physical Execution Engine**: Iterator-based execution with vectorized processing
+- **Workload Classification**: Intelligent OLTP/OLAP query routing
+- **Dual Storage Support**: Row-oriented (OLTP) and column-oriented (OLAP) processing
+
+### Physical Operators
+- **Scan Operators**: Sequential scan, index scan with filter pushdown
+- **Join Algorithms**: Nested loop join, hash join with build/probe phases
+- **Sort Operations**: In-memory and external sort algorithms
+- **Aggregation**: Hash-based GROUP BY processing
+- **Parallel Execution**: Multi-threaded operator execution
+- **Memory Management**: Work memory limits and spill-to-disk strategies
+
+### Advanced Features
 - **Plan Visualization**: PostgreSQL-style execution plan display
-- **Join Algorithms**: Support for nested loop, hash, and merge joins
 - **Cost Estimation**: Sophisticated cost modeling for query optimization
 - **Plan Optimization**: Predicate pushdown, join reordering, and other optimizations
+- **Vectorized Execution**: Batch-based tuple processing for analytical workloads
+- **Computational Storage**: Framework for near-data processing integration
 - **Complete E-commerce Schema**: Ready-to-use database schema example
 
 ## Prerequisites
@@ -117,17 +135,28 @@ lib_pg_cpp/
 │   ├── simple_schema.hpp       # Simple schema example
 │   ├── query_executor.hpp      # Query validation and analysis
 │   ├── logical_plan.hpp        # Logical plan node definitions
-│   └── query_planner.hpp       # Advanced query planning
+│   ├── query_planner.hpp       # Advanced query planning
+│   ├── physical_plan.hpp       # Physical plan node definitions
+│   ├── physical_planner.hpp    # Logical to physical plan conversion
+│   └── execution_engine.hpp    # Physical execution engine
 ├── src/                     # Source files
 │   ├── pg_query_wrapper.cpp
 │   ├── database.cpp
 │   ├── simple_schema.cpp
 │   ├── query_executor.cpp
 │   ├── logical_plan.cpp
-│   └── query_planner.cpp
+│   ├── query_planner.cpp
+│   ├── physical_plan.cpp       # Physical plan implementation
+│   ├── physical_planner.cpp    # Physical plan generation
+│   └── execution_engine.cpp    # Execution engine implementation
 ├── examples/               # Example applications
 │   ├── main.cpp               # Basic functionality demo
-│   └── planning_demo.cpp      # Logical planning demo
+│   ├── planning_demo.cpp      # Logical planning demo
+│   └── execution_demo.cpp     # Physical execution demo
+├── docs/                   # Documentation
+│   ├── query_engine_architecture.tex  # Comprehensive technical documentation
+│   ├── build_pdf.sh          # Documentation build script
+│   └── README.md             # Documentation guide
 ├── CMakeLists.txt         # CMake configuration
 ├── Makefile              # Make configuration
 └── README.md            # This file
@@ -262,6 +291,80 @@ config.work_mem = 1024 * 1024; // 1MB
 planner.set_config(config);
 ```
 
+### Physical Planning and Execution
+
+```cpp
+#include "physical_planner.hpp"
+#include "execution_engine.hpp"
+
+auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
+pg::QueryPlanner logical_planner(schema);
+pg::PhysicalPlanner physical_planner(schema);
+
+// Create logical plan
+std::string query = "SELECT u.name, p.price FROM users u JOIN products p ON u.id = p.user_id WHERE p.price > 100";
+auto logical_plan = logical_planner.create_plan(query);
+
+// Convert to physical plan
+auto physical_plan = physical_planner.create_physical_plan(logical_plan);
+
+// Display physical execution plan
+std::cout << "Physical Execution Plan:" << std::endl;
+std::cout << physical_plan.to_string() << std::endl;
+
+// Execute the plan
+pg::ExecutionEngine executor(schema);
+auto execution_context = executor.create_context();
+
+// Execute and get results
+auto result_iterator = executor.execute(physical_plan, execution_context);
+while (auto batch = result_iterator.next()) {
+    for (const auto& row : batch->rows) {
+        for (const auto& value : row) {
+            std::cout << value << "\t";
+        }
+        std::cout << std::endl;
+    }
+}
+
+// Get execution statistics
+auto stats = execution_context.get_statistics();
+std::cout << "Execution Statistics:" << std::endl;
+std::cout << "Rows processed: " << stats.rows_processed << std::endl;
+std::cout << "Memory used: " << stats.memory_used_mb << " MB" << std::endl;
+std::cout << "Execution time: " << stats.execution_time_ms << " ms" << std::endl;
+```
+
+### HTAP Workload Processing
+
+```cpp
+#include "htap_engine.hpp"
+
+// Create HTAP engine with workload classification
+pg::HTAPEngine htap_engine(schema);
+
+// Configure for mixed workloads
+pg::HTAPConfig config;
+config.oltp_priority = 0.7;  // Prioritize transactional workloads
+config.analytical_timeout_ms = 5000;
+config.enable_real_time_analytics = true;
+htap_engine.set_config(config);
+
+// Execute transactional query (high priority)
+std::string oltp_query = "INSERT INTO orders (user_id, total) VALUES (123, 99.99)";
+auto oltp_result = htap_engine.execute_transactional(oltp_query);
+
+// Execute analytical query (processed in parallel)
+std::string olap_query = "SELECT category, AVG(price) FROM products GROUP BY category";
+auto olap_result = htap_engine.execute_analytical(olap_query);
+
+// Real-time analytics on live data
+auto analytics_stream = htap_engine.create_analytics_stream("orders");
+analytics_stream.add_aggregation("total_revenue", "SUM(total)");
+analytics_stream.add_aggregation("order_count", "COUNT(*)");
+auto live_metrics = analytics_stream.get_current_metrics();
+```
+
 ## Database Schema
 
 The library includes a complete e-commerce database schema with the following tables:
@@ -341,9 +444,42 @@ Each table includes appropriate:
 - **UpdateNode**: UPDATE operations
 - **DeleteNode**: DELETE operations
 
+### PhysicalPlanner Class
+
+- `PhysicalPlan create_physical_plan(const LogicalPlan& logical_plan)`: Convert logical to physical plan
+- `void set_execution_config(const ExecutionConfig& config)`: Configure execution parameters
+- `std::vector<PhysicalPlan> generate_alternatives(const LogicalPlan& plan)`: Generate alternative physical plans
+- `void estimate_physical_costs(PhysicalPlanNodePtr node)`: Estimate physical execution costs
+
+### ExecutionEngine Class
+
+- `ExecutionContext create_context()`: Create execution context
+- `ResultIterator execute(const PhysicalPlan& plan, ExecutionContext& context)`: Execute physical plan
+- `ExecutionStatistics get_statistics(const ExecutionContext& context)`: Get execution statistics
+- `void set_memory_limit(size_t memory_mb)`: Set memory limits for execution
+- `void enable_parallel_execution(int worker_threads)`: Configure parallel execution
+
+### Physical Operator Types
+
+- **PhysicalSequentialScanNode**: Table scan with filter pushdown
+- **PhysicalIndexScanNode**: B+ tree index scan
+- **PhysicalNestedLoopJoinNode**: Iterator-based nested loop join
+- **PhysicalHashJoinNode**: Hash join with build/probe phases
+- **PhysicalSortNode**: In-memory and external sort
+- **PhysicalAggregationNode**: Hash-based GROUP BY aggregation
+- **PhysicalParallelScanNode**: Multi-threaded table scan
+- **PhysicalMaterializeNode**: Materialize intermediate results
+
+### HTAP Engine Classes
+
+- **HTAPEngine**: Main HTAP query processing engine
+- **WorkloadClassifier**: Automatic OLTP/OLAP query classification
+- **ResourceManager**: Dynamic resource allocation between workloads
+- **ComputationalStorageInterface**: Near-data processing integration
+
 ## Running the Examples
 
-The project includes two comprehensive example programs:
+The project includes three comprehensive example programs:
 
 ### Basic Example
 ```bash
@@ -374,9 +510,25 @@ The planning demo demonstrates:
 5. **Cost Estimation**: Analyze costs for different table sizes and join algorithms
 6. **Join Algorithm Selection**: Compare nested loop vs hash joins
 
+### Physical Execution Demo
+```bash
+# Build and run execution demo
+make execution_demo
+./build/execution_demo
+```
+
+The execution demo demonstrates:
+1. **Physical Plan Generation**: Convert logical plans to executable physical plans
+2. **Iterator-Based Execution**: Volcano-style execution model with physical operators
+3. **Vectorized Processing**: Batch-based tuple processing for analytical workloads
+4. **Parallel Execution**: Multi-threaded query execution with worker coordination
+5. **Memory Management**: Work memory limits and spill-to-disk strategies
+6. **HTAP Workload Processing**: Mixed transactional and analytical query execution
+7. **Performance Monitoring**: Execution statistics and resource utilization tracking
+
 ### Run All Examples
 ```bash
-# Build and run both examples
+# Build and run all examples
 make test
 ```
 
