@@ -8,7 +8,7 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{geometry}
-\usepackage{hyperref}
+\usepackage[hidelinks]{hyperref}
 \usepackage{subcaption}
 \usepackage{algorithm}
 \usepackage{algorithmic}
@@ -59,185 +59,185 @@ A Comprehensive Implementation and Extension Framework}}
 
 \begin{document}
 
-\maketitle
+    \maketitle
 
-\begin{abstract}
-This paper presents a comprehensive analysis and implementation guide for a modern query processing engine built with C++17, featuring PostgreSQL-compatible SQL parsing, cost-based optimization, and vectorized execution. The implementation demonstrates the complete pipeline from SQL parsing through physical execution, serving both as an educational tool for graduate database systems courses and as a foundation for advanced database research. We detail the current architecture, identify extension points for production-ready enhancements, and provide a roadmap for implementing missing components including storage management, transaction processing, and advanced optimization techniques.
+    \begin{abstract}
+        This paper presents a comprehensive analysis and implementation guide for a modern query processing engine built with C++17, featuring PostgreSQL-compatible SQL parsing, cost-based optimization, and vectorized execution. The implementation demonstrates the complete pipeline from SQL parsing through physical execution, serving both as an educational tool for graduate database systems courses and as a foundation for advanced database research. We detail the current architecture, identify extension points for production-ready enhancements, and provide a roadmap for implementing missing components including storage management, transaction processing, and advanced optimization techniques.
 
-\textbf{Keywords:} Query Processing, Database Systems, Cost-Based Optimization, Vectorized Execution, C++17, PostgreSQL
-\end{abstract}
+        \textbf{Keywords:} Query Processing, Database Systems, Cost-Based Optimization, Vectorized Execution, C++17, PostgreSQL
+    \end{abstract}
 
-\tableofcontents
-\newpage
+    \tableofcontents
+    \newpage
 
-\section{Introduction}
+    \section{Introduction}
 
-Modern database management systems represent some of the most complex software systems ever built, incorporating decades of research in query optimization, storage management, and concurrent processing. This paper presents a systematic approach to understanding and implementing a query processing engine that demonstrates core database concepts while providing a foundation for advanced research and development.
+    Modern database management systems represent some of the most complex software systems ever built, incorporating decades of research in query optimization, storage management, and concurrent processing. This paper presents a systematic approach to understanding and implementing a query processing engine that demonstrates core database concepts while providing a foundation for advanced research and development.
 
-\subsection{System Overview}
+    \subsection{System Overview}
 
-Our implementation provides a complete query processing pipeline:
+    Our implementation provides a complete query processing pipeline:
 
-\begin{enumerate}
-    \item \textbf{SQL Parsing} using PostgreSQL's \texttt{libpg\_query}
-    \item \textbf{Logical Planning} with cost-based optimization
-    \item \textbf{Physical Planning} with operator selection
-    \item \textbf{Vectorized Execution} with parallel processing
-    \item \textbf{Schema Management} with DDL support
-\end{enumerate}
+    \begin{enumerate}
+        \item \textbf{SQL Parsing} using PostgreSQL's \texttt{libpg\_query}
+        \item \textbf{Logical Planning} with cost-based optimization
+        \item \textbf{Physical Planning} with operator selection
+        \item \textbf{Vectorized Execution} with parallel processing
+        \item \textbf{Schema Management} with DDL support
+    \end{enumerate}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    box/.style={rectangle, draw=black, thick, minimum width=3cm, minimum height=1cm, align=center},
-    arrow/.style={->, thick, >=stealth}
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            box/.style={rectangle, draw=black, thick, minimum width=3cm, minimum height=1cm, align=center},
+            arrow/.style={->, thick, >=stealth}
+        ]
 
 % Input layer
-\node[box, fill=blue!20] (sql) at (0,8) {SQL Query};
+            \node[box, fill=blue!20] (sql) at (0,8) {SQL Query};
 
 % Parsing layer
-\node[box, fill=green!20] (parser) at (0,6.5) {libpg\_query\\Parser};
-\node[box, fill=green!20] (validator) at (4,6.5) {Schema\\Validator};
+            \node[box, fill=green!20] (parser) at (0,6.5) {libpg\_query\\Parser};
+            \node[box, fill=green!20] (validator) at (4,6.5) {Schema\\Validator};
 
 % Planning layer
-\node[box, fill=yellow!20] (logical) at (0,5) {Logical\\Planner};
-\node[box, fill=yellow!20] (optimizer) at (4,5) {Query\\Optimizer};
+            \node[box, fill=yellow!20] (logical) at (0,5) {Logical\\Planner};
+            \node[box, fill=yellow!20] (optimizer) at (4,5) {Query\\Optimizer};
 
 % Physical layer
-\node[box, fill=orange!20] (physical) at (0,3.5) {Physical\\Planner};
-\node[box, fill=orange!20] (executor) at (4,3.5) {Execution\\Engine};
+            \node[box, fill=orange!20] (physical) at (0,3.5) {Physical\\Planner};
+            \node[box, fill=orange!20] (executor) at (4,3.5) {Execution\\Engine};
 
 % Storage layer (Future)
-\node[box, fill=red!20, dashed] (storage) at (2,2) {Storage Engine\\(Future)};
+            \node[box, fill=red!20, dashed] (storage) at (2,2) {Storage Engine\\(Future)};
 
 % Output
-\node[box, fill=purple!20] (results) at (2,0.5) {Query Results};
+            \node[box, fill=purple!20] (results) at (2,0.5) {Query Results};
 
 % Arrows
-\draw[arrow] (sql) -- (parser);
-\draw[arrow] (parser) -- (validator);
-\draw[arrow] (parser) -- (logical);
-\draw[arrow] (validator) -- (optimizer);
-\draw[arrow] (logical) -- (optimizer);
-\draw[arrow] (optimizer) -- (physical);
-\draw[arrow] (physical) -- (executor);
-\draw[arrow, dashed] (executor) -- (storage);
-\draw[arrow] (executor) -- (results);
-\draw[arrow, dashed] (storage) -- (results);
+            \draw[arrow] (sql) -- (parser);
+            \draw[arrow] (parser) -- (validator);
+            \draw[arrow] (parser) -- (logical);
+            \draw[arrow] (validator) -- (optimizer);
+            \draw[arrow] (logical) -- (optimizer);
+            \draw[arrow] (optimizer) -- (physical);
+            \draw[arrow] (physical) -- (executor);
+            \draw[arrow, dashed] (executor) -- (storage);
+            \draw[arrow] (executor) -- (results);
+            \draw[arrow, dashed] (storage) -- (results);
 
 % Side annotations
-\node[align=left] at (-3,6.5) {\footnotesize \textbf{Parsing}\\AST Generation\\Syntax Validation};
-\node[align=left] at (-3,5) {\footnotesize \textbf{Optimization}\\Cost Estimation\\Plan Selection};
-\node[align=left] at (-3,3.5) {\footnotesize \textbf{Execution}\\Vectorized Ops\\Parallel Processing};
+            \node[align=left] at (-3.5,6.5) {\footnotesize \textbf{Parsing}\\AST Generation\\Syntax Validation};
+            \node[align=left] at (-3.5,5) {\footnotesize \textbf{Optimization}\\Cost Estimation\\Plan Selection};
+            \node[align=left] at (-3.5,3.5) {\footnotesize \textbf{Execution}\\Vectorized Ops\\Parallel Processing};
 
-\end{tikzpicture}
-\caption{Query Processing Architecture Overview}
-\label{fig:overview}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Query Processing Architecture Overview}
+        \label{fig:overview}
+    \end{figure}
 
-\subsection{Educational Objectives}
+    \subsection{Educational Objectives}
 
-This implementation serves multiple educational purposes:
+    This implementation serves multiple educational purposes:
 
-\begin{itemize}
-    \item \textbf{Conceptual Understanding}: Demonstrates how SQL queries are transformed into executable plans
-    \item \textbf{Implementation Details}: Shows practical considerations in building query processors
-    \item \textbf{Performance Analysis}: Illustrates cost models and optimization techniques
-    \item \textbf{Extension Framework}: Provides clear pathways for adding production features
-\end{itemize}
-
-\subsection{Algorithmic Notation}
-
-\begin{notation}[Algorithm Pseudocode Syntax]
-This document uses the \texttt{algorithmic} package syntax for all algorithm descriptions. The key elements are:
-
-\begin{itemize}
-    \item \textbf{Control Structures}:
     \begin{itemize}
-        \item \texttt{\textbackslash FOR\{condition\} ... \textbackslash ENDFOR} - For loops
-        \item \texttt{\textbackslash WHILE\{condition\} ... \textbackslash ENDWHILE} - While loops  
-        \item \texttt{\textbackslash IF\{condition\} ... \textbackslash ENDIF} - Conditional statements
+        \item \textbf{Conceptual Understanding}: Demonstrates how SQL queries are transformed into executable plans
+        \item \textbf{Implementation Details}: Shows practical considerations in building query processors
+        \item \textbf{Performance Analysis}: Illustrates cost models and optimization techniques
+        \item \textbf{Extension Framework}: Provides clear pathways for adding production features
     \end{itemize}
-    \item \textbf{Operations}:
-    \begin{itemize}
-        \item \texttt{\textbackslash STATE statement} - Single algorithmic step
-        \item \texttt{\textbackslash CALL\{Function\}\{args\}} - Function calls
-        \item \texttt{\textbackslash COMMENT\{text\}} - Explanatory comments
-    \end{itemize}
-    \item \textbf{Mathematical Notation}:
-    \begin{itemize}
-        \item $\leftarrow$ - Assignment operator
-        \item $\neg$ - Logical negation
-        \item $\lor, \land$ - Logical OR, AND
-        \item $|T|$ - Cardinality (size) of relation $T$
-    \end{itemize}
-    \item \textbf{Specifications}:
-    \begin{itemize}
-        \item \texttt{\textbackslash REQUIRE} - Algorithm preconditions
-        \item \texttt{\textbackslash ENSURE} - Algorithm postconditions
-        \item \texttt{\textbackslash RETURN} - Algorithm return value
-    \end{itemize}
-\end{itemize}
 
-This unified notation ensures consistency across all algorithmic descriptions and maintains academic standards for algorithm presentation.
-\end{notation}
+    \subsection{Algorithmic Notation}
 
-\section{System Architecture}
+    \begin{notation}[Algorithm Pseudocode Syntax]
+        This document uses the \texttt{algorithmic} package syntax for all algorithm descriptions. The key elements are:
 
-\subsection{Component Hierarchy}
+        \begin{itemize}
+            \item \textbf{Control Structures}:
+            \begin{itemize}
+                \item \texttt{\textbackslash FOR\{condition\} ... \textbackslash ENDFOR} - For loops
+                \item \texttt{\textbackslash WHILE\{condition\} ... \textbackslash ENDWHILE} - While loops
+                \item \texttt{\textbackslash IF\{condition\} ... \textbackslash ENDIF} - Conditional statements
+            \end{itemize}
+            \item \textbf{Operations}:
+            \begin{itemize}
+                \item \texttt{\textbackslash STATE statement} - Single algorithmic step
+                \item \texttt{\textbackslash CALL\{Function\}\{args\}} - Function calls
+                \item \texttt{\textbackslash COMMENT\{text\}} - Explanatory comments
+            \end{itemize}
+            \item \textbf{Mathematical Notation}:
+            \begin{itemize}
+                \item $\leftarrow$ - Assignment operator
+                \item $\neg$ - Logical negation
+                \item $\lor, \land$ - Logical OR, AND
+                \item $|T|$ - Cardinality (size) of relation $T$
+            \end{itemize}
+            \item \textbf{Specifications}:
+            \begin{itemize}
+                \item \texttt{\textbackslash REQUIRE} - Algorithm preconditions
+                \item \texttt{\textbackslash ENSURE} - Algorithm postconditions
+                \item \texttt{\textbackslash RETURN} - Algorithm return value
+            \end{itemize}
+        \end{itemize}
 
-The system follows a layered architecture with clear separation of concerns:
+        This unified notation ensures consistency across all algorithmic descriptions and maintains academic standards for algorithm presentation.
+    \end{notation}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    layer/.style={rectangle, draw=black, thick, minimum width=12cm, minimum height=1.5cm, align=center, font=\large\bfseries},
-    component/.style={rectangle, draw=blue, thick, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
-    future/.style={rectangle, draw=red, thick, dashed, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small, fill=red!10}
-]
+    \section{System Architecture}
+
+    \subsection{Component Hierarchy}
+
+    The system follows a layered architecture with clear separation of concerns:
+
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            layer/.style={rectangle, draw=black, thick, minimum width=15cm, minimum height=2.5cm, align=center, font=\large\bfseries},
+            component/.style={rectangle, draw=blue, thick, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small},
+            future/.style={rectangle, draw=red, thick, dashed, minimum width=2.5cm, minimum height=0.8cm, align=center, font=\small, fill=red!10}
+        ]
 
 % Application Layer
-\node[layer, fill=gray!20] (app_layer) at (0,7) {Application Layer};
-\node[component] (sql_interface) at (-4,6.2) {SQL Interface};
-\node[component] (query_executor) at (-1,6.2) {Query Executor};
-\node[component] (result_handler) at (2,6.2) {Result Handler};
+            \node[layer, fill=gray!20] (app_layer) at (0,7) {Application Layer};
+            \node[component] (sql_interface) at (-4,6.2) {SQL Interface};
+            \node[component] (query_executor) at (-1,6.2) {Query Executor};
+            \node[component] (result_handler) at (2,6.2) {Result Handler};
 
 % Query Processing Layer
-\node[layer, fill=blue!20] (query_layer) at (0,5) {Query Processing Layer};
-\node[component] (parser) at (-4,4.2) {Parser};
-\node[component] (logical_planner) at (-1,4.2) {Logical Planner};
-\node[component] (physical_planner) at (2,4.2) {Physical Planner};
-\node[component] (optimizer) at (5,4.2) {Optimizer};
+            \node[layer, fill=blue!20] (query_layer) at (0,4) {Query Processing Layer};
+            \node[component] (parser) at (-4,3.2) {Parser};
+            \node[component] (logical_planner) at (-1,3.2) {Logical Planner};
+            \node[component] (physical_planner) at (2,3.2) {Physical Planner};
+            \node[component] (optimizer) at (5,3.2) {Optimizer};
 
 % Execution Layer
-\node[layer, fill=green!20] (exec_layer) at (0,3) {Execution Layer};
-\node[component] (scan_ops) at (-4,2.2) {Scan Operators};
-\node[component] (join_ops) at (-1,2.2) {Join Operators};
-\node[component] (sort_ops) at (2,2.2) {Sort Operators};
-\node[component] (parallel_exec) at (5,2.2) {Parallel Executor};
+            \node[layer, fill=green!20] (exec_layer) at (0,1) {Execution Layer};
+            \node[component] (scan_ops) at (-4,0.2) {Scan Operators};
+            \node[component] (join_ops) at (-1,0.2) {Join Operators};
+            \node[component] (sort_ops) at (2,0.2) {Sort Operators};
+            \node[component] (parallel_exec) at (5,0.2) {Parallel Executor};
 
 % Storage Layer (Future)
-\node[layer, fill=red!20, dashed] (storage_layer) at (0,1) {Storage Layer (Future Implementation)};
-\node[future] (buffer_mgr) at (-4,0.2) {Buffer Manager};
-\node[future] (page_mgr) at (-1,0.2) {Page Manager};
-\node[future] (index_mgr) at (2,0.2) {Index Manager};
-\node[future] (txn_mgr) at (5,0.2) {Transaction Mgr};
+            \node[layer, fill=red!20, dashed] (storage_layer) at (0,-2) {Storage Layer (Future Implementation)};
+            \node[future] (buffer_mgr) at (-4,-3.2) {Buffer Manager};
+            \node[future] (page_mgr) at (-1,-3.2) {Page Manager};
+            \node[future] (index_mgr) at (2,-3.2) {Index Manager};
+            \node[future] (txn_mgr) at (5,-3.2) {Transaction Mgr};
 
 % Current vs Future indicators
-\node[align=center, font=\footnotesize] at (-6.5,4) {\textbf{Current}\\Implementation};
-\node[align=center, font=\footnotesize] at (-6.5,1) {\textbf{Future}\\Extensions};
+            \node[align=center, font=\footnotesize] at (-7.3,4) {\textbf{Current}\\Implementation};
+            \node[align=center, font=\footnotesize] at (-7.3,1) {\textbf{Future}\\Extensions};
 
-\end{tikzpicture}
-\caption{System Component Hierarchy}
-\label{fig:components}
-\end{figure}
+        \end{tikzpicture}
+        \caption{System Component Hierarchy}
+        \label{fig:components}
+    \end{figure}
 
-\subsection{Core Classes and Interfaces}
+    \subsection{Core Classes and Interfaces}
 
-The implementation uses modern C++17 features and follows SOLID principles:
+    The implementation uses modern C++17 features and follows SOLID principles:
 
-\begin{lstlisting}[style=cpp, caption=Core Interface Definitions]
+    \begin{lstlisting}[style=cpp, caption=Core Interface Definitions]
 namespace pg {
     // Base query plan node
     struct LogicalPlanNode {
@@ -245,346 +245,347 @@ namespace pg {
         PlanCost cost;
         std::vector<LogicalPlanNodePtr> children;
         std::vector<std::string> output_columns;
-        
+
         virtual std::string to_string(int indent = 0) const = 0;
         virtual LogicalPlanNodePtr copy() const = 0;
     };
-    
+
     // Physical execution interface
     struct PhysicalPlanNode {
         PhysicalOperatorType type;
         ExecutionStats actual_stats;
-        
+
         virtual TupleBatch get_next_batch() = 0;
         virtual void reset() = 0;
         virtual void initialize(ExecutionContext* ctx) = 0;
     };
-    
+
     // Main planner interface
     class QueryPlanner {
         std::shared_ptr<DatabaseSchema> schema_;
         CostModel cost_model_;
-        
+
     public:
         LogicalPlan create_plan(const std::string& query);
         std::vector<LogicalPlan> generate_alternatives(const std::string& query);
         void optimize_plan(LogicalPlan& plan);
     };
 }
-\end{lstlisting}
+    \end{lstlisting}
 
-\section{Query Parsing and Validation}
+    \section{Query Parsing and Validation}
 
-\subsection{Integration with libpg\_query}
+    \subsection{Integration with libpg\_query}
 
-We leverage PostgreSQL's proven parsing infrastructure through \texttt{libpg\_query}, ensuring compatibility with PostgreSQL SQL syntax:
+    We leverage PostgreSQL's proven parsing infrastructure through \texttt{libpg\_query}, ensuring compatibility with PostgreSQL SQL syntax:
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    process/.style={rectangle, rounded corners, draw=blue, thick, minimum width=2.5cm, minimum height=1cm, align=center},
-    decision/.style={diamond, draw=red, thick, minimum width=2cm, minimum height=1cm, align=center, aspect=2},
-    data/.style={cylinder, draw=green, thick, minimum width=2cm, minimum height=1cm, align=center}
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            process/.style={rectangle, rounded corners, draw=blue, thick, minimum width=2.5cm, minimum height=1cm, align=center},
+            decision/.style={diamond, draw=red, thick, minimum width=2cm, minimum height=1cm, align=center, aspect=2},
+            data/.style={cylinder, draw=green, thick, minimum width=1.3cm, minimum height=0.5cm, align=center}
+        ]
 
 % Input
-\node[data] (sql_input) at (0,8) {SQL Query\\String};
+            \node[data] (sql_input) at (0,8.2) {SQL Query\\String};
 
 % Parsing steps
-\node[process] (lexer) at (0,6.5) {Lexical\\Analysis};
-\node[process] (parser) at (0,5) {Syntax\\Parsing};
-\node[decision] (valid) at (0,3.5) {Valid\\AST?};
-\node[process] (normalize) at (-3,2) {Query\\Normalization};
-\node[process] (validate) at (3,2) {Schema\\Validation};
-\node[data] (ast_output) at (0,0.5) {Validated\\AST};
+            \node[process] (lexer) at (0,6.5) {Lexical\\Analysis};
+            \node[process] (parser) at (0,5) {Syntax\\Parsing};
+            \node[decision] (valid) at (0,3.2) {Valid\\AST?};
+            \node[process] (normalize) at (-3,1.5) {Query\\Normalization};
+            \node[process] (validate) at (3,1.5) {Schema\\Validation};
+            \node[data] (ast_output) at (0,0) {Validated\\AST};
 
 % Error handling
-\node[data, fill=red!20] (errors) at (-6,3.5) {Parse\\Errors};
+            \node[data, fill=red!20] (errors) at (-6,3.2) {Parse\\Errors};
 
 % Arrows
-\draw[->] (sql_input) -- (lexer);
-\draw[->] (lexer) -- (parser);
-\draw[->] (parser) -- (valid);
-\draw[->] (valid) -- node[left] {No} (errors);
-\draw[->] (valid) -- node[above left] {Yes} (normalize);
-\draw[->] (valid) -- node[above right] {Yes} (validate);
-\draw[->] (normalize) -- (ast_output);
-\draw[->] (validate) -- (ast_output);
+            \draw[->] (sql_input) -- (lexer);
+            \draw[->] (lexer) -- (parser);
+            \draw[->] (parser) -- (valid);
+            \draw[->] (valid) -- node[left] {No} (errors);
+            \draw[->] (valid) -- node[above left] {Yes} (normalize);
+            \draw[->] (valid) -- node[above right] {Yes} (validate);
+            \draw[->] (normalize) -- (ast_output);
+            \draw[->] (validate) -- (ast_output);
 
-\end{tikzpicture}
-\caption{SQL Parsing Pipeline}
-\label{fig:parsing}
-\end{figure}
+        \end{tikzpicture}
+        \caption{SQL Parsing Pipeline}
+        \label{fig:parsing}
+    \end{figure}
 
-\subsection{AST Processing}
+    \subsection{AST Processing}
 
-The Abstract Syntax Tree (AST) processing involves multiple validation phases:
+    The Abstract Syntax Tree (AST) processing involves multiple validation phases:
 
-\begin{lstlisting}[style=cpp, caption=AST Processing Example]
+    \begin{lstlisting}[style=cpp, caption=AST Processing Example]
 class PgQueryWrapper {
     ParseResult parse(const std::string& query) {
         ParseResult result;
-        
+
         // Use libpg_query for parsing
         auto pg_result = pg_query_parse(query.c_str());
-        
+
         if (pg_result.error) {
             result.is_valid = false;
             result.errors.push_back(pg_result.error->message);
         } else {
             result.is_valid = true;
             result.parse_tree = pg_result.parse_tree;
-            
+
             // Extract query components
             extract_table_references(pg_result.parse_tree, result);
             extract_column_references(pg_result.parse_tree, result);
         }
-        
+
         pg_query_free_parse_result(pg_result);
         return result;
     }
 };
-\end{lstlisting}
+    \end{lstlisting}
 
-\section{Logical Query Planning}
+    \section{Logical Query Planning}
 
-\subsection{Plan Node Types}
+    \subsection{Plan Node Types}
 
-The logical planning phase creates a tree of logical operators:
+    The logical planning phase creates a tree of logical operators:
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    node_style/.style={rectangle, rounded corners, draw=black, thick, minimum width=2cm, minimum height=0.8cm, align=center, font=\small},
-    leaf/.style={node_style, fill=green!30},
-    unary/.style={node_style, fill=blue!30},
-    binary/.style={node_style, fill=orange!30},
-    arrow/.style={->, thick}
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            node_style/.style={rectangle, rounded corners, draw=black, thick, minimum width=2cm, minimum height=0.8cm, align=center, font=\small},
+            leaf/.style={node_style, fill=green!30},
+            unary/.style={node_style, fill=blue!30},
+            binary/.style={node_style, fill=orange!30},
+            arrow/.style={->, thick}
+        ]
 
 % Example query plan tree
-\node[unary] (limit) at (0,6) {Limit\\(10)};
-\node[unary] (sort) at (0,4.5) {Sort\\(name ASC)};
-\node[unary] (project) at (0,3) {Projection\\(u.name, p.name)};
-\node[binary] (join) at (0,1.5) {Hash Join\\(u.id = p.id)};
-\node[leaf] (scan_u) at (-2.5,0) {Seq Scan\\(users u)};
-\node[leaf] (scan_p) at (2.5,0) {Seq Scan\\(products p)};
+            \node[unary] (limit) at (0,6) {Limit\\(10)};
+            \node[unary] (sort) at (0,4.5) {Sort\\(name ASC)};
+            \node[unary] (project) at (0,3) {Projection\\(u.name, p.name)};
+            \node[binary] (join) at (0,1.5) {Hash Join\\(u.id = p.id)};
+            \node[leaf] (scan_u) at (-2.5,0) {Seq Scan\\(users u)};
+            \node[leaf] (scan_p) at (2.5,0) {Seq Scan\\(products p)};
 
 % Tree connections
-\draw[arrow] (sort) -- (limit);
-\draw[arrow] (project) -- (sort);
-\draw[arrow] (join) -- (project);
-\draw[arrow] (scan_u) -- (join);
-\draw[arrow] (scan_p) -- (join);
+            \draw[arrow] (sort) -- (limit);
+            \draw[arrow] (project) -- (sort);
+            \draw[arrow] (join) -- (project);
+            \draw[arrow] (scan_u) -- (join);
+            \draw[arrow] (scan_p) -- (join);
 
 % Cost annotations
-\node[font=\tiny, align=left] at (3,6) {Cost: 579.26\\Rows: 10};
-\node[font=\tiny, align=left] at (3,4.5) {Cost: 578.68\\Rows: 50000};
-\node[font=\tiny, align=left] at (3,3) {Cost: 556.48\\Rows: 50000};
-\node[font=\tiny, align=left] at (3,1.5) {Cost: 501.48\\Rows: 50000};
-\node[font=\tiny, align=left] at (-0.5,-0.7) {Cost: 246.48\\Rows: 10000};
-\node[font=\tiny, align=left] at (4.5,-0.7) {Cost: 1720.70\\Rows: 50000};
+            \node[font=\tiny, align=left] at (3,6) {Cost: 579.26\\Rows: 10};
+            \node[font=\tiny, align=left] at (3,4.5) {Cost: 578.68\\Rows: 50000};
+            \node[font=\tiny, align=left] at (3,3) {Cost: 556.48\\Rows: 50000};
+            \node[font=\tiny, align=left] at (3,1.5) {Cost: 501.48\\Rows: 50000};
+            \node[font=\tiny, align=left] at (-0.5,-0.7) {Cost: 246.48\\Rows: 10000};
+            \node[font=\tiny, align=left] at (4.5,-0.7) {Cost: 1720.70\\Rows: 50000};
 
 % SQL query annotation
-\node[align=left, font=\footnotesize] at (-6,3) {
-    \textbf{SQL Query:}\\
-    \texttt{SELECT u.name, p.name}\\
-    \texttt{FROM users u}\\
-    \texttt{JOIN products p}\\
-    \texttt{ON u.id = p.id}\\
-    \texttt{ORDER BY u.name}\\
-    \texttt{LIMIT 10}
-};
+            \node[align=left, font=\footnotesize] at (-6,3) {
+                \textbf{SQL Query:}\\
+                \texttt{SELECT u.name, p.name}\\
+                \texttt{FROM users u}\\
+                \texttt{JOIN products p}\\
+                \texttt{ON u.id = p.id}\\
+                \texttt{ORDER BY u.name}\\
+                \texttt{LIMIT 10}
+            };
 
-\end{tikzpicture}
-\caption{Logical Query Plan Tree Structure}
-\label{fig:logical_plan}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Logical Query Plan Tree Structure}
+        \label{fig:logical_plan}
+    \end{figure}
 
-\subsection{Cost Model}
+    \subsection{Cost Model}
 
-The cost model estimates execution costs using statistical information:
+    The cost model estimates execution costs using statistical information:
 
-\begin{definition}[Cost Model]
-For any logical plan node $N$, the total cost is computed as:
-\begin{align}
-C_{total}(N) &= C_{startup}(N) + C_{run}(N) \\
-C_{run}(N) &= C_{cpu}(N) + C_{io}(N) \\
-C_{cpu}(N) &= \text{rows}(N) \times c_{cpu} \\
-C_{io}(N) &= \text{pages}(N) \times c_{io}
-\end{align}
-where $c_{cpu}$ and $c_{io}$ are cost coefficients.
-\end{definition}
+    \begin{definition}[Cost Model]
+        For any logical plan node $N$, the total cost is computed as:
+        \begin{align}
+            C_{total}(N) &= C_{startup}(N) + C_{run}(N) \\
+            C_{run}(N) &= C_{cpu}(N) + C_{io}(N) \\
+            C_{cpu}(N) &= \text{rows}(N) \times c_{cpu} \\
+            C_{io}(N) &= \text{pages}(N) \times c_{io}
+        \end{align}
+        where $c_{cpu}$ and $c_{io}$ are cost coefficients.
+    \end{definition}
 
-\begin{lstlisting}[style=cpp, caption=Cost Calculation Implementation]
+    \begin{lstlisting}[style=cpp, caption=Cost Calculation Implementation]
 struct PlanCost {
     double startup_cost = 0.0;
     double total_cost = 0.0;
     size_t estimated_rows = 0;
     double estimated_width = 0.0;
-    
+
     // Cost calculation for sequential scan
     static PlanCost calculate_seq_scan_cost(const TableStats& stats) {
         PlanCost cost;
         cost.startup_cost = 0.0;
-        
+
         // IO cost: pages * seq_page_cost
         double io_cost = stats.pages * SEQ_PAGE_COST;
-        
+
         // CPU cost: tuples * cpu_tuple_cost
         double cpu_cost = stats.row_count * CPU_TUPLE_COST;
-        
+
         cost.total_cost = cost.startup_cost + io_cost + cpu_cost;
         cost.estimated_rows = stats.row_count;
         cost.estimated_width = stats.avg_row_size;
-        
+
         return cost;
     }
 };
-\end{lstlisting}
+    \end{lstlisting}
 
-\subsection{Query Optimization Rules}
+    \subsection{Query Optimization Rules}
 
-The optimizer applies transformation rules to improve query plans:
+    The optimizer applies transformation rules to improve query plans:
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    before/.style={rectangle, draw=red, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny},
-    after/.style={rectangle, draw=green, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny},
-    arrow/.style={->, thick, >=stealth}
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            before/.style={rectangle, draw=red, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny},
+            after/.style={rectangle, draw=green, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny},
+            arrow/.style={->, thick, >=stealth}
+        ]
 
 % Selection Pushdown
-\node[font=\small\bfseries] at (-3,5.5) {Selection Pushdown};
-\node[before] (proj1) at (-4,4.5) {Projection};
-\node[before] (sel1) at (-4,3.5) {Selection\\(x > 5)};
-\node[before] (scan1) at (-4,2.5) {Scan(T)};
+            \node[font=\small\bfseries] at (-3,5.5) {Selection Pushdown};
+            \node[before] (proj1) at (-4,4.5) {Projection};
+            \node[before] (sel1) at (-4,3.5) {Selection\\(x > 5)};
+            \node[before] (scan1) at (-4,2.5) {Scan(T)};
 
-\node[after] (proj2) at (-2,4.5) {Projection};
-\node[after] (scan2) at (-2,3.5) {Scan(T)\\Filter: x > 5};
+            \node[after] (proj2) at (-2,4.5) {Projection};
+            \node[after] (scan2) at (-2,3.5) {Scan(T)\\Filter: x > 5};
 
-\draw[arrow] (scan1) -- (sel1);
-\draw[arrow] (sel1) -- (proj1);
-\draw[arrow] (scan2) -- (proj2);
-\draw[arrow, red, thick] (-3.5,3.5) -- (-2.5,3.5);
+            \draw[arrow] (scan1) -- (sel1);
+            \draw[arrow] (sel1) -- (proj1);
+            \draw[arrow] (scan2) -- (proj2);
+            \draw[arrow, red, thick] (-3.5,3.5) -- (-2.5,3.5);
 
 % Join Reordering
-\node[font=\small\bfseries] at (1,5.5) {Join Reordering};
-\node[before] (join1) at (0,4) {Join\\(A $\bowtie$ B)};
-\node[before] (join2) at (0,3) {Join\\($\bowtie$ C)};
-\node[before] (a1) at (-1,2) {A};
-\node[before] (b1) at (0,2) {B};
-\node[before] (c1) at (1,2) {C};
+            \node[font=\small\bfseries] at (1,5.5) {Join Reordering};
+            \node[before] (join1) at (0,4) {Join\\(A $\bowtie$ B)};
+            \node[before] (join2) at (0,3) {Join\\($\bowtie$ C)};
+            \node[before] (a1) at (-1,2) {A};
+            \node[before] (b1) at (0,2) {B};
+            \node[before] (c1) at (1,2) {C};
 
-\node[after] (join3) at (3,4) {Join\\(B $\bowtie$ C)};
-\node[after] (join4) at (3,3) {Join\\(A $\bowtie$)};
-\node[after] (a2) at (2,2) {A};
-\node[after] (b2) at (3,2) {B};
-\node[after] (c2) at (4,2) {C};
+            \node[after] (join3) at (3,4) {Join\\(B $\bowtie$ C)};
+            \node[after] (join4) at (3,3) {Join\\(A $\bowtie$)};
+            \node[after] (a2) at (2,2) {A};
+            \node[after] (b2) at (3,2) {B};
+            \node[after] (c2) at (4,2) {C};
 
-\draw[arrow] (a1) -- (join1);
-\draw[arrow] (b1) -- (join1);
-\draw[arrow] (join1) -- (join2);
-\draw[arrow] (c1) -- (join2);
+            \draw[arrow] (a1) -- (join1);
+            \draw[arrow] (b1) -- (join1);
+            \draw[arrow] (join1) -- (join2);
+            \draw[arrow] (c1) -- (join2);
 
-\draw[arrow] (b2) -- (join3);
-\draw[arrow] (c2) -- (join3);
-\draw[arrow] (join3) -- (join4);
-\draw[arrow] (a2) -- (join4);
+            \draw[arrow] (b2) -- (join3);
+            \draw[arrow] (c2) -- (join3);
+            \draw[arrow] (join3) -- (join4);
+            \draw[arrow] (a2) -- (join4);
 
-\draw[arrow, red, thick] (1.5,3.5) -- (2.5,3.5);
+            \draw[arrow, red, thick] (1.5,3.5) -- (2.5,3.5);
 
-\end{tikzpicture}
-\caption{Query Optimization Transformations}
-\label{fig:optimization}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Query Optimization Transformations}
+        \label{fig:optimization}
+    \end{figure}
 
-\section{Physical Query Planning}
+    \section{Physical Query Planning}
 
-\subsection{Operator Selection}
+    \subsection{Operator Selection}
 
-Physical planning converts logical operators into executable physical operators:
+    Physical planning converts logical operators into executable physical operators:
 
-\begin{table}[htbp]
-\centering
-\caption{Logical to Physical Operator Mapping}
-\label{tab:operators}
-\begin{tabular}{lll}
-\toprule
-\textbf{Logical Operator} & \textbf{Physical Options} & \textbf{Selection Criteria} \\
-\midrule
-Table Scan & Sequential Scan & Default choice \\
-           & Index Scan & Selective predicates \\
-           & Parallel Seq Scan & Large tables \\
-\midrule
-Join & Nested Loop Join & Small tables \\
-     & Hash Join & One small, one large table \\
-     & Sort-Merge Join & Both inputs sorted \\
-\midrule
-Aggregation & Hash Aggregate & GROUP BY queries \\
-           & Sort Aggregate & Sorted input \\
-\midrule
-Sort & In-Memory Sort & Small datasets \\
-     & External Sort & Large datasets \\
-\bottomrule
-\end{tabular}
-\end{table}
+    \begin{table}[H]
+        \centering
+        \caption{Logical to Physical Operator Mapping}
+        \label{tab:operators}
+        \begin{tabular}{lll}
+            \toprule
+            \textbf{Logical Operator} & \textbf{Physical Options} & \textbf{Selection Criteria} \\
+            \midrule
+            Table Scan & Sequential Scan & Default choice \\
+            & Index Scan & Selective predicates \\
+            & Parallel Seq Scan & Large tables \\
+            \midrule
+            Join & Nested Loop Join & Small tables \\
+            & Hash Join & One small, one large table \\
+            & Sort-Merge Join & Both inputs sorted \\
+            \midrule
+            Aggregation & Hash Aggregate & GROUP BY queries \\
+            & Sort Aggregate & Sorted input \\
+            \midrule
+            Sort & In-Memory Sort & Small datasets \\
+            & External Sort & Large datasets \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
 
-\subsection{Memory Management}
+    \subsection{Memory Management}
 
-The execution engine implements sophisticated memory management:
+    The execution engine implements sophisticated memory management:
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    memory/.style={rectangle, draw=blue, thick, minimum width=2cm, minimum height=1cm, align=center},
-    arrow/.style={->, thick},
-    label/.style={font=\small, align=left}
-]
+    \begin{figure}[H]
+        \centering
+        \begin{tikzpicture}[
+            memory/.style={rectangle, draw=blue, thick, minimum width=2cm, minimum height=1cm, align=center},
+            arrow/.style={->, thick},
+            label/.style={font=\small, align=left}
+        ]
 
 % Work Memory allocation
-\node[memory, fill=green!20] (work_mem) at (0,4) {Work Memory\\(1MB)};
+            \node[memory, fill=green!20] (work_mem) at (0,4) {Work Memory\\(1MB)};
 
 % Operator memory usage
-\node[memory, fill=yellow!20] (hash_table) at (-3,2.5) {Hash Table\\(750KB)};
-\node[memory, fill=orange!20] (sort_buffer) at (0,2.5) {Sort Buffer\\(200KB)};
-\node[memory, fill=purple!20] (batch_buffer) at (3,2.5) {Batch Buffer\\(50KB)};
+            \node[memory, fill=yellow!20] (hash_table) at (-3,2.5) {Hash Table\\(750KB)};
+            \node[memory, fill=orange!20] (sort_buffer) at (0,2.5) {Sort Buffer\\(200KB)};
+            \node[memory, fill=purple!20] (batch_buffer) at (3,2.5) {Batch Buffer\\(50KB)};
 
 % Spill to disk
-\node[memory, fill=red!20] (temp_files) at (0,1) {Temporary Files\\(Disk)};
+            \node[memory, fill=red!20] (temp_files) at (0,1) {Temporary Files\\(Disk)};
 
 % Memory flow
-\draw[arrow] (work_mem) -- (hash_table);
-\draw[arrow] (work_mem) -- (sort_buffer);
-\draw[arrow] (work_mem) -- (batch_buffer);
+            \draw[arrow] (work_mem) -- (hash_table);
+            \draw[arrow] (work_mem) -- (sort_buffer);
+            \draw[arrow] (work_mem) -- (batch_buffer);
 
-\draw[arrow, red, dashed] (hash_table) -- node[left, font=\tiny] {Spill} (temp_files);
-\draw[arrow, red, dashed] (sort_buffer) -- node[right, font=\tiny] {Spill} (temp_files);
+            \draw[arrow, red, dashed] (hash_table) -- node[left, font=\tiny] {Spill} (temp_files);
+            \draw[arrow, red, dashed] (sort_buffer) -- node[right, font=\tiny] {Spill} (temp_files);
 
 % Labels
-\node[label] at (-6,4) {\textbf{Memory Hierarchy:}\\• Work memory limit\\• Operator budgets\\• Spill-to-disk strategy};
-\node[label] at (6,2.5) {\textbf{Algorithms:}\\• Hash join partitioning\\• External merge sort\\• Vectorized batching};
+            \node[label] at (-6,4) {\textbf{Memory Hierarchy:}\\• Work memory limit\\• Operator budgets\\• Spill-to-disk strategy};
+            \node[label] at (6,2.5) {\textbf{Algorithms:}\\• Hash join partitioning\\• External merge sort\\• Vectorized batching};
 
-\end{tikzpicture}
-\caption{Memory Management Architecture}
-\label{fig:memory}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Memory Management Architecture}
+        \label{fig:memory}
+    \end{figure}
 
-\subsection{Vectorized Execution}
+    \subsection{Vectorized Execution}
 
-Modern query engines use vectorized execution for improved performance:
+    Modern query engines use vectorized execution for improved performance:
 
-\begin{lstlisting}[style=cpp, caption=Vectorized Batch Processing]
+    \begin{minipage}[H]{0.95\textwidth}
+        \begin{lstlisting}[style=cpp, caption=Vectorized Batch Processing]
 struct TupleBatch {
     std::vector<Tuple> tuples;
     std::vector<std::string> column_names;
     size_t batch_size = 1000;  // Configurable batch size
-    
+
     void add_tuple(const Tuple& tuple) {
         tuples.push_back(tuple);
     }
-    
+
     bool is_full() const {
         return tuples.size() >= batch_size;
     }
@@ -595,196 +596,199 @@ public:
     TupleBatch get_next_batch() override {
         TupleBatch batch;
         batch.column_names = output_columns;
-        
+
         // Process tuples in batches for better cache locality
-        size_t end_pos = std::min(current_position + batch_size, 
+        size_t end_pos = std::min(current_position + batch_size,
                                  mock_data.size());
-        
+
         for (size_t i = current_position; i < end_pos; ++i) {
             if (passes_filter(mock_data[i])) {
                 batch.add_tuple(mock_data[i]);
             }
         }
-        
+
         current_position = end_pos;
         return batch;
     }
 };
-\end{lstlisting}
+        \end{lstlisting}
+    \end{minipage}
 
-\section{Execution Engine}
+    \section{Execution Engine}
 
-\subsection{Iterator Model}
+    \subsection{Iterator Model}
 
-The execution engine implements the iterator model (also known as the Volcano model):
+    The execution engine implements the iterator model (also known as the Volcano model):
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    operator/.style={rectangle, rounded corners, draw=black, thick, minimum width=2.5cm, minimum height=1cm, align=center},
-    data_flow/.style={->, thick, blue},
-    control_flow/.style={->, thick, red, dashed}
-]
+    \begin{figure}[H]
+        \centering
+        \begin{tikzpicture}[
+            operator/.style={rectangle, rounded corners, draw=black, thick, minimum width=2.5cm, minimum height=1cm, align=center},
+            data_flow/.style={->, thick, blue},
+            control_flow/.style={->, thick, red, dashed}
+        ]
 
 % Operators
-\node[operator, fill=purple!20] (limit) at (0,6) {Limit Operator\\next()};
-\node[operator, fill=orange!20] (sort) at (0,4.5) {Sort Operator\\next()};
-\node[operator, fill=yellow!20] (join) at (0,3) {Hash Join\\next()};
-\node[operator, fill=green!20] (scan1) at (-3,1.5) {Seq Scan\\next()};
-\node[operator, fill=green!20] (scan2) at (3,1.5) {Seq Scan\\next()};
+            \node[operator, fill=purple!20] (limit) at (0,6) {Limit Operator\\next()};
+            \node[operator, fill=orange!20] (sort) at (0,4.5) {Sort Operator\\next()};
+            \node[operator, fill=yellow!20] (join) at (0,3) {Hash Join\\next()};
+            \node[operator, fill=green!20] (scan1) at (-3,1.5) {Seq Scan\\next()};
+            \node[operator, fill=green!20] (scan2) at (3,1.5) {Seq Scan\\next()};
 
 % Data sources
-\node[operator, fill=gray!20] (table1) at (-3,0) {Table A};
-\node[operator, fill=gray!20] (table2) at (3,0) {Table B};
+            \node[operator, fill=gray!20] (table1) at (-3,0) {Table A};
+            \node[operator, fill=gray!20] (table2) at (3,0) {Table B};
 
 % Control flow (next() calls)
-\draw[control_flow] (limit) -- node[left] {\tiny next()} (sort);
-\draw[control_flow] (sort) -- node[left] {\tiny next()} (join);
-\draw[control_flow] (join) -- node[above left] {\tiny next()} (scan1);
-\draw[control_flow] (join) -- node[above right] {\tiny next()} (scan2);
+            \draw[control_flow] (limit) -- node[left] {\tiny next()} (sort);
+            \draw[control_flow] (sort) -- node[left] {\tiny next()} (join);
+            \draw[control_flow] (join) -- node[above left] {\tiny next()} (scan1);
+            \draw[control_flow] (join) -- node[above right] {\tiny next()} (scan2);
 
 % Data flow (tuple batches)
-\draw[data_flow] (table1) -- node[left] {\tiny batches} (scan1);
-\draw[data_flow] (table2) -- node[right] {\tiny batches} (scan2);
-\draw[data_flow] (scan1) -- node[below left] {\tiny batches} (join);
-\draw[data_flow] (scan2) -- node[below right] {\tiny batches} (join);
-\draw[data_flow] (join) -- node[right] {\tiny batches} (sort);
-\draw[data_flow] (sort) -- node[right] {\tiny batches} (limit);
+            \draw[data_flow] (table1) -- node[left] {\tiny batches} (scan1);
+            \draw[data_flow] (table2) -- node[right] {\tiny batches} (scan2);
+            \draw[data_flow] (scan1) -- node[below left] {\tiny batches} (join);
+            \draw[data_flow] (scan2) -- node[below right] {\tiny batches} (join);
+            \draw[data_flow] (join) -- node[right] {\tiny batches} (sort);
+            \draw[data_flow] (sort) -- node[right] {\tiny batches} (limit);
 
 % Result
-\node[operator, fill=blue!20] (result) at (0,7.5) {Query Results};
-\draw[data_flow] (limit) -- (result);
+            \node[operator, fill=blue!20] (result) at (0,7.5) {Query Results};
+            \draw[data_flow] (limit) -- (result);
 
-\end{tikzpicture}
-\caption{Iterator Model Execution Flow}
-\label{fig:iterator}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Iterator Model Execution Flow}
+        \label{fig:iterator}
+    \end{figure}
 
-\subsection{Parallel Execution}
+    \subsection{Parallel Execution}
 
-The system supports parallel execution through worker threads:
+    The system supports parallel execution through worker threads:
 
-\begin{algorithm}
-\caption{Parallel Sequential Scan Algorithm}
-\begin{algorithmic}[1]
-\REQUIRE Table $T$, Filter predicate $P$, Number of workers $W$
-\ENSURE Filtered tuples from $T$
-\STATE Initialize shared result queue $Q$
-\STATE Initialize parallel synchronization context $ctx$
-\STATE $rows\_per\_worker \leftarrow \lfloor |T| / W \rfloor$
-\FOR{$i \leftarrow 0$ \TO $W-1$}
-    \STATE $start\_row \leftarrow i \times rows\_per\_worker$
-    \IF{$i = W-1$}
-        \STATE $end\_row \leftarrow |T|$ \COMMENT{Last worker handles remainder}
-    \ELSE
-        \STATE $end\_row \leftarrow (i+1) \times rows\_per\_worker$
-    \ENDIF
-    \STATE \CALL{LaunchWorkerThread}{$i, start\_row, end\_row, P, Q, ctx$}
-\ENDFOR
-\WHILE{$ctx.active\_workers > 0$ \OR $\neg Q.isEmpty()$}
-    \IF{$\neg Q.isEmpty()$}
-        \STATE $batch \leftarrow Q.dequeue()$
-        \STATE \textbf{yield} $batch$ to parent operator
-    \ENDIF
-\ENDWHILE
-\STATE \CALL{JoinAllWorkerThreads}{}
-\end{algorithmic}
-\end{algorithm}
+    \begin{algorithm}
+        \caption{Parallel Sequential Scan Algorithm}
+        \begin{algorithmic}[1]
+            \REQUIRE Table $T$, Filter predicate $P$, Number of workers $W$
+            \ENSURE Filtered tuples from $T$
+            \STATE Initialize shared result queue $Q$
+            \STATE Initialize parallel synchronization context $ctx$
+            \STATE $rows\_per\_worker \leftarrow \lfloor |T| / W \rfloor$
+            \FOR{$i \leftarrow 0$ \TO $W-1$}
+            \STATE $start\_row \leftarrow i \times rows\_per\_worker$
+            \IF{$i = W-1$}
+            \STATE $end\_row \leftarrow |T|$ \COMMENT{Last worker handles remainder}
+            \ELSE
+            \STATE $end\_row \leftarrow (i+1) \times rows\_per\_worker$
+            \ENDIF
+            \STATE \CALL{LaunchWorkerThread}{$i, start\_row, end\_row, P, Q, ctx$}
+            \ENDFOR
+            \WHILE{$ctx.active\_workers > 0$ \OR $\neg Q.isEmpty()$}
+            \IF{$\neg Q.isEmpty()$}
+            \STATE $batch \leftarrow Q.dequeue()$
+            \STATE \textbf{yield} $batch$ to parent operator
+            \ENDIF
+            \ENDWHILE
+            \STATE \CALL{JoinAllWorkerThreads}{}
+        \end{algorithmic}
+    \end{algorithm}
 
-\begin{algorithm}
-\caption{Worker Thread Scan Procedure}
-\begin{algorithmic}[1]
-\REQUIRE Worker ID $worker\_id$, Start row $start$, End row $end$, Predicate $P$, Queue $Q$, Context $ctx$
-\STATE $ctx.active\_workers \leftarrow ctx.active\_workers + 1$
-\STATE Initialize empty batch $batch$
-\FOR{$row\_idx \leftarrow start$ \TO $end - 1$}
-    \STATE $tuple \leftarrow T[row\_idx]$
-    \IF{\CALL{EvaluatePredicate}{$P, tuple$}}
-        \STATE $batch.addTuple(tuple)$
-        \IF{$batch.isFull()$}
+    \begin{algorithm}
+        \caption{Worker Thread Scan Procedure}
+        \begin{algorithmic}[1]
+            \REQUIRE Worker ID $worker\_id$, Start row $start$, End row $end$, Predicate $P$, Queue $Q$, Context $ctx$
+            \STATE $ctx.active\_workers \leftarrow ctx.active\_workers + 1$
+            \STATE Initialize empty batch $batch$
+            \FOR{$row\_idx \leftarrow start$ \TO $end - 1$}
+            \STATE $tuple \leftarrow T[row\_idx]$
+            \IF{\CALL{EvaluatePredicate}{$P, tuple$}}
+            \STATE $batch.addTuple(tuple)$
+            \IF{$batch.isFull()$}
             \STATE $Q.enqueue(batch)$
             \STATE $batch \leftarrow$ new empty batch
-        \ENDIF
-    \ENDIF
-\ENDFOR
-\IF{$\neg batch.isEmpty()$}
-    \STATE $Q.enqueue(batch)$
-\ENDIF
-\STATE $ctx.active\_workers \leftarrow ctx.active\_workers - 1$
-\IF{$ctx.active\_workers = 0$}
-    \STATE $ctx.signalCompletion()$
-\ENDIF
-\end{algorithmic}
-\end{algorithm}
+            \ENDIF
+            \ENDIF
+            \ENDFOR
+            \IF{$\neg batch.isEmpty()$}
+            \STATE $Q.enqueue(batch)$
+            \ENDIF
+            \STATE $ctx.active\_workers \leftarrow ctx.active\_workers - 1$
+            \IF{$ctx.active\_workers = 0$}
+            \STATE $ctx.signalCompletion()$
+            \ENDIF
+        \end{algorithmic}
+    \end{algorithm}
 
-\begin{lstlisting}[style=cpp, caption=Parallel Execution Implementation]
+    \begin{minipage}[H]{0.95\textwidth}
+        \begin{lstlisting}[style=cpp, caption=Parallel Execution Implementation]
 class ParallelSequentialScanNode : public PhysicalPlanNode {
     std::shared_ptr<ParallelContext> parallel_ctx;
     std::vector<std::thread> worker_threads;
-    
+
 public:
     void initialize(ExecutionContext* ctx) override {
         parallel_ctx = std::make_shared<ParallelContext>();
-        
+
         // Start worker threads
         size_t rows_per_worker = mock_data.size() / parallel_degree;
         for (size_t i = 0; i < parallel_degree; ++i) {
             size_t start_row = i * rows_per_worker;
-            size_t end_row = (i == parallel_degree - 1) ? 
+            size_t end_row = (i == parallel_degree - 1) ?
                            mock_data.size() : (i + 1) * rows_per_worker;
-            
+
             worker_threads.emplace_back([this, i, start_row, end_row]() {
                 worker_scan(i, start_row, end_row);
             });
         }
     }
-    
+
     TupleBatch get_next_batch() override {
         return parallel_ctx->get_result_batch();
     }
 };
-\end{lstlisting}
+        \end{lstlisting}
+    \end{minipage}
 
-\section{Current Implementation Status}
+    \section{Current Implementation Status}
 
-\subsection{Implemented Components}
+    \subsection{Implemented Components}
 
-\begin{table}[htbp]
-\centering
-\caption{Implementation Completeness Matrix}
-\label{tab:implementation}
-\begin{tabular}{p{3cm}p{2cm}p{2cm}p{5cm}}
-\toprule
-\textbf{Component} & \textbf{Status} & \textbf{Completeness} & \textbf{Description} \\
-\midrule
-SQL Parsing & \checkmark Complete & 95\% & libpg\_query integration \\
-Schema Management & \checkmark Complete & 90\% & DDL support, validation \\
-Logical Planning & \checkmark Complete & 85\% & Cost-based optimization \\
-Physical Planning & \checkmark Complete & 80\% & Operator selection \\
-Basic Execution & \checkmark Complete & 75\% & Iterator model, batching \\
-Parallel Execution & \checkmark Complete & 70\% & Worker thread coordination \\
-\midrule
-\multicolumn{4}{c}{\textit{Mock/Simplified Components}} \\
-\midrule
-Data Storage & $\triangle$ Mock & 20\% & In-memory mock data \\
-Expression Eval & $\triangle$ Limited & 30\% & Basic string matching \\
-Type System & $\triangle$ Missing & 10\% & String-based only \\
-\midrule
-\multicolumn{4}{c}{\textit{Missing Components}} \\
-\midrule
-Storage Engine & $\times$ Missing & 0\% & Pages, buffer pool \\
-Transaction Mgmt & $\times$ Missing & 0\% & ACID properties \\
-Index Management & $\times$ Missing & 0\% & B-trees, hash indexes \\
-Concurrency Control & $\times$ Missing & 0\% & Locking, MVCC \\
-\bottomrule
-\end{tabular}
-\end{table}
+    \begin{table}[htbp]
+        \centering
+        \caption{Implementation Completeness Matrix}
+        \label{tab:implementation}
+        \begin{tabular}{p{3cm}p{2cm}p{2cm}p{5cm}}
+            \toprule
+            \textbf{Component} & \textbf{Status} & \textbf{Completeness} & \textbf{Description} \\
+            \midrule
+            SQL Parsing & \checkmark Complete & 95\% & libpg\_query integration \\
+            Schema Management & \checkmark Complete & 90\% & DDL support, validation \\
+            Logical Planning & \checkmark Complete & 85\% & Cost-based optimization \\
+            Physical Planning & \checkmark Complete & 80\% & Operator selection \\
+            Basic Execution & \checkmark Complete & 75\% & Iterator model, batching \\
+            Parallel Execution & \checkmark Complete & 70\% & Worker thread coordination \\
+            \midrule
+            \multicolumn{4}{c}{\textit{Mock/Simplified Components}} \\
+            \midrule
+            Data Storage & $\triangle$ Mock & 20\% & In-memory mock data \\
+            Expression Eval & $\triangle$ Limited & 30\% & Basic string matching \\
+            Type System & $\triangle$ Missing & 10\% & String-based only \\
+            \midrule
+            \multicolumn{4}{c}{\textit{Missing Components}} \\
+            \midrule
+            Storage Engine & $\times$ Missing & 0\% & Pages, buffer pool \\
+            Transaction Mgmt & $\times$ Missing & 0\% & ACID properties \\
+            Index Management & $\times$ Missing & 0\% & B-trees, hash indexes \\
+            Concurrency Control & $\times$ Missing & 0\% & Locking, MVCC \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
 
-\subsection{Demonstration Capabilities}
+    \subsection{Demonstration Capabilities}
 
-The current implementation can successfully execute:
+    The current implementation can successfully execute:
 
-\begin{lstlisting}[style=cpp, caption=Supported Query Examples]
+    \begin{lstlisting}[style=cpp, caption=Supported Query Examples]
 // Basic selection and projection
 "SELECT * FROM users WHERE id = 123 LIMIT 10"
 
@@ -795,13 +799,13 @@ The current implementation can successfully execute:
 "SELECT * FROM users ORDER BY name LIMIT 10"
 
 // Complex queries with optimization
-"SELECT u.name, p.name FROM users u JOIN products p ON u.id = p.id 
+"SELECT u.name, p.name FROM users u JOIN products p ON u.id = p.id
  WHERE u.name LIKE 'John%' AND p.price > 50"
-\end{lstlisting}
+    \end{lstlisting}
 
-Output includes detailed execution plans and statistics:
+    Output includes detailed execution plans and statistics:
 
-\begin{lstlisting}[caption=Example Execution Plan Output]
+    \begin{lstlisting}[caption=Example Execution Plan Output]
 QUERY PLAN
 --------------------------------------------------
 Limit (cost=578.68..579.26 rows=10)
@@ -814,80 +818,80 @@ Execution time: 12.345 ms
 Rows processed: 10000
 Rows returned: 10
 Memory used: 1.2 MB
-\end{lstlisting}
+    \end{lstlisting}
 
-\section{Future Implementation Roadmap}
+    \section{Future Implementation Roadmap}
 
-This section outlines the systematic approach to extending the current implementation into a production-ready database system.
+    This section outlines the systematic approach to extending the current implementation into a production-ready database system.
 
-\subsection{Phase 1: Storage Engine Foundation}
+    \subsection{Phase 1: Storage Engine Foundation}
 
-\subsubsection{Buffer Pool Manager}
+    \subsubsection{Buffer Pool Manager}
 
-\begin{extension}[Buffer Pool Implementation]
-Implement a buffer pool manager to handle page-based storage:
+    \begin{extension}[Buffer Pool Implementation]
+        Implement a buffer pool manager to handle page-based storage:
 
-\begin{itemize}
-    \item \textbf{Page Structure}: Fixed-size pages (typically 8KB)
-    \item \textbf{Replacement Policy}: LRU or Clock algorithm
-    \item \textbf{Dirty Page Management}: Write-back caching
-    \item \textbf{Concurrent Access}: Reader-writer locks
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Page Structure}: Fixed-size pages (typically 8KB)
+            \item \textbf{Replacement Policy}: LRU or Clock algorithm
+            \item \textbf{Dirty Page Management}: Write-back caching
+            \item \textbf{Concurrent Access}: Reader-writer locks
+        \end{itemize}
+    \end{extension}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    page/.style={rectangle, draw=blue, thick, minimum width=1cm, minimum height=0.8cm, align=center, font=\tiny},
-    free/.style={page, fill=green!20},
-    used/.style={page, fill=yellow!20},
-    dirty/.style={page, fill=red!20}
-]
+    \begin{figure}[H]
+        \centering
+        \begin{tikzpicture}[
+            page/.style={rectangle, draw=blue, thick, minimum width=1cm, minimum height=0.8cm, align=center, font=\tiny},
+            free/.style={page, fill=green!20},
+            used/.style={page, fill=yellow!20},
+            dirty/.style={page, fill=red!20}
+        ]
 
 % Buffer Pool
-\node[font=\small\bfseries] at (0,4) {Buffer Pool (64 Pages)};
+            \node[font=\small\bfseries] at (0,4) {Buffer Pool (64 Pages)};
 
 % Page frames
-\foreach \x in {0,...,7} {
-    \foreach \y in {0,1,2,3} {
-        \node[used] at (\x,3-\y*0.4) {};
-    }
-}
+            \foreach \x in {0,...,7} {
+                \foreach \y in {0,1,2,3} {
+                    \node[used] at (\x,3-\y*0.4) {};
+                }
+            }
 
 % Some dirty pages
-\node[dirty] at (2,3) {};
-\node[dirty] at (5,2.6) {};
-\node[dirty] at (7,2.2) {};
+            \node[dirty] at (2,3) {};
+            \node[dirty] at (5,2.6) {};
+            \node[dirty] at (7,2.2) {};
 
 % Some free pages
-\node[free] at (3,1.8) {};
-\node[free] at (6,1.8) {};
+            \node[free] at (3,1.8) {};
+            \node[free] at (6,1.8) {};
 
 % Hash table for page lookup
-\node[font=\small\bfseries] at (10,4) {Page Table};
-\node[rectangle, draw=black, minimum width=3cm, minimum height=2cm] at (10,2.5) {};
-\node[font=\tiny, align=left] at (10,2.5) {
-    Page 1 → Frame 0\\
-    Page 5 → Frame 2\\
-    Page 12 → Frame 5\\
-    Page 23 → Frame 7\\
-    ...
-};
+            \node[font=\small\bfseries] at (10,4) {Page Table};
+            \node[rectangle, draw=black, minimum width=3cm, minimum height=2cm] at (10,2.5) {};
+            \node[font=\tiny, align=left] at (10,2.5) {
+                Page 1 → Frame 0\\
+                Page 5 → Frame 2\\
+                Page 12 → Frame 5\\
+                Page 23 → Frame 7\\
+                ...
+            };
 
 % Disk storage
-\node[font=\small\bfseries] at (0,-1) {Disk Storage};
-\node[rectangle, draw=gray, thick, minimum width=8cm, minimum height=1cm] at (3.5,-2) {};
-\node[font=\tiny] at (3.5,-2) {Pages: 1, 2, 3, 4, 5, ..., N};
+            \node[font=\small\bfseries] at (0,-1) {Disk Storage};
+            \node[rectangle, draw=gray, thick, minimum width=8cm, minimum height=1cm] at (3.5,-2) {};
+            \node[font=\tiny] at (3.5,-2) {Pages: 1, 2, 3, 4, 5, ..., N};
 
 % Arrows
-\draw[<->, thick] (4,1.4) -- node[right, font=\tiny] {Page I/O} (4,-1.5);
+            \draw[<->, thick] (4,1.4) -- node[right, font=\tiny] {Page I/O} (4,-1.5);
 
-\end{tikzpicture}
-\caption{Buffer Pool Manager Architecture}
-\label{fig:buffer_pool}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Buffer Pool Manager Architecture}
+        \label{fig:buffer_pool}
+    \end{figure}
 
-\begin{lstlisting}[style=cpp, caption=Buffer Pool Manager Interface]
+    \begin{lstlisting}[style=cpp, caption=Buffer Pool Manager Interface]
 class BufferPoolManager {
     struct PageFrame {
         PageId page_id;
@@ -896,106 +900,107 @@ class BufferPoolManager {
         int pin_count;
         std::chrono::time_point<std::chrono::steady_clock> last_access;
     };
-    
+
     std::vector<PageFrame> frames_;
     std::unordered_map<PageId, FrameId> page_table_;
     std::mutex latch_;
-    
+
 public:
     Page* fetch_page(PageId page_id);
     bool unpin_page(PageId page_id, bool is_dirty);
     Page* new_page(PageId* page_id);
     bool delete_page(PageId page_id);
     void flush_all_pages();
-    
+
 private:
     FrameId find_victim_frame();
     void flush_page(FrameId frame_id);
 };
-\end{lstlisting}
+    \end{lstlisting}
 
-\subsubsection{Page Management}
+    \subsubsection{Page Management}
 
-\begin{extension}[Page Layout Design]
-Implement efficient page layouts for different data types:
+    \begin{extension}[Page Layout Design]
+        Implement efficient page layouts for different data types:
 
-\begin{itemize}
-    \item \textbf{Slotted Pages}: Variable-length tuples
-    \item \textbf{Fixed-Length Records}: High-performance access
-    \item \textbf{Overflow Pages}: Large attributes (TOAST)
-    \item \textbf{Free Space Management}: Efficient space utilization
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Slotted Pages}: Variable-length tuples
+            \item \textbf{Fixed-Length Records}: High-performance access
+            \item \textbf{Overflow Pages}: Large attributes (TOAST)
+            \item \textbf{Free Space Management}: Efficient space utilization
+        \end{itemize}
+    \end{extension}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    slot/.style={rectangle, draw=black, minimum width=0.8cm, minimum height=0.4cm, align=center, font=\tiny},
-    header/.style={rectangle, draw=blue, thick, minimum width=8cm, minimum height=0.6cm, align=center, font=\small, fill=blue!20},
-    tuple/.style={rectangle, draw=green, minimum width=1.5cm, minimum height=0.4cm, align=center, font=\tiny, fill=green!20}
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            slot/.style={rectangle, draw=black, minimum width=0.8cm, minimum height=0.4cm, align=center, font=\tiny},
+            header/.style={rectangle, draw=blue, thick, minimum width=8cm, minimum height=0.6cm, align=center, font=\small, fill=blue!20},
+            tuple/.style={rectangle, draw=green, minimum width=1.5cm, minimum height=0.4cm, align=center, font=\tiny, fill=green!20}
+        ]
 
 % Page header
-\node[header] at (0,3) {Page Header (24 bytes): LSN, Page Type, Free Space, Slot Count};
+            \node[header] at (0,3) {Page Header (24 bytes): LSN, Page Type, Free Space, Slot Count};
 
 % Slot directory
-\node[font=\small] at (-3,2.2) {Slot Directory:};
-\node[slot] at (-2,2) {0→2048};
-\node[slot] at (-1,2) {1→1856};
-\node[slot] at (0,2) {2→1664};
-\node[slot] at (1,2) {3→1472};
-\node[slot, fill=red!20] at (2,2) {4→DEL};
+            \node[font=\small] at (-4,2.2) {Slot Directory:};
+            \node[slot] at (-2,2) {0→2048};
+            \node[slot] at (-0.85,2) {1→1856};
+            \node[slot] at (0.3,2) {2→1664};
+            \node[slot] at (1.5,2) {3→1472};
+            \node[slot, fill=red!20] at (2.7,2) {4→DEL};
 
 % Tuples
-\node[tuple] at (-2,1) {Tuple 0\\(192 bytes)};
-\node[tuple] at (0,1) {Tuple 1\\(192 bytes)};
-\node[tuple] at (2,1) {Tuple 2\\(192 bytes)};
+            \node[tuple] at (-2,1) {Tuple 0\\(192 bytes)};
+            \node[tuple] at (-0.5,1) {Tuple 1\\(192 bytes)};
+            \node[tuple] at (1,1) {Tuple 2\\(192 bytes)};
+            \node[tuple] at (2.5,1) {Tuple 3\\(192 bytes)};
 
 % Free space
-\node[rectangle, draw=gray, dashed, minimum width=3cm, minimum height=0.6cm, fill=gray!10] at (0,0.2) {Free Space (1280 bytes)};
+            \node[rectangle, draw=gray, dashed, minimum width=3cm, minimum height=0.6cm, fill=gray!10] at (0,0.2) {Free Space (1280 bytes)};
 
 % Page boundaries
-\draw[thick] (-4,-0.5) -- (4,-0.5);
-\draw[thick] (-4,3.5) -- (4,3.5);
-\draw[thick] (-4,-0.5) -- (-4,3.5);
-\draw[thick] (4,-0.5) -- (4,3.5);
+            \draw[thick] (-6,-0.5) -- (6,-0.5);
+            \draw[thick] (-6,3.5) -- (6,3.5);
+            \draw[thick] (-6,-0.5) -- (-6,3.5);
+            \draw[thick] (6,-0.5) -- (6,3.5);
 
-\node[font=\small] at (5,1.5) {8KB Page};
+            \node[font=\small] at (5,1.5) {8KB Page};
 
-\end{tikzpicture}
-\caption{Slotted Page Layout}
-\label{fig:page_layout}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Slotted Page Layout}
+        \label{fig:page_layout}
+    \end{figure}
 
-\subsubsection{File Management}
+    \subsubsection{File Management}
 
-\begin{extension}[File System Integration]
-Implement file management for persistent storage:
+    \begin{extension}[File System Integration]
+        Implement file management for persistent storage:
 
-\begin{itemize}
-    \item \textbf{Heap Files}: Unordered tuple storage
-    \item \textbf{Directory Pages}: Page allocation tracking
-    \item \textbf{Extent Management}: Efficient space allocation
-    \item \textbf{File Growth}: Dynamic file expansion
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Heap Files}: Unordered tuple storage
+            \item \textbf{Directory Pages}: Page allocation tracking
+            \item \textbf{Extent Management}: Efficient space allocation
+            \item \textbf{File Growth}: Dynamic file expansion
+        \end{itemize}
+    \end{extension}
 
-\subsection{Phase 2: Transaction Management}
+    \subsection{Phase 2: Transaction Management}
 
-\subsubsection{Transaction Interface}
+    \subsubsection{Transaction Interface}
 
-\begin{extension}[Transaction Processing]
-Implement ACID transaction support:
+    \begin{extension}[Transaction Processing]
+        Implement ACID transaction support:
 
-\begin{itemize}
-    \item \textbf{Transaction Context}: State tracking per transaction
-    \item \textbf{Begin/Commit/Abort}: Transaction lifecycle
-    \item \textbf{Isolation Levels}: Read uncommitted to serializable
-    \item \textbf{Deadlock Detection}: Timeout and graph-based
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Transaction Context}: State tracking per transaction
+            \item \textbf{Begin/Commit/Abort}: Transaction lifecycle
+            \item \textbf{Isolation Levels}: Read uncommitted to serializable
+            \item \textbf{Deadlock Detection}: Timeout and graph-based
+        \end{itemize}
+    \end{extension}
 
-\begin{lstlisting}[style=cpp, caption=Transaction Manager Interface]
+    \begin{lstlisting}[style=cpp, caption=Transaction Manager Interface]
 class TransactionManager {
     struct Transaction {
         TransactionId txn_id;
@@ -1005,214 +1010,215 @@ class TransactionManager {
         std::set<PageId> read_set;
         std::set<PageId> write_set;
     };
-    
+
     std::unordered_map<TransactionId, Transaction> active_txns_;
     std::atomic<TransactionId> next_txn_id_{1};
-    
+
 public:
     TransactionId begin_transaction(IsolationLevel level = IsolationLevel::READ_COMMITTED);
     void commit_transaction(TransactionId txn_id);
     void abort_transaction(TransactionId txn_id);
-    
+
     bool is_transaction_active(TransactionId txn_id);
     IsolationLevel get_isolation_level(TransactionId txn_id);
 };
-\end{lstlisting}
+    \end{lstlisting}
 
-\subsubsection{Write-Ahead Logging (WAL)}
+    \subsubsection{Write-Ahead Logging (WAL)}
 
-\begin{extension}[Logging System]
-Implement write-ahead logging for durability and recovery:
+    \begin{extension}[Logging System]
+        Implement write-ahead logging for durability and recovery:
 
-\begin{itemize}
-    \item \textbf{Log Records}: Before/after images
-    \item \textbf{Log Sequence Numbers (LSNs)}: Ordering and recovery
-    \item \textbf{Checkpointing}: Periodic consistency points
-    \item \textbf{Recovery}: REDO/UNDO processing
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Log Records}: Before/after images
+            \item \textbf{Log Sequence Numbers (LSNs)}: Ordering and recovery
+            \item \textbf{Checkpointing}: Periodic consistency points
+            \item \textbf{Recovery}: REDO/UNDO processing
+        \end{itemize}
+    \end{extension}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    log/.style={rectangle, draw=green, thick, minimum width=2cm, minimum height=0.6cm, align=center, font=\tiny, fill=green!20},
-    arrow/.style={->, thick}
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            log/.style={rectangle, draw=green, thick, minimum width=2cm, minimum height=0.6cm, align=center, font=\tiny, fill=green!20},
+            arrow/.style={->, thick}
+        ]
 
 % WAL log entries
-\node[log] at (0,4) {LSN: 100\\BEGIN TXN 5};
-\node[log] at (0,3.3) {LSN: 101\\UPDATE P1\\Before: A=10};
-\node[log] at (0,2.6) {LSN: 102\\UPDATE P1\\After: A=15};
-\node[log] at (0,1.9) {LSN: 103\\INSERT P2\\New: B=20};
-\node[log] at (0,1.2) {LSN: 104\\COMMIT TXN 5};
+            \node[log] at (0,4) {LSN: 100\\BEGIN TXN 5};
+            \node[log] at (0,3.3) {LSN: 101\\UPDATE P1\\Before: A=10};
+            \node[log] at (0,2.6) {LSN: 102\\UPDATE P1\\After: A=15};
+            \node[log] at (0,1.9) {LSN: 103\\INSERT P2\\New: B=20};
+            \node[log] at (0,1.2) {LSN: 104\\COMMIT TXN 5};
 
 % Checkpoint
-\node[rectangle, draw=red, thick, minimum width=2cm, minimum height=0.6cm, align=center, font=\tiny, fill=red!20] at (0,0.5) {LSN: 105\\CHECKPOINT};
+            \node[rectangle, draw=red, thick, minimum width=2cm, minimum height=0.6cm, align=center, font=\tiny, fill=red!20] at (0,0.5) {LSN: 105\\CHECKPOINT};
 
 % Buffer pool pages
-\node[rectangle, draw=blue, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny, fill=blue!20] at (4,3) {Page P1\\A=15\\PageLSN=102};
-\node[rectangle, draw=blue, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny, fill=blue!20] at (4,2) {Page P2\\B=20\\PageLSN=103};
+            \node[rectangle, draw=blue, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny, fill=blue!20] at (4,3) {Page P1\\A=15\\PageLSN=102};
+            \node[rectangle, draw=blue, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny, fill=blue!20] at (4,2) {Page P2\\B=20\\PageLSN=103};
 
 % WAL write before data write
-\draw[arrow, red] (1.2,2.9) -- node[above, font=\tiny] {WAL First} (2.8,2.7);
-\draw[arrow, blue] (1.2,2.2) -- node[below, font=\tiny] {Data After} (2.8,2.3);
+            \draw[arrow, red] (1.2,2.9) -- node[above, font=\tiny] {WAL First} (2.8,2.7);
+            \draw[arrow, blue] (1.2,2.2) -- node[below, font=\tiny] {Data After} (2.8,2.3);
 
-\node[font=\small\bfseries] at (-1.5,4.5) {Write-Ahead Log};
-\node[font=\small\bfseries] at (4,4) {Buffer Pool};
+            \node[font=\small\bfseries] at (-1.5,4.5) {Write-Ahead Log};
+            \node[font=\small\bfseries] at (4,4) {Buffer Pool};
 
-\end{tikzpicture}
-\caption{Write-Ahead Logging Protocol}
-\label{fig:wal}
-\end{figure}
+        \end{tikzpicture}
+        \caption{Write-Ahead Logging Protocol}
+        \label{fig:wal}
+    \end{figure}
 
-\subsection{Phase 3: Concurrency Control}
+    \subsection{Phase 3: Concurrency Control}
 
-\subsubsection{Locking Manager}
+    \subsubsection{Locking Manager}
 
-\begin{extension}[Lock Management]
-Implement hierarchical locking for concurrency control:
+    \begin{extension}[Lock Management]
+        Implement hierarchical locking for concurrency control:
 
-\begin{itemize}
-    \item \textbf{Lock Modes}: Shared, Exclusive, Intention locks
-    \item \textbf{Lock Granularity}: Table, page, tuple-level
-    \item \textbf{Deadlock Prevention}: Ordering protocols
-    \item \textbf{Lock Escalation}: Fine to coarse-grained locks
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Lock Modes}: Shared, Exclusive, Intention locks
+            \item \textbf{Lock Granularity}: Table, page, tuple-level
+            \item \textbf{Deadlock Prevention}: Ordering protocols
+            \item \textbf{Lock Escalation}: Fine to coarse-grained locks
+        \end{itemize}
+    \end{extension}
 
-\begin{table}[htbp]
-\centering
-\caption{Lock Compatibility Matrix}
-\label{tab:locks}
-\begin{tabular}{c|ccccc}
-\toprule
-& \textbf{IS} & \textbf{IX} & \textbf{S} & \textbf{X} & \textbf{SIX} \\
-\midrule
-\textbf{IS} & \checkmark & \checkmark & \checkmark & $\times$ & \checkmark \\
-\textbf{IX} & \checkmark & \checkmark & $\times$ & $\times$ & $\times$ \\
-\textbf{S} & \checkmark & $\times$ & \checkmark & $\times$ & $\times$ \\
-\textbf{X} & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
-\textbf{SIX} & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
-\bottomrule
-\end{tabular}
-\end{table}
+    \begin{table}[htbp]
+        \centering
+        \caption{Lock Compatibility Matrix}
+        \label{tab:locks}
+        \begin{tabular}{c|ccccc}
+            \toprule
+            & \textbf{IS} & \textbf{IX} & \textbf{S} & \textbf{X} & \textbf{SIX} \\
+            \midrule
+            \textbf{IS} & \checkmark & \checkmark & \checkmark & $\times$ & \checkmark \\
+            \textbf{IX} & \checkmark & \checkmark & $\times$ & $\times$ & $\times$ \\
+            \textbf{S} & \checkmark & $\times$ & \checkmark & $\times$ & $\times$ \\
+            \textbf{X} & $\times$ & $\times$ & $\times$ & $\times$ & $\times$ \\
+            \textbf{SIX} & \checkmark & $\times$ & $\times$ & $\times$ & $\times$ \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
 
-\subsubsection{Multi-Version Concurrency Control (MVCC)}
+    \subsubsection{Multi-Version Concurrency Control (MVCC)}
 
-\begin{extension}[MVCC Implementation]
-Implement MVCC for improved concurrency:
+    \begin{extension}[MVCC Implementation]
+        Implement MVCC for improved concurrency:
 
-\begin{itemize}
-    \item \textbf{Tuple Versioning}: Multiple tuple versions
-    \item \textbf{Visibility Rules}: Transaction snapshot isolation
-    \item \textbf{Garbage Collection}: Old version cleanup
-    \item \textbf{Version Chains}: Linked list of versions
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Tuple Versioning}: Multiple tuple versions
+            \item \textbf{Visibility Rules}: Transaction snapshot isolation
+            \item \textbf{Garbage Collection}: Old version cleanup
+            \item \textbf{Version Chains}: Linked list of versions
+        \end{itemize}
+    \end{extension}
 
-\subsection{Phase 4: Index Management}
+    \subsection{Phase 4: Index Management}
 
-\subsubsection{B+ Tree Implementation}
+    \subsubsection{B+ Tree Implementation}
 
-\begin{extension}[B+ Tree Index]
-Implement B+ tree indexes for efficient data access:
+    \begin{extension}[B+ Tree Index]
+        Implement B+ tree indexes for efficient data access:
 
-\begin{itemize}
-    \item \textbf{Node Structure}: Internal and leaf nodes
-    \item \textbf{Insertion/Deletion}: Tree balancing algorithms
-    \item \textbf{Range Queries}: Efficient scan operations
-    \item \textbf{Concurrent Access}: Latch coupling protocol
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Node Structure}: Internal and leaf nodes
+            \item \textbf{Insertion/Deletion}: Tree balancing algorithms
+            \item \textbf{Range Queries}: Efficient scan operations
+            \item \textbf{Concurrent Access}: Latch coupling protocol
+        \end{itemize}
+    \end{extension}
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}[
-    internal/.style={rectangle, draw=blue, thick, minimum width=2cm, minimum height=0.8cm, align=center, font=\tiny, fill=blue!20},
-    leaf/.style={rectangle, draw=green, thick, minimum width=1.5cm, minimum height=0.6cm, align=center, font=\tiny, fill=green!20},
-    arrow/.style={->, thick}
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}[
+            internal/.style={rectangle, draw=blue, thick, minimum width=2cm, minimum height=0.8cm, align=center, font=\tiny, fill=blue!20},
+            leaf/.style={rectangle, draw=green, thick, minimum width=1cm, minimum height=0.6cm, align=center, font=\tiny, fill=green!20},
+            arrow/.style={->, thick}
+        ]
 
 % Root node
-\node[internal] (root) at (0,4) {Root\\[25, 50]};
+%\node[log] at (0,4) {LSN: 100\\BEGIN TXN 5};
+            \node[internal] (root) at (0,4) {Root\\\mbox{[25, 50]}};
 
 % Internal nodes
-\node[internal] (int1) at (-3,2.5) {Internal\\[10, 20]};
-\node[internal] (int2) at (0,2.5) {Internal\\[35, 40]};
-\node[internal] (int3) at (3,2.5) {Internal\\[60, 70]};
+            \node[internal] (int1) at (-4,2.5) {Internal\\\mbox{[10, 20]}};
+            \node[internal] (int2) at (0,2.5) {Internal\\\mbox{[35, 40]}};
+            \node[internal] (int3) at (4,2.5) {Internal\\\mbox{[60, 70]}};
 
 % Leaf nodes
-\node[leaf] (leaf1) at (-4.5,1) {[5,8,9]};
-\node[leaf] (leaf2) at (-3,1) {[10,15]};
-\node[leaf] (leaf3) at (-1.5,1) {[20,22,24]};
-\node[leaf] (leaf4) at (-0.5,1) {[25,30,32]};
-\node[leaf] (leaf5) at (0.5,1) {[35,37]};
-\node[leaf] (leaf6) at (1.5,1) {[40,45,48]};
-\node[leaf] (leaf7) at (2.5,1) {[50,55,58]};
-\node[leaf] (leaf8) at (3.5,1) {[60,65]};
-\node[leaf] (leaf9) at (4.5,1) {[70,75,80]};
+            \node[leaf] (leaf1) at (-5.8,1) {[5,8,9]};
+            \node[leaf] (leaf2) at (-4.5,1) {[10,15]};
+            \node[leaf] (leaf3) at (-3,1) {[20,22,24]};
+            \node[leaf] (leaf4) at (-1.3,1) {[25,30,32]};
+            \node[leaf] (leaf5) at (0.2,1) {[35,37]};
+            \node[leaf] (leaf6) at (1.8,1) {[40,45,48]};
+            \node[leaf] (leaf7) at (3.5,1) {[50,55,58]};
+            \node[leaf] (leaf8) at (5,1) {[60,65]};
+            \node[leaf] (leaf9) at (6.5,1) {[70,75,80]};
 
 % Tree connections
-\draw[arrow] (root) -- (int1);
-\draw[arrow] (root) -- (int2);
-\draw[arrow] (root) -- (int3);
+            \draw[arrow] (root) -- (int1);
+            \draw[arrow] (root) -- (int2);
+            \draw[arrow] (root) -- (int3);
 
-\draw[arrow] (int1) -- (leaf1);
-\draw[arrow] (int1) -- (leaf2);
-\draw[arrow] (int1) -- (leaf3);
+            \draw[arrow] (int1) -- (leaf1);
+            \draw[arrow] (int1) -- (leaf2);
+            \draw[arrow] (int1) -- (leaf3);
 
-\draw[arrow] (int2) -- (leaf4);
-\draw[arrow] (int2) -- (leaf5);
-\draw[arrow] (int2) -- (leaf6);
+            \draw[arrow] (int2) -- (leaf4);
+            \draw[arrow] (int2) -- (leaf5);
+            \draw[arrow] (int2) -- (leaf6);
 
-\draw[arrow] (int3) -- (leaf7);
-\draw[arrow] (int3) -- (leaf8);
-\draw[arrow] (int3) -- (leaf9);
+            \draw[arrow] (int3) -- (leaf7);
+            \draw[arrow] (int3) -- (leaf8);
+            \draw[arrow] (int3) -- (leaf9);
 
 % Leaf node links
-\draw[<->, thick, green] (leaf1) -- (leaf2);
-\draw[<->, thick, green] (leaf2) -- (leaf3);
-\draw[<->, thick, green] (leaf3) -- (leaf4);
-\draw[<->, thick, green] (leaf4) -- (leaf5);
-\draw[<->, thick, green] (leaf5) -- (leaf6);
-\draw[<->, thick, green] (leaf6) -- (leaf7);
-\draw[<->, thick, green] (leaf7) -- (leaf8);
-\draw[<->, thick, green] (leaf8) -- (leaf9);
+            \draw[<->, thick, green] (leaf1) -- (leaf2);
+            \draw[<->, thick, green] (leaf2) -- (leaf3);
+            \draw[<->, thick, green] (leaf3) -- (leaf4);
+            \draw[<->, thick, green] (leaf4) -- (leaf5);
+            \draw[<->, thick, green] (leaf5) -- (leaf6);
+            \draw[<->, thick, green] (leaf6) -- (leaf7);
+            \draw[<->, thick, green] (leaf7) -- (leaf8);
+            \draw[<->, thick, green] (leaf8) -- (leaf9);
 
-\end{tikzpicture}
-\caption{B+ Tree Index Structure}
-\label{fig:btree}
-\end{figure}
+        \end{tikzpicture}
+        \caption{B+ Tree Index Structure}
+        \label{fig:btree}
+    \end{figure}
 
-\subsubsection{Hash Indexes}
+    \subsubsection{Hash Indexes}
 
-\begin{extension}[Hash Index Implementation]
-Implement hash indexes for equality queries:
+    \begin{extension}[Hash Index Implementation]
+        Implement hash indexes for equality queries:
 
-\begin{itemize}
-    \item \textbf{Extendible Hashing}: Dynamic bucket splitting
-    \item \textbf{Collision Handling}: Chaining or open addressing
-    \item \textbf{Hash Functions}: Uniform distribution
-    \item \textbf{Rehashing}: Load factor management
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Extendible Hashing}: Dynamic bucket splitting
+            \item \textbf{Collision Handling}: Chaining or open addressing
+            \item \textbf{Hash Functions}: Uniform distribution
+            \item \textbf{Rehashing}: Load factor management
+        \end{itemize}
+    \end{extension}
 
-\subsection{Phase 5: Advanced Query Processing}
+    \subsection{Phase 5: Advanced Query Processing}
 
-\subsubsection{Complex Expression Evaluation}
+    \subsubsection{Complex Expression Evaluation}
 
-\begin{extension}[Expression Engine]
-Implement a comprehensive expression evaluation system:
+    \begin{extension}[Expression Engine]
+        Implement a comprehensive expression evaluation system:
 
-\begin{itemize}
-    \item \textbf{Type System}: Strong typing with conversions
-    \item \textbf{Function Library}: Built-in SQL functions
-    \item \textbf{Operator Precedence}: Correct expression parsing
-    \item \textbf{Null Handling}: Three-valued logic
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Type System}: Strong typing with conversions
+            \item \textbf{Function Library}: Built-in SQL functions
+            \item \textbf{Operator Precedence}: Correct expression parsing
+            \item \textbf{Null Handling}: Three-valued logic
+        \end{itemize}
+    \end{extension}
 
-\begin{lstlisting}[style=cpp, caption=Expression Evaluation Framework]
+    \begin{lstlisting}[style=cpp, caption=Expression Evaluation Framework]
 class Expression {
 public:
     virtual ~Expression() = default;
@@ -1249,170 +1255,170 @@ public:
         return ctx.function_registry.call(function_name_, arg_values);
     }
 };
-\end{lstlisting}
+    \end{lstlisting}
 
-\subsubsection{Advanced Join Algorithms}
+    \subsubsection{Advanced Join Algorithms}
 
-\begin{extension}[Join Algorithm Enhancement]
-Implement additional join algorithms:
+    \begin{extension}[Join Algorithm Enhancement]
+        Implement additional join algorithms:
 
-\begin{itemize}
-    \item \textbf{Sort-Merge Join}: For pre-sorted inputs
-    \item \textbf{Hybrid Hash Join}: Memory-adaptive partitioning
-    \item \textbf{Index Nested Loop}: Using index lookups
-    \item \textbf{Multi-Way Joins}: Star and snowflake queries
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Sort-Merge Join}: For pre-sorted inputs
+            \item \textbf{Hybrid Hash Join}: Memory-adaptive partitioning
+            \item \textbf{Index Nested Loop}: Using index lookups
+            \item \textbf{Multi-Way Joins}: Star and snowflake queries
+        \end{itemize}
+    \end{extension}
 
-\begin{algorithm}
-\caption{Hash Join Algorithm}
-\begin{algorithmic}[1]
-\REQUIRE Left relation $R$, Right relation $S$, Join predicate $\theta$
-\ENSURE Joined tuples satisfying $\theta$
-\STATE \textbf{Phase 1: Build Phase}
-\STATE Initialize hash table $H$
-\FOR{\textbf{each} tuple $r \in R$}
-    \STATE $key \leftarrow \CALL{ExtractJoinKey}{r, \theta}$
-    \STATE $H[key].append(r)$ \COMMENT{Add to hash bucket}
-\ENDFOR
-\STATE \textbf{Phase 2: Probe Phase}
-\FOR{\textbf{each} tuple $s \in S$}
-    \STATE $key \leftarrow \CALL{ExtractJoinKey}{s, \theta}$
-    \IF{$key \in H$}
-        \FOR{\textbf{each} tuple $r \in H[key]$}
+    \begin{algorithm}
+        \caption{Hash Join Algorithm}
+        \begin{algorithmic}[1]
+            \REQUIRE Left relation $R$, Right relation $S$, Join predicate $\theta$
+            \ENSURE Joined tuples satisfying $\theta$
+            \STATE \textbf{Phase 1: Build Phase}
+            \STATE Initialize hash table $H$
+            \FOR{\textbf{each} tuple $r \in R$}
+            \STATE $key \leftarrow \CALL{ExtractJoinKey}{r, \theta}$
+            \STATE $H[key].append(r)$ \COMMENT{Add to hash bucket}
+            \ENDFOR
+            \STATE \textbf{Phase 2: Probe Phase}
+            \FOR{\textbf{each} tuple $s \in S$}
+            \STATE $key \leftarrow \CALL{ExtractJoinKey}{s, \theta}$
+            \IF{$key \in H$}
+            \FOR{\textbf{each} tuple $r \in H[key]$}
             \IF{\CALL{EvaluateJoinCondition}{$r, s, \theta$}}
-                \STATE \textbf{yield} $\CALL{MergeTuples}{r, s}$
+            \STATE \textbf{yield} $\CALL{MergeTuples}{r, s}$
             \ENDIF
-        \ENDFOR
-    \ENDIF
-\ENDFOR
-\end{algorithmic}
-\end{algorithm}
+            \ENDFOR
+            \ENDIF
+            \ENDFOR
+        \end{algorithmic}
+    \end{algorithm}
 
-\begin{algorithm}
-\caption{External Sort Algorithm}
-\begin{algorithmic}[1]
-\REQUIRE Input relation $R$, Available memory $M$, Sort keys $K$
-\ENSURE Sorted relation $R'$
-\STATE \textbf{Phase 1: Generate Sorted Runs}
-\STATE $run\_count \leftarrow 0$
-\STATE $buffer \leftarrow$ empty list
-\WHILE{$R$ has more tuples}
-    \STATE Fill $buffer$ with up to $M$ tuples from $R$
-    \STATE \CALL{InMemorySort}{$buffer, K$}
-    \STATE Write $buffer$ to temporary file $temp\_run_{run\_count}$
-    \STATE $run\_count \leftarrow run\_count + 1$
-    \STATE Clear $buffer$
-\ENDWHILE
-\STATE \textbf{Phase 2: Merge Sorted Runs}
-\STATE Initialize priority queue $PQ$ with first tuple from each run
-\STATE Open output file $R'$
-\WHILE{$PQ$ is not empty}
-    \STATE $(tuple, run\_id) \leftarrow PQ.extractMin()$
-    \STATE Write $tuple$ to $R'$
-    \IF{$temp\_run_{run\_id}$ has more tuples}
-        \STATE $next\_tuple \leftarrow$ read next tuple from $temp\_run_{run\_id}$
-        \STATE $PQ.insert((next\_tuple, run\_id))$
-    \ENDIF
-\ENDWHILE
-\STATE Delete all temporary run files
-\RETURN $R'$
-\end{algorithmic}
-\end{algorithm}
+    \begin{algorithm}
+        \caption{External Sort Algorithm}
+        \begin{algorithmic}[1]
+            \REQUIRE Input relation $R$, Available memory $M$, Sort keys $K$
+            \ENSURE Sorted relation $R'$
+            \STATE \textbf{Phase 1: Generate Sorted Runs}
+            \STATE $run\_count \leftarrow 0$
+            \STATE $buffer \leftarrow$ empty list
+            \WHILE{$R$ has more tuples}
+            \STATE Fill $buffer$ with up to $M$ tuples from $R$
+            \STATE \CALL{InMemorySort}{$buffer, K$}
+            \STATE Write $buffer$ to temporary file $temp\_run_{run\_count}$
+            \STATE $run\_count \leftarrow run\_count + 1$
+            \STATE Clear $buffer$
+            \ENDWHILE
+            \STATE \textbf{Phase 2: Merge Sorted Runs}
+            \STATE Initialize priority queue $PQ$ with first tuple from each run
+            \STATE Open output file $R'$
+            \WHILE{$PQ$ is not empty}
+            \STATE $(tuple, run\_id) \leftarrow PQ.extractMin()$
+            \STATE Write $tuple$ to $R'$
+            \IF{$temp\_run_{run\_id}$ has more tuples}
+            \STATE $next\_tuple \leftarrow$ read next tuple from $temp\_run_{run\_id}$
+            \STATE $PQ.insert((next\_tuple, run\_id))$
+            \ENDIF
+            \ENDWHILE
+            \STATE Delete all temporary run files
+            \RETURN $R'$
+        \end{algorithmic}
+    \end{algorithm}
 
-\subsubsection{Advanced Aggregation}
+    \subsubsection{Advanced Aggregation}
 
-\begin{extension}[Aggregation Enhancement]
-Implement sophisticated aggregation operators:
+    \begin{extension}[Aggregation Enhancement]
+        Implement sophisticated aggregation operators:
 
-\begin{itemize}
-    \item \textbf{Window Functions}: OVER clauses
-    \item \textbf{CUBE and ROLLUP}: Multi-dimensional aggregation
-    \item \textbf{Streaming Aggregation}: Large dataset processing
-    \item \textbf{Approximate Aggregation}: HyperLogLog, sketches
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Window Functions}: OVER clauses
+            \item \textbf{CUBE and ROLLUP}: Multi-dimensional aggregation
+            \item \textbf{Streaming Aggregation}: Large dataset processing
+            \item \textbf{Approximate Aggregation}: HyperLogLog, sketches
+        \end{itemize}
+    \end{extension}
 
-\subsection{Phase 6: Advanced Optimization}
+    \subsection{Phase 6: Advanced Optimization}
 
-\subsubsection{Statistics and Cardinality Estimation}
+    \subsubsection{Statistics and Cardinality Estimation}
 
-\begin{extension}[Statistics System]
-Implement comprehensive statistics for query optimization:
+    \begin{extension}[Statistics System]
+        Implement comprehensive statistics for query optimization:
 
-\begin{itemize}
-    \item \textbf{Histograms}: Value distribution tracking
-    \item \textbf{Most Common Values (MCVs)}: Skew handling
-    \item \textbf{Correlation Statistics}: Multi-column dependencies
-    \item \textbf{Adaptive Statistics}: Query feedback integration
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Histograms}: Value distribution tracking
+            \item \textbf{Most Common Values (MCVs)}: Skew handling
+            \item \textbf{Correlation Statistics}: Multi-column dependencies
+            \item \textbf{Adaptive Statistics}: Query feedback integration
+        \end{itemize}
+    \end{extension}
 
-\subsubsection{Advanced Cost Models}
+    \subsubsection{Advanced Cost Models}
 
-\begin{extension}[Cost Model Enhancement]
-Develop sophisticated cost estimation:
+    \begin{extension}[Cost Model Enhancement]
+        Develop sophisticated cost estimation:
 
-\begin{itemize}
-    \item \textbf{Machine Learning}: Learned cost models
-    \item \textbf{Runtime Feedback}: Actual vs estimated costs
-    \item \textbf{Hardware-Aware Costs}: CPU, memory, I/O modeling
-    \item \textbf{Parallel Cost Models}: Multi-threading overhead
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Machine Learning}: Learned cost models
+            \item \textbf{Runtime Feedback}: Actual vs estimated costs
+            \item \textbf{Hardware-Aware Costs}: CPU, memory, I/O modeling
+            \item \textbf{Parallel Cost Models}: Multi-threading overhead
+        \end{itemize}
+    \end{extension}
 
-\section{Teaching Methodology}
+    \section{Teaching Methodology}
 
-\subsection{Progressive Implementation Approach}
+    \subsection{Progressive Implementation Approach}
 
-This implementation framework supports a structured learning approach:
+    This implementation framework supports a structured learning approach:
 
-\begin{enumerate}
-    \item \textbf{Phase 1 - Foundations}: Students begin with the current working system
-    \item \textbf{Phase 2 - Storage}: Implement file and page management
-    \item \textbf{Phase 3 - Transactions}: Add ACID properties
-    \item \textbf{Phase 4 - Concurrency}: Implement locking and MVCC
-    \item \textbf{Phase 5 - Indexing}: Add B+ trees and hash indexes
-    \item \textbf{Phase 6 - Advanced}: Optimize and extend functionality
-\end{enumerate}
+    \begin{enumerate}
+        \item \textbf{Phase 1 - Foundations}: Students begin with the current working system
+        \item \textbf{Phase 2 - Storage}: Implement file and page management
+        \item \textbf{Phase 3 - Transactions}: Add ACID properties
+        \item \textbf{Phase 4 - Concurrency}: Implement locking and MVCC
+        \item \textbf{Phase 5 - Indexing}: Add B+ trees and hash indexes
+        \item \textbf{Phase 6 - Advanced}: Optimize and extend functionality
+    \end{enumerate}
 
-\subsection{Learning Objectives by Phase}
+    \subsection{Learning Objectives by Phase}
 
-\begin{table}[htbp]
-\centering
-\caption{Learning Objectives by Implementation Phase}
-\label{tab:learning}
-\begin{tabular}{p{2cm}p{5cm}p{5cm}}
-\toprule
-\textbf{Phase} & \textbf{Technical Skills} & \textbf{Conceptual Understanding} \\
-\midrule
-Current & C++17, SQL parsing, query planning & Query optimization theory \\
-Storage & File I/O, memory management, caching & Storage hierarchy, buffer management \\
-Transactions & Logging, recovery, state management & ACID properties, consistency \\
-Concurrency & Threading, synchronization, deadlocks & Isolation levels, conflict serializability \\
-Indexing & Tree algorithms, hashing, B+ trees & Access methods, query performance \\
-Advanced & Performance tuning, statistics & Research-level optimization \\
-\bottomrule
-\end{tabular}
-\end{table}
+    \begin{table}[htbp]
+        \centering
+        \caption{Learning Objectives by Implementation Phase}
+        \label{tab:learning}
+        \begin{tabular}{p{2cm}p{5cm}p{5cm}}
+            \toprule
+            \textbf{Phase} & \textbf{Technical Skills} & \textbf{Conceptual Understanding} \\
+            \midrule
+            Current & C++17, SQL parsing, query planning & Query optimization theory \\
+            Storage & File I/O, memory management, caching & Storage hierarchy, buffer management \\
+            Transactions & Logging, recovery, state management & ACID properties, consistency \\
+            Concurrency & Threading, synchronization, deadlocks & Isolation levels, conflict serializability \\
+            Indexing & Tree algorithms, hashing, B+ trees & Access methods, query performance \\
+            Advanced & Performance tuning, statistics & Research-level optimization \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
 
-\subsection{Assessment Strategies}
+    \subsection{Assessment Strategies}
 
-\begin{itemize}
-    \item \textbf{Incremental Development}: Each phase builds on previous work
-    \item \textbf{Performance Benchmarking}: Measure improvements at each stage
-    \item \textbf{Design Documentation}: Require architectural documentation
-    \item \textbf{Testing Framework}: Comprehensive test suite development
-    \item \textbf{Research Extensions}: Open-ended optimization projects
-\end{itemize}
+    \begin{itemize}
+        \item \textbf{Incremental Development}: Each phase builds on previous work
+        \item \textbf{Performance Benchmarking}: Measure improvements at each stage
+        \item \textbf{Design Documentation}: Require architectural documentation
+        \item \textbf{Testing Framework}: Comprehensive test suite development
+        \item \textbf{Research Extensions}: Open-ended optimization projects
+    \end{itemize}
 
-\section{Integration with Current Implementation}
+    \section{Integration with Current Implementation}
 
-\subsection{Extension Points}
+    \subsection{Extension Points}
 
-The current architecture provides clear extension points:
+    The current architecture provides clear extension points:
 
-\begin{lstlisting}[style=cpp, caption=Storage Interface Extension Point]
+    \begin{lstlisting}[style=cpp, caption=Storage Interface Extension Point]
 // Current mock implementation
 class SequentialScanNode : public PhysicalPlanNode {
     std::vector<Tuple> mock_data;  // Replace with storage interface
@@ -1469,13 +1475,13 @@ public:
         return batch;
     }
 };
-\end{lstlisting}
+    \end{lstlisting}
 
-\subsection{Backward Compatibility}
+    \subsection{Backward Compatibility}
 
-Extensions maintain compatibility with existing interfaces:
+    Extensions maintain compatibility with existing interfaces:
 
-\begin{lstlisting}[style=cpp, caption=Interface Compatibility Design]
+    \begin{lstlisting}[style=cpp, caption=Interface Compatibility Design]
 // Abstract base maintains current interface
 class PhysicalPlanNode {
 public:
@@ -1504,202 +1510,202 @@ public:
         current_txn_id_ = txn_id;
     }
 };
-\end{lstlisting}
+    \end{lstlisting}
 
-\section{Performance Analysis and Benchmarking}
+    \section{Performance Analysis and Benchmarking}
 
-\subsection{Current Performance Characteristics}
+    \subsection{Current Performance Characteristics}
 
-The existing implementation provides a baseline for performance comparison:
+    The existing implementation provides a baseline for performance comparison:
 
-\begin{figure}[htbp]
-\centering
-\begin{tikzpicture}
-\begin{axis}[
-    xlabel={Table Size (rows)},
-    ylabel={Execution Time (ms)},
-    xmode=log,
-    ymode=log,
-    legend pos=north west,
-    grid=major,
-    width=10cm,
-    height=6cm
-]
+    \begin{figure}[htbp]
+        \centering
+        \begin{tikzpicture}
+            \begin{axis}[
+                xlabel={Table Size (rows)},
+                ylabel={Execution Time (ms)},
+                xmode=log,
+                ymode=log,
+                legend pos=north west,
+                grid=major,
+                width=10cm,
+                height=6cm
+            ]
 
-\addplot[blue, thick, mark=*] coordinates {
-    (1000, 2.1)
-    (10000, 15.3)
-    (100000, 142.7)
-    (1000000, 1486.2)
-};
+                \addplot[blue, thick, mark=*] coordinates {
+                    (1000, 2.1)
+                    (10000, 15.3)
+                    (100000, 142.7)
+                    (1000000, 1486.2)
+                };
 
-\addplot[red, thick, mark=square] coordinates {
-    (1000, 5.8)
-    (10000, 42.1)
-    (100000, 398.6)
-    (1000000, 4125.9)
-};
+                \addplot[red, thick, mark=square] coordinates {
+                    (1000, 5.8)
+                    (10000, 42.1)
+                    (100000, 398.6)
+                    (1000000, 4125.9)
+                };
 
-\addplot[green, thick, mark=triangle] coordinates {
-    (1000, 1.2)
-    (10000, 8.7)
-    (100000, 67.3)
-    (1000000, 623.1)
-};
+                \addplot[green, thick, mark=triangle] coordinates {
+                    (1000, 1.2)
+                    (10000, 8.7)
+                    (100000, 67.3)
+                    (1000000, 623.1)
+                };
 
-\legend{Sequential Scan, Hash Join, Parallel Scan}
-\end{axis}
-\end{tikzpicture}
-\caption{Performance Scaling with Mock Data}
-\label{fig:performance}
-\end{figure}
+                \legend{Sequential Scan, Hash Join, Parallel Scan}
+            \end{axis}
+        \end{tikzpicture}
+        \caption{Performance Scaling with Mock Data}
+        \label{fig:performance}
+    \end{figure}
 
-\subsection{Benchmarking Framework}
+    \subsection{Benchmarking Framework}
 
-\begin{extension}[Performance Testing]
-Implement comprehensive benchmarking:
+    \begin{extension}[Performance Testing]
+        Implement comprehensive benchmarking:
 
-\begin{itemize}
-    \item \textbf{TPC Benchmarks}: TPC-H for analytical queries
-    \item \textbf{Microbenchmarks}: Individual operator performance
-    \item \textbf{Scalability Tests}: Multi-threaded performance
-    \item \textbf{Memory Usage Analysis}: Resource consumption tracking
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{TPC Benchmarks}: TPC-H for analytical queries
+            \item \textbf{Microbenchmarks}: Individual operator performance
+            \item \textbf{Scalability Tests}: Multi-threaded performance
+            \item \textbf{Memory Usage Analysis}: Resource consumption tracking
+        \end{itemize}
+    \end{extension}
 
-\subsection{Expected Performance Improvements}
+    \subsection{Expected Performance Improvements}
 
-Performance improvements anticipated from each phase:
+    Performance improvements anticipated from each phase:
 
-\begin{table}[htbp]
-\centering
-\caption{Expected Performance Gains by Implementation Phase}
-\label{tab:performance_gains}
-\begin{tabular}{lp{3cm}p{3cm}p{4cm}}
-\toprule
-\textbf{Phase} & \textbf{Improvement} & \textbf{Mechanism} & \textbf{Workload Impact} \\
-\midrule
-Storage Engine & 10-100x & Real I/O optimization, caching & Large dataset queries \\
-Indexing & 100-1000x & B+ tree access & Selective queries \\
-Transactions & Varies & Reduced locking overhead & Concurrent workloads \\
-MVCC & 2-10x & Reduced blocking & Read-heavy workloads \\
-Vectorization & 2-5x & SIMD, cache optimization & CPU-intensive queries \\
-Parallelization & 2-8x & Multi-core utilization & Large scan operations \\
-\bottomrule
-\end{tabular}
-\end{table}
+    \begin{table}[htbp]
+        \centering
+        \caption{Expected Performance Gains by Implementation Phase}
+        \label{tab:performance_gains}
+        \begin{tabular}{lp{3cm}p{3cm}p{4cm}}
+            \toprule
+            \textbf{Phase} & \textbf{Improvement} & \textbf{Mechanism} & \textbf{Workload Impact} \\
+            \midrule
+            Storage Engine & 10-100x & Real I/O optimization, caching & Large dataset queries \\
+            Indexing & 100-1000x & B+ tree access & Selective queries \\
+            Transactions & Varies & Reduced locking overhead & Concurrent workloads \\
+            MVCC & 2-10x & Reduced blocking & Read-heavy workloads \\
+            Vectorization & 2-5x & SIMD, cache optimization & CPU-intensive queries \\
+            Parallelization & 2-8x & Multi-core utilization & Large scan operations \\
+            \bottomrule
+        \end{tabular}
+    \end{table}
 
-\section{Research Extensions and Future Work}
+    \section{Research Extensions and Future Work}
 
-\subsection{Machine Learning Integration}
+    \subsection{Machine Learning Integration}
 
-\begin{extension}[ML-Enhanced Query Processing]
-Integrate machine learning for intelligent query processing:
+    \begin{extension}[ML-Enhanced Query Processing]
+        Integrate machine learning for intelligent query processing:
 
-\begin{itemize}
-    \item \textbf{Learned Indexes}: Replace B+ trees with learned models
-    \item \textbf{Cardinality Estimation}: Neural network-based estimates
-    \item \textbf{Join Order Optimization}: Reinforcement learning
-    \item \textbf{Adaptive Query Processing}: Runtime plan adjustments
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Learned Indexes}: Replace B+ trees with learned models
+            \item \textbf{Cardinality Estimation}: Neural network-based estimates
+            \item \textbf{Join Order Optimization}: Reinforcement learning
+            \item \textbf{Adaptive Query Processing}: Runtime plan adjustments
+        \end{itemize}
+    \end{extension}
 
-\subsection{Modern Hardware Utilization}
+    \subsection{Modern Hardware Utilization}
 
-\begin{extension}[Hardware-Aware Processing]
-Optimize for modern hardware architectures:
+    \begin{extension}[Hardware-Aware Processing]
+        Optimize for modern hardware architectures:
 
-\begin{itemize}
-    \item \textbf{SIMD Vectorization}: AVX-512 instruction utilization
-    \item \textbf{GPU Acceleration}: CUDA-based query processing
-    \item \textbf{Non-Volatile Memory}: Persistent memory integration
-    \item \textbf{RDMA Networks}: High-speed interconnects
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{SIMD Vectorization}: AVX-512 instruction utilization
+            \item \textbf{GPU Acceleration}: CUDA-based query processing
+            \item \textbf{Non-Volatile Memory}: Persistent memory integration
+            \item \textbf{RDMA Networks}: High-speed interconnects
+        \end{itemize}
+    \end{extension}
 
-\subsection{Distributed Query Processing}
+    \subsection{Distributed Query Processing}
 
-\begin{extension}[Distributed Systems]
-Extend to distributed query processing:
+    \begin{extension}[Distributed Systems]
+        Extend to distributed query processing:
 
-\begin{itemize}
-    \item \textbf{Data Partitioning}: Horizontal and vertical partitioning
-    \item \textbf{Distributed Joins}: Cross-node join processing
-    \item \textbf{Consensus Protocols}: Distributed transaction coordination
-    \item \textbf{Fault Tolerance}: Node failure recovery
-\end{itemize}
-\end{extension}
+        \begin{itemize}
+            \item \textbf{Data Partitioning}: Horizontal and vertical partitioning
+            \item \textbf{Distributed Joins}: Cross-node join processing
+            \item \textbf{Consensus Protocols}: Distributed transaction coordination
+            \item \textbf{Fault Tolerance}: Node failure recovery
+        \end{itemize}
+    \end{extension}
 
-\section{Conclusion}
+    \section{Conclusion}
 
-This comprehensive implementation framework provides a solid foundation for understanding and extending modern query processing systems. The current implementation demonstrates core concepts while providing clear pathways for production-ready enhancements.
+    This comprehensive implementation framework provides a solid foundation for understanding and extending modern query processing systems. The current implementation demonstrates core concepts while providing clear pathways for production-ready enhancements.
 
-\subsection{Key Contributions}
+    \subsection{Key Contributions}
 
-\begin{enumerate}
-    \item \textbf{Complete Pipeline}: End-to-end query processing implementation
-    \item \textbf{Educational Framework}: Structured learning progression
-    \item \textbf{Extension Architecture}: Clear interfaces for enhancements
-    \item \textbf{Modern Techniques}: Vectorization and parallel processing
-    \item \textbf{Research Integration}: Academic and industrial practices
-\end{enumerate}
+    \begin{enumerate}
+        \item \textbf{Complete Pipeline}: End-to-end query processing implementation
+        \item \textbf{Educational Framework}: Structured learning progression
+        \item \textbf{Extension Architecture}: Clear interfaces for enhancements
+        \item \textbf{Modern Techniques}: Vectorization and parallel processing
+        \item \textbf{Research Integration}: Academic and industrial practices
+    \end{enumerate}
 
-\subsection{Learning Outcomes}
+    \subsection{Learning Outcomes}
 
-Students working with this system will gain:
+    Students working with this system will gain:
 
-\begin{itemize}
-    \item Deep understanding of query processing internals
-    \item Practical experience with database system implementation
-    \item Exposure to modern optimization techniques
-    \item Foundation for database research and development
-    \item Skills applicable to distributed and cloud systems
-\end{itemize}
+    \begin{itemize}
+        \item Deep understanding of query processing internals
+        \item Practical experience with database system implementation
+        \item Exposure to modern optimization techniques
+        \item Foundation for database research and development
+        \item Skills applicable to distributed and cloud systems
+    \end{itemize}
 
-The systematic approach outlined in this paper enables both academic instruction and research advancement, providing a bridge between theoretical database concepts and practical system implementation.
+    The systematic approach outlined in this paper enables both academic instruction and research advancement, providing a bridge between theoretical database concepts and practical system implementation.
 
-\section{Acknowledgments}
+    \section{Acknowledgments}
 
-This implementation builds upon decades of database systems research and the open-source PostgreSQL project. Special recognition goes to the libpg\_query project for providing accessible PostgreSQL parsing capabilities.
+    This implementation builds upon decades of database systems research and the open-source PostgreSQL project. Special recognition goes to the libpg\_query project for providing accessible PostgreSQL parsing capabilities.
 
-\bibliographystyle{acm}
-\begin{thebibliography}{99}
+    \bibliographystyle{acm}
+    \begin{thebibliography}{99}
 
-\bibitem{garcia2008database}
-Garcia-Molina, H., Ullman, J. D., \& Widom, J. (2008). 
-\textit{Database Systems: The Complete Book}. 
-Pearson Prentice Hall.
+        \bibitem{garcia2008database}
+        Garcia-Molina, H., Ullman, J. D., \& Widom, J. (2008).
+        \textit{Database Systems: The Complete Book}.
+        Pearson Prentice Hall.
 
-\bibitem{ramakrishnan2003database}
-Ramakrishnan, R., \& Gehrke, J. (2003). 
-\textit{Database Management Systems}. 
-McGraw-Hill.
+        \bibitem{ramakrishnan2003database}
+        Ramakrishnan, R., \& Gehrke, J. (2003).
+        \textit{Database Management Systems}.
+        McGraw-Hill.
 
-\bibitem{hellerstein2007architecture}
-Hellerstein, J. M., Stonebraker, M., \& Hamilton, J. (2007). 
-Architecture of a database system. 
-\textit{Foundations and Trends in Databases}, 1(2), 141-259.
+        \bibitem{hellerstein2007architecture}
+        Hellerstein, J. M., Stonebraker, M., \& Hamilton, J. (2007).
+        Architecture of a database system.
+        \textit{Foundations and Trends in Databases}, 1(2), 141-259.
 
-\bibitem{graefe1993volcano}
-Graefe, G. (1993). 
-Volcano—an extensible and parallel query evaluation system. 
-\textit{IEEE Transactions on Knowledge and Data Engineering}, 6(1), 120-135.
+        \bibitem{graefe1993volcano}
+        Graefe, G. (1993).
+        Volcano—an extensible and parallel query evaluation system.
+        \textit{IEEE Transactions on Knowledge and Data Engineering}, 6(1), 120-135.
 
-\bibitem{neumann2011efficiently}
-Neumann, T. (2011). 
-Efficiently compiling efficient query plans for modern hardware. 
-\textit{Proceedings of the VLDB Endowment}, 4(9), 539-550.
+        \bibitem{neumann2011efficiently}
+        Neumann, T. (2011).
+        Efficiently compiling efficient query plans for modern hardware.
+        \textit{Proceedings of the VLDB Endowment}, 4(9), 539-550.
 
-\bibitem{postgres2023}
-PostgreSQL Global Development Group. (2023). 
-PostgreSQL Documentation. 
-\url{https://www.postgresql.org/docs/}
+        \bibitem{postgres2023}
+        PostgreSQL Global Development Group. (2023).
+        PostgreSQL Documentation.
+        \url{https://www.postgresql.org/docs/}
 
-\bibitem{libpgquery2023}
-libpg\_query. (2023). 
-Standalone PostgreSQL query parser for C/C++. 
-\url{https://github.com/pganalyze/libpg_query}
+        \bibitem{libpgquery2023}
+        libpg\_query. (2023).
+        Standalone PostgreSQL query parser for C/C++.
+        \url{https://github.com/pganalyze/libpg_query}
 
-\end{thebibliography}
+    \end{thebibliography}
 
 \end{document}
