@@ -62,9 +62,9 @@ A Comprehensive Implementation and Extension Framework}}
     \maketitle
 
     \begin{abstract}
-        This paper presents a comprehensive analysis and implementation guide for a modern query processing engine built with C++17, featuring PostgreSQL-compatible SQL parsing, cost-based optimization, and vectorized execution. The implementation demonstrates the complete pipeline from SQL parsing through physical execution, serving both as an educational tool for graduate database systems courses and as a foundation for advanced database research. We detail the current architecture, identify extension points for production-ready enhancements, and provide a roadmap for implementing missing components including storage management, transaction processing, and advanced optimization techniques.
+        This paper presents DB25, a modern Hybrid Transactional/Analytical Processing (HTAP) database system built with C++17, featuring PostgreSQL-compatible SQL parsing, cost-based optimization, vectorized execution, and Computational Storage integration. DB25 unifies transactional and analytical workloads within a single system, enabling real-time analytics on operational data without the traditional ETL overhead. The implementation demonstrates the complete HTAP pipeline from SQL parsing through hybrid execution, incorporating both row-based transactional processing and columnar analytical processing with intelligent workload routing. DB25 leverages Computational Storage to push data processing closer to storage devices, reducing data movement and improving performance for analytical queries. This work serves both as an educational tool for graduate database systems courses and as a foundation for advanced HTAP database research.
 
-        \textbf{Keywords:} Query Processing, Database Systems, Cost-Based Optimization, Vectorized Execution, C++17, PostgreSQL
+        \textbf{Keywords:} HTAP Database, Query Processing, Computational Storage, Cost-Based Optimization, Vectorized Execution, C++17, PostgreSQL, Hybrid Processing
     \end{abstract}
 
     \tableofcontents
@@ -72,68 +72,94 @@ A Comprehensive Implementation and Extension Framework}}
 
     \section{Introduction}
 
-    Modern database management systems represent some of the most complex software systems ever built, incorporating decades of research in query optimization, storage management, and concurrent processing. This paper presents a systematic approach to understanding and implementing a query processing engine that demonstrates core database concepts while providing a foundation for advanced research and development.
+    Modern database management systems face the challenge of serving both transactional and analytical workloads efficiently. Traditional database architectures require separate OLTP and OLAP systems with complex ETL processes, introducing latency and operational complexity. DB25 addresses this challenge by implementing a unified Hybrid Transactional/Analytical Processing (HTAP) architecture that enables real-time analytics on operational data while maintaining strong transactional guarantees.
 
-    \subsection{System Overview}
+    DB25 represents a modern approach to database system design, incorporating decades of research in query optimization, storage management, and concurrent processing, while introducing novel HTAP capabilities and Computational Storage integration. This paper presents a systematic approach to understanding and implementing an HTAP database system that demonstrates core database concepts while providing a foundation for advanced research and development in hybrid processing architectures.
 
-    Our implementation provides a complete query processing pipeline:
+    \subsection{HTAP System Overview}
+
+    DB25 provides a complete HTAP query processing pipeline with intelligent workload routing:
 
     \begin{enumerate}
-        \item \textbf{SQL Parsing} using PostgreSQL's \texttt{libpg\_query}
-        \item \textbf{Logical Planning} with cost-based optimization
-        \item \textbf{Physical Planning} with operator selection
-        \item \textbf{Vectorized Execution} with parallel processing
-        \item \textbf{Schema Management} with DDL support
+        \item \textbf{SQL Parsing} using PostgreSQL's \texttt{libpg\_query} with HTAP workload classification
+        \item \textbf{Workload Routing} with intelligent OLTP/OLAP detection and routing
+        \item \textbf{Hybrid Logical Planning} with cost-based optimization for both transactional and analytical queries
+        \item \textbf{Dual Physical Planning} with row-based and column-based operator selection
+        \item \textbf{HTAP Execution Engine} supporting both transactional integrity and vectorized analytics
+        \item \textbf{Computational Storage Integration} for near-data processing capabilities
+        \item \textbf{Unified Schema Management} with DDL support for hybrid storage formats
     \end{enumerate}
 
     \begin{figure}[htbp]
         \centering
         \begin{tikzpicture}[
             box/.style={rectangle, draw=black, thick, minimum width=3cm, minimum height=1cm, align=center},
-            arrow/.style={->, thick, >=stealth}
+            htapbox/.style={rectangle, draw=blue, thick, minimum width=3cm, minimum height=1cm, align=center, fill=blue!10},
+            arrow/.style={->, thick, >=stealth},
+            htaparrow/.style={->, thick, >=stealth, blue}
         ]
 
 % Input layer
-            \node[box, fill=blue!20] (sql) at (0,8) {SQL Query};
+            \node[box, fill=blue!20] (sql) at (0,9) {SQL Query};
+
+% Workload classification layer
+            \node[htapbox] (classifier) at (0,7.5) {HTAP Workload\\Classifier};
+            \node[htapbox] (router) at (4,7.5) {Query\\Router};
 
 % Parsing layer
-            \node[box, fill=green!20] (parser) at (0,6.5) {libpg\_query\\Parser};
-            \node[box, fill=green!20] (validator) at (4,6.5) {Schema\\Validator};
+            \node[box, fill=green!20] (parser) at (-2,6) {libpg\_query\\Parser};
+            \node[box, fill=green!20] (validator) at (2,6) {Schema\\Validator};
+            \node[htapbox] (formatdet) at (6,6) {Storage Format\\Detector};
 
 % Planning layer
-            \node[box, fill=yellow!20] (logical) at (0,5) {Logical\\Planner};
-            \node[box, fill=yellow!20] (optimizer) at (4,5) {Query\\Optimizer};
+            \node[box, fill=yellow!20] (logical) at (-2,4.5) {Logical\\Planner};
+            \node[box, fill=yellow!20] (optimizer) at (2,4.5) {HTAP Query\\Optimizer};
+            \node[htapbox] (costmodel) at (6,4.5) {Dual Cost\\Model};
 
 % Physical layer
-            \node[box, fill=orange!20] (physical) at (0,3.5) {Physical\\Planner};
-            \node[box, fill=orange!20] (executor) at (4,3.5) {Execution\\Engine};
+            \node[box, fill=orange!20] (physical) at (-2,3) {Physical\\Planner};
+            \node[box, fill=orange!20] (executor) at (2,3) {HTAP Execution\\Engine};
+            \node[htapbox] (compstorage) at (6,3) {Computational\\Storage};
 
-% Storage layer (Future)
-            \node[box, fill=red!20, dashed] (storage) at (2,2) {Storage Engine\\(Future)};
+% Storage layer
+            \node[box, fill=red!20] (rowstore) at (-1,1.5) {Row Store\\(OLTP)};
+            \node[box, fill=red!20] (colstore) at (3,1.5) {Column Store\\(OLAP)};
+            \node[htapbox] (unifstorage) at (1,0.5) {Unified Storage\\Manager};
 
 % Output
-            \node[box, fill=purple!20] (results) at (2,0.5) {Query Results};
+            \node[box, fill=purple!20] (results) at (1,-1) {Query Results};
 
 % Arrows
-            \draw[arrow] (sql) -- (parser);
+            \draw[arrow] (sql) -- (classifier);
+            \draw[htaparrow] (classifier) -- (router);
+            \draw[arrow] (classifier) -- (parser);
+            \draw[htaparrow] (router) -- (formatdet);
             \draw[arrow] (parser) -- (validator);
             \draw[arrow] (parser) -- (logical);
             \draw[arrow] (validator) -- (optimizer);
+            \draw[htaparrow] (formatdet) -- (costmodel);
             \draw[arrow] (logical) -- (optimizer);
+            \draw[htaparrow] (costmodel) -- (optimizer);
             \draw[arrow] (optimizer) -- (physical);
             \draw[arrow] (physical) -- (executor);
-            \draw[arrow, dashed] (executor) -- (storage);
-            \draw[arrow] (executor) -- (results);
-            \draw[arrow, dashed] (storage) -- (results);
+            \draw[htaparrow] (executor) -- (compstorage);
+            \draw[arrow] (executor) -- (rowstore);
+            \draw[arrow] (executor) -- (colstore);
+            \draw[htaparrow] (compstorage) -- (unifstorage);
+            \draw[arrow] (rowstore) -- (unifstorage);
+            \draw[arrow] (colstore) -- (unifstorage);
+            \draw[arrow] (unifstorage) -- (results);
 
 % Side annotations
-            \node[align=left] at (-3.5,6.5) {\footnotesize \textbf{Parsing}\\AST Generation\\Syntax Validation};
-            \node[align=left] at (-3.5,5) {\footnotesize \textbf{Optimization}\\Cost Estimation\\Plan Selection};
-            \node[align=left] at (-3.5,3.5) {\footnotesize \textbf{Execution}\\Vectorized Ops\\Parallel Processing};
+            \node[align=left] at (-5,7.5) {\footnotesize \textbf{HTAP Routing}\\Workload Detection\\Query Classification};
+            \node[align=left] at (-5,6) {\footnotesize \textbf{Parsing}\\AST Generation\\Schema Validation};
+            \node[align=left] at (-5,4.5) {\footnotesize \textbf{Hybrid Planning}\\Dual Cost Models\\Format Selection};
+            \node[align=left] at (-5,3) {\footnotesize \textbf{HTAP Execution}\\Row/Column Ops\\Comp. Storage};
+            \node[align=left] at (-5,1) {\footnotesize \textbf{Unified Storage}\\Dual Formats\\Smart Devices};
 
         \end{tikzpicture}
-        \caption{Query Processing Architecture Overview}
-        \label{fig:overview}
+        \caption{DB25 HTAP Architecture Overview}
+        \label{fig:htap-overview}
     \end{figure}
 
     \subsection{Educational Objectives}
@@ -145,6 +171,73 @@ A Comprehensive Implementation and Extension Framework}}
         \item \textbf{Implementation Details}: Shows practical considerations in building query processors
         \item \textbf{Performance Analysis}: Illustrates cost models and optimization techniques
         \item \textbf{Extension Framework}: Provides clear pathways for adding production features
+    \end{itemize}
+
+    \subsection{HTAP Database Capabilities}
+
+    DB25 implements a unified HTAP architecture that supports both transactional and analytical workloads within a single system:
+
+    \begin{itemize}
+        \item \textbf{Workload Classification}: Automatic detection and routing of OLTP vs. OLAP queries based on query patterns, complexity, and resource requirements
+        \item \textbf{Dual Storage Formats}: Support for both row-oriented storage (optimized for transactional workloads) and column-oriented storage (optimized for analytical workloads)
+        \item \textbf{Real-time Analytics}: Ability to run analytical queries on live transactional data without impacting OLTP performance through intelligent resource isolation
+        \item \textbf{Computational Storage Integration}: Offloading of data-intensive operations to smart storage devices, reducing data movement and improving analytical query performance
+        \item \textbf{Unified Query Interface}: Single SQL interface supporting both simple transactional queries and complex analytical queries with seamless execution
+        \item \textbf{Adaptive Resource Management}: Dynamic allocation of system resources between transactional and analytical workloads based on current demand and priority
+    \end{itemize}
+
+    \textbf{HTAP Benefits:}
+    \begin{itemize}
+        \item \textbf{Reduced Latency}: Elimination of ETL delays enables real-time decision making
+        \item \textbf{Simplified Architecture}: Single system reduces operational complexity and maintenance overhead
+        \item \textbf{Cost Efficiency}: Reduced hardware footprint and data duplication costs
+        \item \textbf{Data Consistency}: Unified view of data across all workloads ensures analytical accuracy
+    \end{itemize}
+
+    \subsection{Computational Storage Integration}
+
+    DB25 incorporates Computational Storage (CS) capabilities to address the growing data movement bottleneck in modern database systems. By leveraging smart storage devices with embedded processing capabilities, DB25 can significantly reduce data transfer overhead and improve analytical query performance.
+
+    \begin{itemize}
+        \item \textbf{Near-Data Processing}: Critical database operations are pushed down to storage devices, including:
+        \begin{itemize}
+            \item Data filtering and selection operations
+            \item Basic aggregations (SUM, COUNT, MIN/MAX)
+            \item Data transformation and format conversion
+            \item Compression and decompression operations
+        \end{itemize}
+        
+        \item \textbf{Intelligent Query Offloading}: The query optimizer identifies portions of execution plans that can benefit from computational storage:
+        \begin{itemize}
+            \item Scan-heavy operations with high selectivity filters
+            \item Large-scale aggregations over sequential data
+            \item Data-intensive join operations on co-located data
+            \item Analytical queries with minimal result sets
+        \end{itemize}
+        
+        \item \textbf{Hybrid Execution Model}: DB25 seamlessly coordinates between host-based processing and storage-based computation:
+        \begin{itemize}
+            \item Host handles complex logic and cross-device operations
+            \item Storage devices process local, data-intensive operations
+            \item Automatic load balancing between processing locations
+            \item Result combination and final query assembly at host level
+        \end{itemize}
+        
+        \item \textbf{Storage Device Interface}: Standardized API for computational storage integration:
+        \begin{itemize}
+            \item Device capability discovery and registration
+            \item Operation scheduling and resource management
+            \item Error handling and fallback mechanisms
+            \item Performance monitoring and adaptive optimization
+        \end{itemize}
+    \end{itemize}
+
+    \textbf{Computational Storage Benefits:}
+    \begin{itemize}
+        \item \textbf{Reduced Data Movement}: Up to 90\% reduction in data transfer for analytical workloads
+        \item \textbf{Improved Performance}: 2-5x speedup for scan-intensive queries through parallel near-data processing
+        \item \textbf{Energy Efficiency}: Reduced power consumption due to minimized data movement across the memory hierarchy
+        \item \textbf{Scalability}: Better scaling characteristics as storage capacity grows without proportional bandwidth requirements
     \end{itemize}
 
     \subsection{Algorithmic Notation}
@@ -757,7 +850,7 @@ public:
         \centering
         \caption{Implementation Completeness Matrix}
         \label{tab:implementation}
-        \begin{tabular}{p{3cm}p{2cm}p{2cm}p{5cm}}
+        \begin{tabular}{p{3cm}p{2cm}p{2.8cm}p{5cm}}
             \toprule
             \textbf{Component} & \textbf{Status} & \textbf{Completeness} & \textbf{Description} \\
             \midrule
@@ -822,7 +915,7 @@ Memory used: 1.2 MB
 
     \section{Future Implementation Roadmap}
 
-    This section outlines the systematic approach to extending the current implementation into a production-ready database system.
+    This section outlines the systematic approach to extending the current implementation into a production-ready HTAP database system. The roadmap includes both traditional database components and novel HTAP-specific features for supporting hybrid transactional/analytical workloads and computational storage integration.
 
     \subsection{Phase 1: Storage Engine Foundation}
 
@@ -1046,13 +1139,13 @@ public:
 
 % WAL log entries
             \node[log] at (0,4) {LSN: 100\\BEGIN TXN 5};
-            \node[log] at (0,3.3) {LSN: 101\\UPDATE P1\\Before: A=10};
-            \node[log] at (0,2.6) {LSN: 102\\UPDATE P1\\After: A=15};
-            \node[log] at (0,1.9) {LSN: 103\\INSERT P2\\New: B=20};
-            \node[log] at (0,1.2) {LSN: 104\\COMMIT TXN 5};
+            \node[log] at (0,3) {LSN: 101\\UPDATE P1\\Before: A=10};
+            \node[log] at (0,2) {LSN: 102\\UPDATE P1\\After: A=15};
+            \node[log] at (0,1) {LSN: 103\\INSERT P2\\New: B=20};
+            \node[log] at (0,0) {LSN: 104\\COMMIT TXN 5};
 
 % Checkpoint
-            \node[rectangle, draw=red, thick, minimum width=2cm, minimum height=0.6cm, align=center, font=\tiny, fill=red!20] at (0,0.5) {LSN: 105\\CHECKPOINT};
+            \node[rectangle, draw=red, thick, minimum width=2cm, minimum height=0.6cm, align=center, font=\tiny, fill=red!20] at (0,-1) {LSN: 105\\CHECKPOINT};
 
 % Buffer pool pages
             \node[rectangle, draw=blue, thick, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\tiny, fill=blue!20] at (4,3) {Page P1\\A=15\\PageLSN=102};
@@ -1231,12 +1324,12 @@ class BinaryOpExpression : public Expression {
     std::unique_ptr<Expression> left_;
     std::unique_ptr<Expression> right_;
     BinaryOpType op_type_;
-    
+
 public:
     Value evaluate(const Tuple& tuple, ExecutionContext& ctx) override {
         Value left_val = left_->evaluate(tuple, ctx);
         Value right_val = right_->evaluate(tuple, ctx);
-        
+
         return apply_binary_op(left_val, right_val, op_type_);
     }
 };
@@ -1244,14 +1337,14 @@ public:
 class FunctionExpression : public Expression {
     std::string function_name_;
     std::vector<std::unique_ptr<Expression>> arguments_;
-    
+
 public:
     Value evaluate(const Tuple& tuple, ExecutionContext& ctx) override {
         std::vector<Value> arg_values;
         for (auto& arg : arguments_) {
             arg_values.push_back(arg->evaluate(tuple, ctx));
         }
-        
+
         return ctx.function_registry.call(function_name_, arg_values);
     }
 };
@@ -1367,6 +1460,90 @@ public:
         \end{itemize}
     \end{extension}
 
+    \subsection{Phase 7: HTAP Infrastructure}
+
+    \subsubsection{Workload Classification and Routing}
+
+    \begin{extension}[HTAP Query Routing]
+        Implement intelligent workload detection and routing:
+
+        \begin{itemize}
+            \item \textbf{Query Pattern Analysis}: Automatic OLTP/OLAP classification based on query complexity, selectivity, and access patterns
+            \item \textbf{Resource Requirements Estimation}: Memory, CPU, and I/O requirements prediction for optimal routing
+            \item \textbf{Dynamic Load Balancing}: Real-time workload distribution between transactional and analytical processing paths
+            \item \textbf{Priority-Based Scheduling}: SLA-aware query scheduling with configurable priorities
+        \end{itemize}
+    \end{extension}
+
+    \subsubsection{Dual Storage Format Support}
+
+    \begin{extension}[Hybrid Storage Engine]
+        Implement unified storage engine supporting both row and column formats:
+
+        \begin{itemize}
+            \item \textbf{Row-Oriented Storage}: Optimized for transactional workloads with high write throughput
+            \item \textbf{Column-Oriented Storage}: Vectorized analytical processing with compression
+            \item \textbf{Format Selection}: Automatic storage format selection based on access patterns
+            \item \textbf{Data Migration}: Background conversion between storage formats as workload patterns change
+        \end{itemize}
+    \end{extension}
+
+    \subsection{Phase 8: Computational Storage Integration}
+
+    \subsubsection{Near-Data Processing Framework}
+
+    \begin{extension}[Computational Storage API]
+        Develop comprehensive computational storage integration:
+
+        \begin{itemize}
+            \item \textbf{Device Discovery}: Automatic detection and capability assessment of computational storage devices
+            \item \textbf{Operation Offloading}: Query plan analysis for identifying offloadable operations
+            \item \textbf{Execution Coordination}: Seamless coordination between host and storage-based processing
+            \item \textbf{Error Handling}: Robust fallback mechanisms for device failures or limitations
+        \end{itemize}
+    \end{extension}
+
+    \subsubsection{Smart Storage Optimization}
+
+    \begin{extension}[Adaptive Near-Data Processing]
+        Implement intelligent computational storage utilization:
+
+        \begin{itemize}
+            \item \textbf{Performance Monitoring}: Real-time tracking of storage device performance and utilization
+            \item \textbf{Adaptive Scheduling}: Dynamic operation scheduling based on device capabilities and current load
+            \item \textbf{Data Locality Optimization}: Co-location aware query planning for maximizing near-data processing benefits
+            \item \textbf{Cost Model Integration}: Computational storage costs incorporated into query optimization
+        \end{itemize}
+    \end{extension}
+
+    \subsection{Phase 9: Advanced HTAP Features}
+
+    \subsubsection{Real-time Analytics}
+
+    \begin{extension}[Streaming Analytics Integration]
+        Enable real-time analytical capabilities:
+
+        \begin{itemize}
+            \item \textbf{Incremental View Maintenance}: Automatic maintenance of materialized views as transactional data changes
+            \item \textbf{Change Data Capture}: Efficient tracking and propagation of data modifications
+            \item \textbf{Real-time Aggregation}: Continuous computation of analytical metrics on streaming data
+            \item \textbf{Freshness Guarantees}: Configurable consistency levels for analytical queries
+        \end{itemize}
+    \end{extension}
+
+    \subsubsection{Cross-Workload Optimization}
+
+    \begin{extension}[Unified Optimization]
+        Develop HTAP-aware query optimization:
+
+        \begin{itemize}
+            \item \textbf{Multi-Objective Optimization}: Balancing transactional latency and analytical throughput
+            \item \textbf{Shared Resource Management}: Intelligent allocation of CPU, memory, and I/O resources
+            \item \textbf{Interference Minimization}: Techniques to reduce mutual impact between OLTP and OLAP workloads
+            \item \textbf{Adaptive Query Planning}: Dynamic plan adjustment based on current system state and workload mix
+        \end{itemize}
+    \end{extension}
+
     \section{Teaching Methodology}
 
     \subsection{Progressive Implementation Approach}
@@ -1380,6 +1557,9 @@ public:
         \item \textbf{Phase 4 - Concurrency}: Implement locking and MVCC
         \item \textbf{Phase 5 - Indexing}: Add B+ trees and hash indexes
         \item \textbf{Phase 6 - Advanced}: Optimize and extend functionality
+        \item \textbf{Phase 7 - HTAP Infrastructure}: Implement workload routing and dual storage formats
+        \item \textbf{Phase 8 - Computational Storage}: Integrate near-data processing capabilities
+        \item \textbf{Phase 9 - Advanced HTAP}: Real-time analytics and cross-workload optimization
     \end{enumerate}
 
     \subsection{Learning Objectives by Phase}
@@ -1422,12 +1602,12 @@ public:
 // Current mock implementation
 class SequentialScanNode : public PhysicalPlanNode {
     std::vector<Tuple> mock_data;  // Replace with storage interface
-    
+
 public:
     TupleBatch get_next_batch() override {
         // Current: iterate over mock_data
         // Future: integrate with buffer pool manager
-        
+
         TupleBatch batch;
         // TODO: Replace with real storage access
         for (size_t i = current_position; i < end_pos; ++i) {
@@ -1444,34 +1624,34 @@ class StorageSequentialScanNode : public PhysicalPlanNode {
     TableOid table_oid;
     std::shared_ptr<BufferPoolManager> buffer_pool_;
     std::shared_ptr<CatalogManager> catalog_;
-    
+
 public:
     TupleBatch get_next_batch() override {
         TupleBatch batch;
-        
+
         // Get table metadata from catalog
         auto table_info = catalog_->get_table_info(table_oid);
-        
+
         // Iterate through pages using buffer pool
         while (current_page_id <= table_info->last_page_id) {
             Page* page = buffer_pool_->fetch_page(current_page_id);
-            
+
             // Extract tuples from page
             auto page_tuples = extract_tuples_from_page(page, table_info->schema);
-            
+
             for (const auto& tuple : page_tuples) {
                 if (passes_filter(tuple)) {
                     batch.add_tuple(tuple);
                     if (batch.is_full()) break;
                 }
             }
-            
+
             buffer_pool_->unpin_page(current_page_id, false);
             if (batch.is_full()) break;
-            
+
             current_page_id++;
         }
-        
+
         return batch;
     }
 };
@@ -1495,17 +1675,17 @@ class StorageAwarePhysicalPlanNode : public PhysicalPlanNode {
 protected:
     std::shared_ptr<StorageManager> storage_manager_;
     std::shared_ptr<TransactionManager> txn_manager_;
-    
+
 public:
     // Existing interface
     TupleBatch get_next_batch() override = 0;
     void reset() override = 0;
-    
+
     // New storage-aware methods
     virtual void set_storage_manager(std::shared_ptr<StorageManager> sm) {
         storage_manager_ = sm;
     }
-    
+
     virtual void set_transaction_context(TransactionId txn_id) {
         current_txn_id_ = txn_id;
     }
@@ -1638,35 +1818,39 @@ public:
 
     \section{Conclusion}
 
-    This comprehensive implementation framework provides a solid foundation for understanding and extending modern query processing systems. The current implementation demonstrates core concepts while providing clear pathways for production-ready enhancements.
+    DB25 provides a comprehensive HTAP database implementation framework that serves as both an educational tool and a foundation for advanced database research. The system demonstrates how modern database architectures can unify transactional and analytical workloads while incorporating cutting-edge technologies like Computational Storage.
 
     \subsection{Key Contributions}
 
     \begin{enumerate}
-        \item \textbf{Complete Pipeline}: End-to-end query processing implementation
-        \item \textbf{Educational Framework}: Structured learning progression
-        \item \textbf{Extension Architecture}: Clear interfaces for enhancements
-        \item \textbf{Modern Techniques}: Vectorization and parallel processing
-        \item \textbf{Research Integration}: Academic and industrial practices
+        \item \textbf{HTAP Architecture}: Unified transactional and analytical processing within a single system
+        \item \textbf{Computational Storage Integration}: Novel near-data processing capabilities for improved performance
+        \item \textbf{Complete Pipeline}: End-to-end HTAP query processing implementation
+        \item \textbf{Educational Framework}: Structured learning progression for HTAP concepts
+        \item \textbf{Extension Architecture}: Clear interfaces for production-ready HTAP enhancements
+        \item \textbf{Modern Techniques}: Vectorization, parallel processing, and workload routing
+        \item \textbf{Research Integration}: Bridge between academic HTAP research and practical implementation
     \end{enumerate}
 
     \subsection{Learning Outcomes}
 
-    Students working with this system will gain:
+    Students working with DB25 will gain:
 
     \begin{itemize}
-        \item Deep understanding of query processing internals
-        \item Practical experience with database system implementation
-        \item Exposure to modern optimization techniques
-        \item Foundation for database research and development
-        \item Skills applicable to distributed and cloud systems
+        \item Deep understanding of HTAP database architecture and workload management
+        \item Practical experience with hybrid transactional/analytical processing implementation
+        \item Exposure to modern optimization techniques including computational storage
+        \item Foundation for HTAP database research and development
+        \item Skills applicable to modern data processing systems and cloud architectures
+        \item Understanding of real-time analytics and cross-workload optimization
+        \item Experience with near-data processing and smart storage integration
     \end{itemize}
 
-    The systematic approach outlined in this paper enables both academic instruction and research advancement, providing a bridge between theoretical database concepts and practical system implementation.
+    The systematic approach outlined in this paper enables both academic instruction and research advancement in HTAP systems, providing a bridge between theoretical database concepts and practical hybrid processing implementation.
 
     \section{Acknowledgments}
 
-    This implementation builds upon decades of database systems research and the open-source PostgreSQL project. Special recognition goes to the libpg\_query project for providing accessible PostgreSQL parsing capabilities.
+    DB25 builds upon decades of database systems research, the open-source PostgreSQL project, and recent advances in HTAP database architectures. Special recognition goes to the libpg\_query project for providing accessible PostgreSQL parsing capabilities, and to the computational storage research community for pioneering near-data processing techniques.
 
     \bibliographystyle{acm}
     \begin{thebibliography}{99}
