@@ -3,6 +3,7 @@
 #include "logical_plan.hpp"
 #include "physical_plan.hpp"
 #include "database.hpp"
+#include "query_planner.hpp"
 #include <memory>
 #include <unordered_map>
 #include <random>

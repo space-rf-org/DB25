@@ -191,7 +191,7 @@ PhysicalPlanNodePtr PhysicalPlanner::convert_table_scan(std::shared_ptr<TableSca
     AccessMethod best_method = select_best_access_method(logical_node->table_name, logical_node->filter_conditions);
     
     if (best_method.type == AccessMethod::INDEX_SCAN && !best_method.index_name.empty()) {
-        auto index_scan = std::make_shared<IndexScanNode>(logical_node->table_name, best_method.index_name);
+        auto index_scan = std::make_shared<PhysicalIndexScanNode>(logical_node->table_name, best_method.index_name);
         index_scan->alias = logical_node->alias;
         index_scan->filter_conditions = logical_node->filter_conditions;
         return index_scan;
@@ -204,7 +204,7 @@ PhysicalPlanNodePtr PhysicalPlanner::convert_table_scan(std::shared_ptr<TableSca
 }
 
 PhysicalPlanNodePtr PhysicalPlanner::convert_index_scan(std::shared_ptr<IndexScanNode> logical_node) {
-    auto physical_index_scan = std::make_shared<IndexScanNode>(logical_node->table_name, logical_node->index_name);
+    auto physical_index_scan = std::make_shared<PhysicalIndexScanNode>(logical_node->table_name, logical_node->index_name);
     physical_index_scan->alias = logical_node->alias;
     physical_index_scan->index_conditions = logical_node->index_conditions;
     physical_index_scan->filter_conditions = logical_node->filter_conditions;
@@ -240,7 +240,7 @@ PhysicalPlanNodePtr PhysicalPlanner::convert_selection(std::shared_ptr<Selection
             seq_scan->filter_conditions.insert(seq_scan->filter_conditions.end(),
                                               logical_node->conditions.begin(),
                                               logical_node->conditions.end());
-        } else if (auto index_scan = std::dynamic_pointer_cast<IndexScanNode>(child)) {
+        } else if (auto index_scan = std::dynamic_pointer_cast<PhysicalIndexScanNode>(child)) {
             index_scan->filter_conditions.insert(index_scan->filter_conditions.end(),
                                                  logical_node->conditions.begin(),
                                                  logical_node->conditions.end());
@@ -252,19 +252,21 @@ PhysicalPlanNodePtr PhysicalPlanner::convert_selection(std::shared_ptr<Selection
 }
 
 PhysicalPlanNodePtr PhysicalPlanner::convert_aggregation(std::shared_ptr<AggregationNode> logical_node) {
-    auto hash_agg = std::make_shared<HashAggregateNode>();
-    hash_agg->group_by_exprs = logical_node->group_by_exprs;
-    hash_agg->aggregate_exprs = logical_node->aggregate_exprs;
-    hash_agg->aggregate_functions = logical_node->aggregate_functions;
-    return hash_agg;
+    // TODO: Implement HashAggregateNode - returning nullptr for now
+    // auto hash_agg = std::make_shared<HashAggregateNode>();
+    // hash_agg->group_by_exprs = logical_node->group_by_exprs;
+    // hash_agg->aggregate_exprs = logical_node->aggregate_exprs;
+    // hash_agg->aggregate_functions = logical_node->aggregate_functions;
+    (void)logical_node; // Suppress unused parameter warning
+    return nullptr;
 }
 
 PhysicalPlanNodePtr PhysicalPlanner::convert_sort(std::shared_ptr<SortNode> logical_node) {
-    auto physical_sort = std::make_shared<SortNode>();
+    auto physical_sort = std::make_shared<PhysicalSortNode>();
     
     // Convert logical sort keys to physical sort keys
     for (const auto& logical_key : logical_node->sort_keys) {
-        SortNode::SortKey physical_key;
+        PhysicalSortNode::SortKey physical_key;
         physical_key.expression = logical_key.expression;
         physical_key.ascending = logical_key.ascending;
         physical_key.nulls_first = logical_key.nulls_first;
@@ -275,7 +277,7 @@ PhysicalPlanNodePtr PhysicalPlanner::convert_sort(std::shared_ptr<SortNode> logi
 }
 
 PhysicalPlanNodePtr PhysicalPlanner::convert_limit(std::shared_ptr<LimitNode> logical_node) {
-    auto physical_limit = std::make_shared<LimitNode>();
+    auto physical_limit = std::make_shared<PhysicalLimitNode>();
     physical_limit->limit = logical_node->limit;
     physical_limit->offset = logical_node->offset;
     return physical_limit;
@@ -341,11 +343,12 @@ PhysicalPlanNodePtr PhysicalPlanner::select_join_algorithm(LogicalPlanNodePtr lo
     
     // Decide between hash join and nested loop join
     if (should_use_hash_join(left, right)) {
-        auto physical_hash_join = std::make_shared<HashJoinNode>(join_type);
+        // auto physical_hash_join = std::make_shared<PhysicalHashJoinNode>(join_type); // TODO: Implement PhysicalHashJoinNode
+        auto physical_hash_join = std::make_shared<PhysicalNestedLoopJoinNode>(join_type); // Temporary fallback
         physical_hash_join->join_conditions = join_conditions;
         return physical_hash_join;
     } else {
-        auto physical_nl_join = std::make_shared<NestedLoopJoinNode>(join_type);
+        auto physical_nl_join = std::make_shared<PhysicalNestedLoopJoinNode>(join_type);
         physical_nl_join->join_conditions = join_conditions;
         return physical_nl_join;
     }

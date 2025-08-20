@@ -13,6 +13,12 @@ void print_separator(const std::string& title) {
     std::cout << std::string(70, '=') << std::endl;
 }
 
+std::string format_memory_bytes(size_t bytes) {
+    if (bytes < 1024) return std::to_string(bytes) + " B";
+    else if (bytes < 1024 * 1024) return std::to_string(bytes / 1024) + " KB";
+    else return std::to_string(bytes / (1024 * 1024)) + " MB";
+}
+
 void demonstrate_physical_planning() {
     print_separator("Physical Plan Generation");
     
@@ -313,12 +319,7 @@ void demonstrate_batch_processing() {
               << (total_rows * 1000.0) / (duration.count() / 1000.0) << " rows/sec" << std::endl;
 }
 
-// Helper function for formatting memory sizes
-std::string format_memory_bytes(size_t bytes) {
-    if (bytes < 1024) return std::to_string(bytes) + " B";
-    else if (bytes < 1024 * 1024) return std::to_string(bytes / 1024) + " KB";
-    else return std::to_string(bytes / (1024 * 1024)) + " MB";
-}
+// Helper function moved to top of file
 
 int main() {
     try {

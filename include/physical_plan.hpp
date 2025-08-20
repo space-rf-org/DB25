@@ -366,7 +366,7 @@ struct PhysicalPlan {
 
 // Parallel execution support
 struct ParallelContext {
-    std::mutex result_mutex;
+    mutable std::mutex result_mutex;
     std::condition_variable worker_cv;
     std::queue<TupleBatch> result_queue;
     std::atomic<size_t> active_workers{0};
