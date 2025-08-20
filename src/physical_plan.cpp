@@ -594,8 +594,8 @@ std::vector<Tuple> PhysicalPlan::execute() {
     if (!root) return results;
     
     initialize();
-    
-    auto start_time = std::chrono::high_resolution_clock::now();
+
+    const auto start_time = std::chrono::high_resolution_clock::now();
     
     while (root->has_more_data()) {
         TupleBatch batch = root->get_next_batch();
@@ -603,9 +603,9 @@ std::vector<Tuple> PhysicalPlan::execute() {
             results.push_back(tuple);
         }
     }
-    
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+
+    const auto end_time = std::chrono::high_resolution_clock::now();
+    const auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     total_stats.execution_time_ms = duration.count() / 1000.0;
     total_stats.rows_returned = results.size();
     
@@ -629,7 +629,7 @@ void PhysicalPlan::reset() {
     total_stats = ExecutionStats();
 }
 
-void PhysicalPlan::cleanup() {
+void PhysicalPlan::cleanup() const {
     if (root) {
         root->cleanup();
     }
@@ -751,7 +751,7 @@ void PhysicalLimitNode::reset() {
     }
 }
 
-std::string PhysicalLimitNode::to_string(int indent) const {
+std::string PhysicalLimitNode::to_string(const int indent) const {
     std::ostringstream oss;
     oss << physical_indent_string(indent) << "Limit (" << format_physical_cost(estimated_cost) << ")\n";
     
@@ -884,7 +884,7 @@ void ParallelSequentialScanNode::cleanup() {
     parallel_ctx.reset();
 }
 
-std::string ParallelSequentialScanNode::to_string(int indent) const {
+std::string ParallelSequentialScanNode::to_string(const int indent) const {
     std::ostringstream oss;
     oss << physical_indent_string(indent) << "Parallel Seq Scan on " << table_name
         << " (workers=" << parallel_degree << ") (" << format_physical_cost(estimated_cost) << ")\n";
@@ -910,8 +910,8 @@ PhysicalPlanNodePtr ParallelSequentialScanNode::copy() const {
     return node;
 }
 
-void ParallelSequentialScanNode::worker_scan(size_t worker_id, size_t start_row, size_t end_row) {
-    parallel_ctx->active_workers++;
+void ParallelSequentialScanNode::worker_scan(size_t worker_id, size_t start_row, const size_t end_row) const {
+    ++parallel_ctx->active_workers;
     
     TupleBatch batch;
     batch.column_names = output_columns;

@@ -5,7 +5,7 @@
 namespace pg {
 
 // Helper function for indentation
-std::string indent_string(int indent) {
+std::string indent_string(const int indent) {
     return std::string(indent * 2, ' ');
 }
 
@@ -19,7 +19,7 @@ std::string format_cost(const PlanCost& cost) {
 }
 
 // TableScanNode implementation
-std::string TableScanNode::to_string(int indent) const {
+std::string TableScanNode::to_string(const int indent) const {
     std::ostringstream oss;
     oss << indent_string(indent) << "Seq Scan on " << table_name;
     if (!alias.empty() && alias != table_name) {
@@ -49,7 +49,7 @@ LogicalPlanNodePtr TableScanNode::copy() const {
 }
 
 // IndexScanNode implementation
-std::string IndexScanNode::to_string(int indent) const {
+std::string IndexScanNode::to_string(const int indent) const {
     std::ostringstream oss;
     oss << indent_string(indent) << "Index Scan using " << index_name 
         << " on " << table_name;
@@ -104,7 +104,7 @@ std::string JoinNode::join_type_to_string() const {
 }
 
 // NestedLoopJoinNode implementation
-std::string NestedLoopJoinNode::to_string(int indent) const {
+std::string NestedLoopJoinNode::to_string(const int indent) const {
     std::ostringstream oss;
     oss << indent_string(indent) << "Nested Loop " << join_type_to_string() 
         << " (" << format_cost(cost) << ")\n";
@@ -137,7 +137,7 @@ LogicalPlanNodePtr NestedLoopJoinNode::copy() const {
 }
 
 // HashJoinNode implementation
-std::string HashJoinNode::to_string(int indent) const {
+std::string HashJoinNode::to_string(const int indent) const {
     std::ostringstream oss;
     oss << indent_string(indent) << "Hash " << join_type_to_string() 
         << " (" << format_cost(cost) << ")\n";

@@ -1,8 +1,6 @@
 #include "physical_planner.hpp"
 #include <algorithm>
 #include <random>
-#include <sstream>
-#include <chrono>
 
 namespace pg {
 

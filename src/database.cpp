@@ -1,6 +1,5 @@
 #include "database.hpp"
 #include <sstream>
-#include <algorithm>
 
 namespace pg {
 

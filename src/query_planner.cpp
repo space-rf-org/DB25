@@ -7,7 +7,7 @@
 
 namespace pg {
 
-QueryPlanner::QueryPlanner(std::shared_ptr<DatabaseSchema> schema) 
+QueryPlanner::QueryPlanner(const std::shared_ptr<DatabaseSchema> &schema)
     : schema_(schema) {
     // Initialize default table statistics
     for (const auto& table_name : schema_->get_table_names()) {
@@ -118,7 +118,7 @@ std::vector<LogicalPlan> QueryPlanner::generate_alternative_plans(const std::str
     return plans;
 }
 
-void QueryPlanner::estimate_costs(LogicalPlanNodePtr node) {
+void QueryPlanner::estimate_costs(const LogicalPlanNodePtr &node) {
     if (!node) return;
     
     // First estimate costs for children

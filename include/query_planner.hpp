@@ -31,7 +31,7 @@ struct PlannerConfig {
 // Query planner class
 class QueryPlanner {
 public:
-    explicit QueryPlanner(std::shared_ptr<DatabaseSchema> schema);
+    explicit QueryPlanner(const std::shared_ptr<DatabaseSchema> &schema);
     
     // Main planning interface
     LogicalPlan create_plan(const std::string& query);
@@ -50,7 +50,7 @@ public:
     std::vector<LogicalPlan> generate_alternative_plans(const std::string& query);
     
     // Cost estimation
-    void estimate_costs(LogicalPlanNodePtr node);
+    void estimate_costs(const LogicalPlanNodePtr &node);
     double estimate_selectivity(const std::vector<ExpressionPtr>& conditions, 
                                const std::string& table_name) const;
 
@@ -121,18 +121,18 @@ class PlanVisitor {
 public:
     virtual ~PlanVisitor() = default;
     
-    virtual void visit(TableScanNode* node) {}
-    virtual void visit(IndexScanNode* node) {}
-    virtual void visit(NestedLoopJoinNode* node) {}
-    virtual void visit(HashJoinNode* node) {}
-    virtual void visit(ProjectionNode* node) {}
-    virtual void visit(SelectionNode* node) {}
-    virtual void visit(AggregationNode* node) {}
-    virtual void visit(SortNode* node) {}
-    virtual void visit(LimitNode* node) {}
-    virtual void visit(InsertNode* node) {}
-    virtual void visit(UpdateNode* node) {}
-    virtual void visit(DeleteNode* node) {}
+    virtual void visit(TableScanNode*) {}
+    virtual void visit(IndexScanNode*) {}
+    virtual void visit(NestedLoopJoinNode*) {}
+    virtual void visit(HashJoinNode*) {}
+    virtual void visit(ProjectionNode*) {}
+    virtual void visit(SelectionNode*) {}
+    virtual void visit(AggregationNode*) {}
+    virtual void visit(SortNode*) {}
+    virtual void visit(LimitNode*) {}
+    virtual void visit(InsertNode*) {}
+    virtual void visit(UpdateNode*) {}
+    virtual void visit(DeleteNode*) {}
     
     void traverse(LogicalPlanNodePtr node);
 };

@@ -1,13 +1,13 @@
 #include "query_executor.hpp"
 #include <algorithm>
 #include <regex>
-#include <cctype>
 #include <sstream>
+#include <utility>
 
 namespace pg {
 
 QueryExecutor::QueryExecutor(std::shared_ptr<DatabaseSchema> schema) 
-    : schema_(schema) {}
+    : schema_(std::move(schema)) {}
 
 QueryValidationResult QueryExecutor::validate_query(const std::string& query) {
     QueryValidationResult result;

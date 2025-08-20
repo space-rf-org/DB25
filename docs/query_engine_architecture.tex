@@ -33,7 +33,7 @@ A Comprehensive Implementation and Extension Framework}}
     Advanced Implementation Tutorial
 }
 
-\date{\today}
+\date{August 2025}
 
 \lstdefinestyle{cpp}{
     language=C++,
@@ -124,10 +124,10 @@ A Comprehensive Implementation and Extension Framework}}
 % Storage layer
             \node[box, fill=red!20] (rowstore) at (-1,1.5) {Row Store\\(OLTP)};
             \node[box, fill=red!20] (colstore) at (3,1.5) {Column Store\\(OLAP)};
-            \node[htapbox] (unifstorage) at (1,0.5) {Unified Storage\\Manager};
+            \node[htapbox] (unifstorage) at (1,0) {Unified Storage\\Manager};
 
 % Output
-            \node[box, fill=purple!20] (results) at (1,-1) {Query Results};
+            \node[box, fill=purple!20] (results) at (1,-1.5) {Query Results};
 
 % Arrows
             \draw[arrow] (sql) -- (classifier);
@@ -151,11 +151,11 @@ A Comprehensive Implementation and Extension Framework}}
             \draw[arrow] (unifstorage) -- (results);
 
 % Side annotations
-            \node[align=left] at (-5,7.5) {\footnotesize \textbf{HTAP Routing}\\Workload Detection\\Query Classification};
-            \node[align=left] at (-5,6) {\footnotesize \textbf{Parsing}\\AST Generation\\Schema Validation};
-            \node[align=left] at (-5,4.5) {\footnotesize \textbf{Hybrid Planning}\\Dual Cost Models\\Format Selection};
-            \node[align=left] at (-5,3) {\footnotesize \textbf{HTAP Execution}\\Row/Column Ops\\Comp. Storage};
-            \node[align=left] at (-5,1) {\footnotesize \textbf{Unified Storage}\\Dual Formats\\Smart Devices};
+            \node[align=left] at (-5.5,7.5) {\footnotesize \textbf{HTAP Routing}\\Workload Detection\\Query Classification};
+            \node[align=left] at (-5.5,6) {\footnotesize \textbf{Parsing}\\AST Generation\\Schema Validation};
+            \node[align=left] at (-5.5,4.5) {\footnotesize \textbf{Hybrid Planning}\\Dual Cost Models\\Format Selection};
+            \node[align=left] at (-5.5,3) {\footnotesize \textbf{HTAP Execution}\\Row/Column Ops\\Comp. Storage};
+            \node[align=left] at (-5.5,1) {\footnotesize \textbf{Unified Storage}\\Dual Formats\\Smart Devices};
 
         \end{tikzpicture}
         \caption{DB25 HTAP Architecture Overview}
@@ -206,7 +206,7 @@ A Comprehensive Implementation and Extension Framework}}
             \item Data transformation and format conversion
             \item Compression and decompression operations
         \end{itemize}
-        
+
         \item \textbf{Intelligent Query Offloading}: The query optimizer identifies portions of execution plans that can benefit from computational storage:
         \begin{itemize}
             \item Scan-heavy operations with high selectivity filters
@@ -214,7 +214,7 @@ A Comprehensive Implementation and Extension Framework}}
             \item Data-intensive join operations on co-located data
             \item Analytical queries with minimal result sets
         \end{itemize}
-        
+
         \item \textbf{Hybrid Execution Model}: DB25 seamlessly coordinates between host-based processing and storage-based computation:
         \begin{itemize}
             \item Host handles complex logic and cross-device operations
@@ -222,7 +222,7 @@ A Comprehensive Implementation and Extension Framework}}
             \item Automatic load balancing between processing locations
             \item Result combination and final query assembly at host level
         \end{itemize}
-        
+
         \item \textbf{Storage Device Interface}: Standardized API for computational storage integration:
         \begin{itemize}
             \item Device capability discovery and registration
@@ -318,8 +318,8 @@ A Comprehensive Implementation and Extension Framework}}
             \node[future] (txn_mgr) at (5,-3.2) {Transaction Mgr};
 
 % Current vs Future indicators
-            \node[align=center, font=\footnotesize] at (-7.3,4) {\textbf{Current}\\Implementation};
-            \node[align=center, font=\footnotesize] at (-7.3,1) {\textbf{Future}\\Extensions};
+            \node[align=center, font=\footnotesize, rotate=90] at (-8,4) {\textbf{Current} Implementation};
+            \node[align=center, font=\footnotesize, rotate=90] at (-8,-1.8) {\textbf{Future} Extensions};
 
         \end{tikzpicture}
         \caption{System Component Hierarchy}
@@ -656,8 +656,8 @@ struct PlanCost {
             \draw[arrow, red, dashed] (sort_buffer) -- node[right, font=\tiny] {Spill} (temp_files);
 
 % Labels
-            \node[label] at (-6,4) {\textbf{Memory Hierarchy:}\\• Work memory limit\\• Operator budgets\\• Spill-to-disk strategy};
-            \node[label] at (6,2.5) {\textbf{Algorithms:}\\• Hash join partitioning\\• External merge sort\\• Vectorized batching};
+            \node[label] at (-5.5,4.5) {\textbf{Memory Hierarchy:}\\• Work memory limit\\• Operator budgets\\• Spill-to-disk strategy};
+            \node[label] at (5.5,4.5) {\textbf{Algorithms:}\\• Hash join partitioning\\• External merge sort\\• Vectorized batching};
 
         \end{tikzpicture}
         \caption{Memory Management Architecture}

@@ -354,7 +354,7 @@ struct PhysicalPlan {
     std::vector<Tuple> execute();
     TupleBatch execute_batch();
     void reset();
-    void cleanup();
+    void cleanup() const;
     
     // Display and analysis
     std::string to_string() const;
@@ -402,7 +402,7 @@ struct ParallelSequentialScanNode : PhysicalPlanNode {
     PhysicalPlanNodePtr copy() const override;
     
 private:
-    void worker_scan(size_t worker_id, size_t start_row, size_t end_row);
+    void worker_scan(size_t worker_id, size_t start_row, size_t end_row) const;
     void generate_mock_data(size_t num_rows);
 };
 
