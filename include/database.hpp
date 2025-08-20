@@ -2,9 +2,7 @@
 
 #include <string>
 #include <vector>
-#include <memory>
 #include <unordered_map>
-#include <functional>
 #include <optional>
 
 namespace pg {
@@ -50,7 +48,7 @@ struct Table {
 
 class DatabaseSchema {
 public:
-    DatabaseSchema(const std::string& name);
+    explicit DatabaseSchema(const std::string& name);
 
     void add_table(const Table& table);
     void add_index(const std::string& table_name, const Index& index);
@@ -59,18 +57,18 @@ public:
                         const std::string& ref_table, 
                         const std::string& ref_column);
 
-    std::string generate_create_sql() const;
-    std::string generate_drop_sql() const;
-    std::vector<std::string> get_table_names() const;
-    std::optional<Table> get_table(const std::string& name) const;
+    [[nodiscard]] std::string generate_create_sql() const;
+    [[nodiscard]] std::string generate_drop_sql() const;
+    [[nodiscard]] std::vector<std::string> get_table_names() const;
+    [[nodiscard]] std::optional<Table> get_table(const std::string& name) const;
 
 private:
     std::string name_;
     std::unordered_map<std::string, Table> tables_;
     
-    std::string column_type_to_sql(const Column& column) const;
-    std::string generate_table_sql(const Table& table) const;
-    std::string generate_index_sql(const std::string& table_name, const Index& index) const;
+    [[nodiscard]] std::string column_type_to_sql(const Column& column) const;
+    [[nodiscard]] std::string generate_table_sql(const Table& table) const;
+    [[nodiscard]] std::string generate_index_sql(const std::string& table_name, const Index& index) const;
 };
 
 }
