@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <optional>
 
-namespace pg {
+namespace db25 {
 
 enum class ColumnType {
     INTEGER,

@@ -2,7 +2,7 @@
 #include <sstream>
 #include <iomanip>
 
-namespace pg {
+namespace db25 {
 
 // Helper function for indentation
 std::string indent_string(const int indent) {
@@ -490,7 +490,7 @@ std::string LogicalPlan::to_string() const {
     std::ostringstream oss;
     oss << "QUERY PLAN\n";
     oss << std::string(50, '-') << "\n";
-    oss << root->to_string();
+    oss << root->to_string(0);
     oss << std::string(50, '-') << "\n";
     oss << "Planning time: N/A ms\n";
     oss << "Execution time: N/A ms\n";

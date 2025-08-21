@@ -14,7 +14,7 @@ void print_separator(const std::string& title) {
 void demonstrate_query_parsing() {
     print_separator("Query Parsing with libpg_query");
     
-    pg::QueryParser parser;
+    db25::QueryParser parser;
     
     std::vector<std::string> test_queries = {
         "SELECT * FROM users WHERE email = 'test@example.com'",
@@ -53,7 +53,7 @@ void demonstrate_query_parsing() {
 void demonstrate_schema_generation() {
     print_separator("Database Schema Generation");
     
-    auto schema = pg::create_simple_schema();
+    auto schema = db25::create_simple_schema();
     
     std::cout << "Schema Name: " << "simple_db" << std::endl;
     std::cout << "Tables: " << schema.get_table_names().size() << std::endl;
@@ -75,8 +75,8 @@ void demonstrate_schema_generation() {
 void demonstrate_query_validation() {
     print_separator("Query Validation and Analysis");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryExecutor executor(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryExecutor executor(schema);
     
     std::vector<std::string> test_queries = {
         "SELECT * FROM users WHERE email = 'test@example.com'",
@@ -128,7 +128,7 @@ void demonstrate_query_validation() {
 void demonstrate_schema_inspection() {
     print_separator("Schema Inspection");
     
-    auto schema = pg::create_simple_schema();
+    auto schema = db25::create_simple_schema();
     
     auto users_table = schema.get_table("users");
     if (users_table) {
@@ -164,8 +164,8 @@ void demonstrate_schema_inspection() {
 void demonstrate_query_optimization() {
     print_separator("Query Optimization Suggestions");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryExecutor executor(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryExecutor executor(schema);
     
     std::vector<std::string> queries = {
         "SELECT * FROM products WHERE category_id = 1 AND price > 50",

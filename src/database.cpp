@@ -1,7 +1,7 @@
 #include "database.hpp"
 #include <sstream>
 
-namespace pg {
+namespace db25 {
 
 DatabaseSchema::DatabaseSchema(const std::string& name) : name_(name) {}
 
@@ -67,6 +67,7 @@ std::string DatabaseSchema::generate_drop_sql() const {
 
 std::vector<std::string> DatabaseSchema::get_table_names() const {
     std::vector<std::string> names;
+    names.reserve(tables_.size());
     for (const auto& [table_name, table] : tables_) {
         names.push_back(table_name);
     }

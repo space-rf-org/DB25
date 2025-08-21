@@ -1,0 +1,79 @@
+Wed Aug 20, 2025, 11:34 AM PT
+-----------------------------
+  ⏺ Update Todos
+    ⎿  ☒ Compare Makefile and CMakeLists.txt configurations
+       ☒ Test CMake build system
+       ☒ Test Make build system
+       ☒ Identify and fix any discrepancies
+
+  ⏺ Summary: Makefile and CMakeLists.txt Synchronization
+
+    ✅ Successfully synchronized both build systems!
+
+    Issues Found and Fixed:
+
+    1. Missing Executables:
+      - Issue: CMakeLists.txt only built example, missed planning_demo and physical_demo
+      - Fix: Added both missing executables to CMakeLists.txt
+    2. Inconsistent Optimization Flags:
+      - Issue: Makefile used -O2, CMake used -O3
+      - Fix: Changed CMake to use -O2 to match Makefile
+    3. Warning Flags Mismatch:
+      - Issue: CMake only applied -Wall -Wextra in debug mode, Makefile applied them always
+      - Fix: Made CMake apply warning flags in all build modes
+    4. Library Naming:
+      - Note: CMake creates liblib_pg_cpp.a, Makefile creates libpg_cpp.a (minor difference due to CMake conventions)
+
+    Verification Results:
+
+    Both build systems now produce:
+    - ✅ Same executables: example, planning_demo, physical_demo
+    - ✅ Same compiler flags: -std=c++17 -Wall -Wextra -O2
+    - ✅ Same warnings: Identical warning output from both builds
+    - ✅ Same functionality: All executables run correctly from both build systems
+    - ✅ Same library linking: Both use libpg_query.a and pthread
+
+    Test Results:
+
+    - Makefile build: ✅ All 3 executables built and tested successfully
+    - CMake build: ✅ All 3 executables built and tested successfully
+    - Namespace: ✅ Both systems correctly use db25 namespace
+    - Compatibility: ✅ Both build systems are now fully synchronized
+
+    The Makefile and CMakeLists.txt are now in perfect sync and produce equivalent builds!
+
+Wed Aug 20, 2025, 10:54 AM PT
+ --------------
+  Update Todos
+  ⎿  ☒ Change namespace from 'pg' to 'db25' in all header files
+     ☒ Change namespace from 'pg' to 'db25' in all source files
+     ☒ Update CMakeLists.txt if it references the namespace
+     ☒ Build and test all components to ensure everything works
+
+⏺ Summary
+
+  Successfully changed the namespace from 'pg' to 'db25' throughout the entire project and tested everything:
+
+  Completed Tasks:
+
+  1. Updated all header files - Changed namespace declarations in all 9 header files
+  2. Updated all source files - Changed namespace declarations in all 8 source files
+  3. Updated examples - Changed all namespace references in main.cpp, planning_demo.cpp, and physical_demo.cpp
+  4. Updated documentation - Changed namespace references in README.md and LaTeX documentation
+  5. Full testing - Built and tested all three demos successfully
+
+  Files Modified:
+
+  - Header files: 9 files updated (query_executor.hpp, database.hpp, physical_plan.hpp, etc.)
+  - Source files: 8 files updated (all .cpp files in src/)
+  - Example files: 3 files updated (all .cpp files in examples/)
+  - Documentation: README.md and query_engine_architecture.tex
+
+  Test Results:
+
+  - ✅ Basic demo: All query parsing, validation, and schema operations working
+  - ✅ Logical planning demo: Query planning and optimization working
+  - ✅ Physical demo: Physical plan generation and execution working
+  - ✅ Build: Clean compilation with only minor unused parameter warnings
+
+  The entire DB25 project now uses the db25 namespace consistently and all components are functioning correctly.
