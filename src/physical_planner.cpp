@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <random>
 
-namespace pg {
+namespace db25 {
 
 // Mock data generator implementation
 std::random_device MockDataGenerator::rd_;

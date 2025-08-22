@@ -2,7 +2,7 @@
 
 #include "database.hpp"
 
-namespace pg {
+namespace db25 {
 
 class ECommerceSchema {
 public:

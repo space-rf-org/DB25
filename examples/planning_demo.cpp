@@ -4,7 +4,6 @@
 #include "pg_query_wrapper.hpp"
 #include "database.hpp"
 #include "simple_schema.hpp"
-#include "query_executor.hpp"
 #include "query_planner.hpp"
 
 void print_separator(const std::string& title) {
@@ -16,17 +15,17 @@ void print_separator(const std::string& title) {
 void demonstrate_basic_planning() {
     print_separator("Basic Logical Planning");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner planner(schema);
     
     // Configure planner with some statistics
-    pg::TableStats user_stats;
+    db25::TableStats user_stats;
     user_stats.row_count = 10000;
     user_stats.avg_row_size = 120.0;
     user_stats.column_selectivity["email"] = 0.8;
     planner.set_table_stats("users", user_stats);
     
-    pg::TableStats product_stats;
+    db25::TableStats product_stats;
     product_stats.row_count = 50000;
     product_stats.avg_row_size = 200.0;
     product_stats.column_selectivity["name"] = 0.6;
@@ -42,9 +41,8 @@ void demonstrate_basic_planning() {
     for (const auto& query : test_queries) {
         std::cout << "\nQuery: " << query << std::endl;
         std::cout << std::string(50, '-') << std::endl;
-        
-        auto plan = planner.create_plan(query);
-        if (plan.root) {
+
+        if (auto plan = planner.create_plan(query); plan.root) {
             std::cout << plan.to_string() << std::endl;
         } else {
             std::cout << "Failed to generate plan" << std::endl;
@@ -55,11 +53,11 @@ void demonstrate_basic_planning() {
 void demonstrate_plan_optimization() {
     print_separator("Plan Optimization");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner planner(schema);
     
     // Set up some table statistics
-    pg::TableStats stats;
+    db25::TableStats stats;
     stats.row_count = 100000;
     stats.avg_row_size = 150.0;
     planner.set_table_stats("users", stats);
@@ -100,11 +98,11 @@ void demonstrate_plan_optimization() {
 void demonstrate_alternative_plans() {
     print_separator("Alternative Plan Generation");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner planner(schema);
     
     // Configure planner for different join algorithms
-    pg::PlannerConfig config;
+    db25::PlannerConfig config;
     config.enable_hash_joins = true;
     config.enable_merge_joins = true;
     planner.set_config(config);
@@ -129,8 +127,8 @@ void demonstrate_alternative_plans() {
 void demonstrate_dml_planning() {
     print_separator("DML Query Planning");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner planner(schema);
     
     std::vector<std::string> dml_queries = {
         "INSERT INTO users (name, email) VALUES ('John Doe', 'john@example.com')",
@@ -154,8 +152,8 @@ void demonstrate_dml_planning() {
 void demonstrate_cost_estimation() {
     print_separator("Cost Estimation Analysis");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner planner(schema);
     
     // Set up different table sizes to see cost differences
     std::vector<size_t> table_sizes = {1000, 10000, 100000, 1000000};
@@ -172,7 +170,7 @@ void demonstrate_cost_estimation() {
     std::cout << std::string(54, '-') << std::endl;
     
     for (size_t table_size : table_sizes) {
-        pg::TableStats stats;
+        db25::TableStats stats;
         stats.row_count = table_size;
         stats.avg_row_size = 100.0;
         stats.column_selectivity["name"] = 0.1; // 10% selectivity for LIKE 'A%'
@@ -192,8 +190,8 @@ void demonstrate_cost_estimation() {
 void demonstrate_join_algorithms() {
     print_separator("Join Algorithm Selection");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner planner(schema);
     
     std::string join_query = "SELECT u.name, p.name FROM users u JOIN products p ON u.id = p.id";
     
@@ -218,24 +216,23 @@ void demonstrate_join_algorithms() {
         std::cout << std::string(40, '-') << std::endl;
         
         // Configure table stats
-        pg::TableStats user_stats;
+        db25::TableStats user_stats;
         user_stats.row_count = test_case.users_rows;
         user_stats.avg_row_size = 100.0;
         planner.set_table_stats("users", user_stats);
         
-        pg::TableStats product_stats;
+        db25::TableStats product_stats;
         product_stats.row_count = test_case.products_rows;
         product_stats.avg_row_size = 150.0;
         planner.set_table_stats("products", product_stats);
         
         // Configure planner
-        pg::PlannerConfig config;
+        db25::PlannerConfig config;
         config.enable_hash_joins = test_case.enable_hash;
         config.enable_merge_joins = test_case.enable_merge;
         planner.set_config(config);
-        
-        auto plan = planner.create_plan(join_query);
-        if (plan.root) {
+
+        if (auto plan = planner.create_plan(join_query); plan.root) {
             std::cout << plan.to_string() << std::endl;
         }
     }

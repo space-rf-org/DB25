@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <random>
 
-namespace pg {
+namespace db25 {
 
 // Physical planning configuration
 struct PhysicalPlannerConfig {

@@ -4,7 +4,7 @@
 #include <sstream>
 #include <utility>
 
-namespace pg {
+namespace db25 {
 
 QueryExecutor::QueryExecutor(std::shared_ptr<DatabaseSchema> schema) 
     : schema_(std::move(schema)) {}
@@ -23,9 +23,8 @@ QueryValidationResult QueryExecutor::validate_query(const std::string& query) {
     if (normalized.is_valid) {
         result.normalized_query = normalized.normalized_query;
     }
-    
-    auto fingerprint = parser_.get_query_fingerprint(query);
-    if (fingerprint) {
+
+    if (auto fingerprint = parser_.get_query_fingerprint(query)) {
         result.fingerprint = *fingerprint;
     }
     

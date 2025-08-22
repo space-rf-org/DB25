@@ -22,18 +22,18 @@ std::string format_memory_bytes(size_t bytes) {
 void demonstrate_physical_planning() {
     print_separator("Physical Plan Generation");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner logical_planner(schema);
-    pg::PhysicalPlanner physical_planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner logical_planner(schema);
+    db25::PhysicalPlanner physical_planner(schema);
     
     // Configure table statistics
-    pg::TableStats user_stats;
+    db25::TableStats user_stats;
     user_stats.row_count = 50000;
     user_stats.avg_row_size = 120.0;
     logical_planner.set_table_stats("users", user_stats);
     physical_planner.set_table_stats("users", user_stats);
     
-    pg::TableStats product_stats;
+    db25::TableStats product_stats;
     product_stats.row_count = 100000;
     product_stats.avg_row_size = 200.0;
     logical_planner.set_table_stats("products", product_stats);
@@ -65,12 +65,12 @@ void demonstrate_physical_planning() {
 void demonstrate_physical_execution() {
     print_separator("Physical Plan Execution");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner logical_planner(schema);
-    pg::PhysicalPlanner physical_planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner logical_planner(schema);
+    db25::PhysicalPlanner physical_planner(schema);
     
     // Configure smaller dataset for execution demo
-    pg::TableStats user_stats;
+    db25::TableStats user_stats;
     user_stats.row_count = 1000;
     user_stats.avg_row_size = 120.0;
     logical_planner.set_table_stats("users", user_stats);
@@ -127,18 +127,18 @@ void demonstrate_physical_execution() {
 void demonstrate_join_execution() {
     print_separator("Join Algorithm Execution");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner logical_planner(schema);
-    pg::PhysicalPlanner physical_planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner logical_planner(schema);
+    db25::PhysicalPlanner physical_planner(schema);
     
     // Configure for join demonstration
-    pg::TableStats user_stats;
+    db25::TableStats user_stats;
     user_stats.row_count = 100;
     user_stats.avg_row_size = 50.0;
     logical_planner.set_table_stats("users", user_stats);
     physical_planner.set_table_stats("users", user_stats);
     
-    pg::TableStats product_stats;
+    db25::TableStats product_stats;
     product_stats.row_count = 50;
     product_stats.avg_row_size = 75.0;
     logical_planner.set_table_stats("products", product_stats);
@@ -180,19 +180,19 @@ void demonstrate_join_execution() {
 void demonstrate_parallel_execution() {
     print_separator("Parallel Execution");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner logical_planner(schema);
-    pg::PhysicalPlanner physical_planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner logical_planner(schema);
+    db25::PhysicalPlanner physical_planner(schema);
     
     // Configure for parallel execution
-    pg::PhysicalPlannerConfig config;
+    db25::PhysicalPlannerConfig config;
     config.enable_parallel_execution = true;
     config.max_parallel_workers = 4;
     config.work_mem = 1024 * 1024; // 1MB
     physical_planner.set_config(config);
     
     // Large table for parallel scan
-    pg::TableStats large_table_stats;
+    db25::TableStats large_table_stats;
     large_table_stats.row_count = 10000;
     large_table_stats.avg_row_size = 100.0;
     logical_planner.set_table_stats("users", large_table_stats);
@@ -228,12 +228,12 @@ void demonstrate_parallel_execution() {
 void demonstrate_physical_optimization() {
     print_separator("Physical Plan Optimization");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner logical_planner(schema);
-    pg::PhysicalPlanner physical_planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner logical_planner(schema);
+    db25::PhysicalPlanner physical_planner(schema);
     
     // Configure for optimization demo
-    pg::TableStats stats;
+    db25::TableStats stats;
     stats.row_count = 100000;
     stats.avg_row_size = 200.0;
     logical_planner.set_table_stats("users", stats);
@@ -273,11 +273,11 @@ void demonstrate_physical_optimization() {
 void demonstrate_batch_processing() {
     print_separator("Vectorized Batch Processing");
     
-    auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-    pg::QueryPlanner logical_planner(schema);
-    pg::PhysicalPlanner physical_planner(schema);
+    auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+    db25::QueryPlanner logical_planner(schema);
+    db25::PhysicalPlanner physical_planner(schema);
     
-    pg::TableStats stats;
+    db25::TableStats stats;
     stats.row_count = 5000;
     physical_planner.set_table_stats("users", stats);
     

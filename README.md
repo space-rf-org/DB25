@@ -169,7 +169,7 @@ lib_pg_cpp/
 ```cpp
 #include "pg_query_wrapper.hpp"
 
-pg::QueryParser parser;
+db25::QueryParser parser;
 
 // Parse a query
 auto result = parser.parse("SELECT * FROM users WHERE id = 1");
@@ -197,7 +197,7 @@ if (normalized.is_valid) {
 #include "sample_schema.hpp"
 
 // Create a complete e-commerce schema
-auto schema = pg::ECommerceSchema::create_schema();
+auto schema = db25::ECommerceSchema::create_schema();
 
 // Generate SQL for creating tables
 std::string create_sql = schema.generate_create_sql();
@@ -222,8 +222,8 @@ if (users_table) {
 ```cpp
 #include "query_executor.hpp"
 
-auto schema = std::make_shared<pg::DatabaseSchema>(pg::ECommerceSchema::create_schema());
-pg::QueryExecutor executor(schema);
+auto schema = std::make_shared<db25::DatabaseSchema>(db25::ECommerceSchema::create_schema());
+db25::QueryExecutor executor(schema);
 
 // Validate query against schema
 std::string query = "SELECT name, email FROM users WHERE active = true";
@@ -254,11 +254,11 @@ for (const auto& suggestion : suggestions) {
 ```cpp
 #include "query_planner.hpp"
 
-auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-pg::QueryPlanner planner(schema);
+auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+db25::QueryPlanner planner(schema);
 
 // Configure table statistics for better cost estimation
-pg::TableStats user_stats;
+db25::TableStats user_stats;
 user_stats.row_count = 10000;
 user_stats.avg_row_size = 120.0;
 user_stats.column_selectivity["email"] = 0.8;
@@ -284,7 +284,7 @@ for (size_t i = 0; i < alternatives.size(); ++i) {
 }
 
 // Configure planner options
-pg::PlannerConfig config;
+db25::PlannerConfig config;
 config.enable_hash_joins = true;
 config.enable_merge_joins = true;
 config.work_mem = 1024 * 1024; // 1MB
@@ -297,9 +297,9 @@ planner.set_config(config);
 #include "physical_planner.hpp"
 #include "execution_engine.hpp"
 
-auto schema = std::make_shared<pg::DatabaseSchema>(pg::create_simple_schema());
-pg::QueryPlanner logical_planner(schema);
-pg::PhysicalPlanner physical_planner(schema);
+auto schema = std::make_shared<db25::DatabaseSchema>(db25::create_simple_schema());
+db25::QueryPlanner logical_planner(schema);
+db25::PhysicalPlanner physical_planner(schema);
 
 // Create logical plan
 std::string query = "SELECT u.name, p.price FROM users u JOIN products p ON u.id = p.user_id WHERE p.price > 100";
@@ -313,7 +313,7 @@ std::cout << "Physical Execution Plan:" << std::endl;
 std::cout << physical_plan.to_string() << std::endl;
 
 // Execute the plan
-pg::ExecutionEngine executor(schema);
+db25::ExecutionEngine executor(schema);
 auto execution_context = executor.create_context();
 
 // Execute and get results
@@ -341,10 +341,10 @@ std::cout << "Execution time: " << stats.execution_time_ms << " ms" << std::endl
 #include "htap_engine.hpp"
 
 // Create HTAP engine with workload classification
-pg::HTAPEngine htap_engine(schema);
+db25::HTAPEngine htap_engine(schema);
 
 // Configure for mixed workloads
-pg::HTAPConfig config;
+db25::HTAPConfig config;
 config.oltp_priority = 0.7;  // Prioritize transactional workloads
 config.analytical_timeout_ms = 5000;
 config.enable_real_time_analytics = true;

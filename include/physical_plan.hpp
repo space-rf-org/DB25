@@ -11,7 +11,7 @@
 #include <atomic>
 #include <chrono>
 
-namespace pg {
+namespace db25 {
 
 // Forward declarations
 struct PhysicalPlanNode;
@@ -247,7 +247,7 @@ struct PhysicalHashJoinNode : PhysicalPlanNode {
     bool build_phase_complete = false;
     bool probe_phase_complete = false;
     
-    PhysicalHashJoinNode(JoinType jt) 
+    explicit PhysicalHashJoinNode(const JoinType jt)
         : PhysicalPlanNode(PhysicalOperatorType::HASH_JOIN), join_type(jt) {}
     
     void initialize(ExecutionContext* ctx) override;
@@ -255,8 +255,8 @@ struct PhysicalHashJoinNode : PhysicalPlanNode {
     void reset() override;
     void cleanup() override;
     
-    std::string to_string(int indent = 0) const override;
-    PhysicalPlanNodePtr copy() const override;
+    [[nodiscard]] std::string to_string(int indent) const override;
+    [[nodiscard]] PhysicalPlanNodePtr copy() const override;
     
 private:
     void build_hash_table();
@@ -401,9 +401,10 @@ struct ParallelSequentialScanNode : PhysicalPlanNode {
     std::string to_string(int indent = 0) const override;
     PhysicalPlanNodePtr copy() const override;
     
+    void generate_mock_data(size_t num_rows);  // Made public for testing
+    
 private:
     void worker_scan(size_t worker_id, size_t start_row, size_t end_row) const;
-    void generate_mock_data(size_t num_rows);
 };
 
 }

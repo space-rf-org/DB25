@@ -7,7 +7,7 @@
 #include <memory>
 #include <functional>
 
-namespace pg {
+namespace db25 {
 
 struct QueryValidationResult {
     bool is_valid;
@@ -27,7 +27,7 @@ struct QueryAnalysis {
 
 class QueryExecutor {
 public:
-    QueryExecutor(std::shared_ptr<DatabaseSchema> schema);
+    explicit QueryExecutor(std::shared_ptr<DatabaseSchema> schema);
     
     QueryValidationResult validate_query(const std::string& query);
     QueryAnalysis analyze_query(const std::string& query);
@@ -35,8 +35,8 @@ public:
     std::string optimize_query(const std::string& query);
     std::vector<std::string> suggest_indexes(const std::string& query);
     
-    bool check_table_exists(const std::string& table_name) const;
-    bool check_column_exists(const std::string& table_name, const std::string& column_name) const;
+    [[nodiscard]] bool check_table_exists(const std::string& table_name) const;
+    [[nodiscard]] bool check_column_exists(const std::string& table_name, const std::string& column_name) const;
     
     std::string format_query(const std::string& query, bool pretty_print = true);
     

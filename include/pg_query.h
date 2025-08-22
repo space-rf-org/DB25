@@ -1,8 +1,7 @@
 #ifndef PG_QUERY_H
 #define PG_QUERY_H
 
-#include <stdint.h>
-#include <sys/types.h>
+#include <cstdint>
 
 #include "postgres_deparse.h"
 
