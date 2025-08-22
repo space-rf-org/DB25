@@ -87,6 +87,17 @@ namespace db25 {
 
         [[nodiscard]] std::optional<size_t> extract_limit_from_ast(const std::string &query) const;
 
+        struct InsertInfo {
+            std::string table_name;
+            std::vector<std::string> target_columns;
+            bool has_values = false;
+            bool has_subquery = false;
+            bool has_cte = false;
+            std::vector<std::string> cte_names;  // Names of CTEs used
+        };
+
+        [[nodiscard]] std::optional<InsertInfo> extract_insert_info_from_ast(const std::string &query) const;
+
         LogicalPlanNodePtr build_plan_from_insert(const std::string &query);
 
         LogicalPlanNodePtr build_plan_from_update(const std::string &query);

@@ -39,6 +39,18 @@ namespace db25 {
             root = build_plan_from_select(query);
         } else if (upper_query.find("INSERT") == 0) {
             root = build_plan_from_insert(query);
+        } else if (upper_query.find("WITH") == 0) {
+            // Check if it's a CTE with INSERT, UPDATE, DELETE, or SELECT
+            if (upper_query.find("INSERT") != std::string::npos) {
+                root = build_plan_from_insert(query);
+            } else if (upper_query.find("UPDATE") != std::string::npos) {
+                root = build_plan_from_update(query);
+            } else if (upper_query.find("DELETE") != std::string::npos) {
+                root = build_plan_from_delete(query);
+            } else {
+                // Default to SELECT for WITH ... SELECT
+                root = build_plan_from_select(query);
+            }
         } else if (upper_query.find("UPDATE") == 0) {
             root = build_plan_from_update(query);
         } else if (upper_query.find("DELETE") == 0) {
@@ -619,7 +631,7 @@ namespace db25 {
             return nullptr;
         }
 
-        std::string bool_op = bool_expr_node["boolop"].get<std::string>();
+        const std::string bool_op = bool_expr_node["boolop"].get<std::string>();
         std::string op_name;
 
         // PostgreSQL boolean operators
@@ -629,9 +641,12 @@ namespace db25 {
             op_name = "OR";
         } else if (bool_op == "NOT_EXPR") {
             op_name = "NOT";
-        } else {
+        }
+
+        if (op_name.empty()) { // DEFAULT
             op_name = "AND"; // default fallback
         }
+
 
         auto expr = std::make_shared<Expression>(ExpressionType::BINARY_OP, op_name);
 
@@ -667,7 +682,7 @@ namespace db25 {
                 node->cost.startup_cost = 0.0;
                 node->cost.total_cost = base_cost;
                 node->cost.estimated_rows = static_cast<size_t>(
-                    get_table_stats(scan_node->table_name).row_count * selectivity);
+                    get_table_stats(scan_node->table_name).row_count * selectivity); // NOLINT(readability-magic-numbers
                 node->cost.selectivity = selectivity;
                 break;
             }
@@ -689,11 +704,11 @@ namespace db25 {
             case PlanNodeType::NESTED_LOOP_JOIN: {
                 auto join_node = std::static_pointer_cast<NestedLoopJoinNode>(node);
                 if (join_node->children.size() == 2) {
-                    auto left = join_node->children[0];
-                    auto right = join_node->children[1];
+                    const auto left = join_node->children[0];
+                    const auto right = join_node->children[1];
 
-                    double selectivity = estimate_selectivity(join_node->join_conditions, "");
-                    double join_cost = estimate_join_cost_internal(join_node->join_type,
+                    const double selectivity = estimate_selectivity(join_node->join_conditions, "");
+                    const double join_cost = estimate_join_cost_internal(join_node->join_type,
                                                                    left->cost.estimated_rows,
                                                                    right->cost.estimated_rows,
                                                                    selectivity);
@@ -701,7 +716,7 @@ namespace db25 {
                     node->cost.startup_cost = left->cost.startup_cost + right->cost.startup_cost;
                     node->cost.total_cost = left->cost.total_cost + right->cost.total_cost + join_cost;
                     node->cost.estimated_rows = static_cast<size_t>(
-                        left->cost.estimated_rows * right->cost.estimated_rows * selectivity);
+                        left->cost.estimated_rows * right->cost.estimated_rows * selectivity); // NOLINT(readability-magic-numbers
                     node->cost.selectivity = selectivity;
                 }
                 break;
@@ -1105,29 +1120,96 @@ namespace db25 {
         }
     }
 
+    std::optional<QueryPlanner::InsertInfo> QueryPlanner::extract_insert_info_from_ast(const std::string &query) const {
+        try {
+            PgQueryParseResult parse_result = pg_query_parse(query.c_str());
+            
+            // RAII cleanup using unique_ptr with custom deleter
+            auto cleanup = [&parse_result](void*) { pg_query_free_parse_result(parse_result); };
+            std::unique_ptr<void, decltype(cleanup)> cleanup_guard(nullptr, cleanup);
+            
+            if (parse_result.error) {
+                return std::nullopt;
+            }
+
+            nlohmann::json ast = nlohmann::json::parse(parse_result.parse_tree);
+            
+            if (!ast.contains("stmts") || !ast["stmts"].is_array() || ast["stmts"].empty()) {
+                return std::nullopt;
+            }
+
+            const auto& first_stmt = ast["stmts"][0];
+            if (first_stmt.contains("stmt") && first_stmt["stmt"].contains("InsertStmt")) {
+                const auto& insert_stmt = first_stmt["stmt"]["InsertStmt"];
+                QueryPlanner::InsertInfo info;
+                
+                // Extract table name from relation
+                if (insert_stmt.contains("relation") && insert_stmt["relation"].contains("relname")) {
+                    info.table_name = insert_stmt["relation"]["relname"].get<std::string>();
+                }
+                
+                // Extract target column list if present
+                if (insert_stmt.contains("cols") && insert_stmt["cols"].is_array()) {
+                    for (const auto& res_target : insert_stmt["cols"]) {
+                        if (res_target.contains("ResTarget")) {
+                            const auto& target = res_target["ResTarget"];
+                            if (target.contains("name") && target["name"].is_string()) {
+                                info.target_columns.push_back(target["name"].get<std::string>());
+                            }
+                        }
+                    }
+                }
+                
+                // Check for WITH clause (CTE)
+                if (insert_stmt.contains("withClause")) {
+                    info.has_cte = true;
+                    const auto& with_clause = insert_stmt["withClause"];
+                    
+                    // Extract CTE names
+                    if (with_clause.contains("ctes") && with_clause["ctes"].is_array()) {
+                        for (const auto& cte : with_clause["ctes"]) {
+                            if (cte.contains("CommonTableExpr")) {
+                                const auto& cte_expr = cte["CommonTableExpr"];
+                                if (cte_expr.contains("ctename") && cte_expr["ctename"].is_string()) {
+                                    info.cte_names.push_back(cte_expr["ctename"].get<std::string>());
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Check if INSERT has VALUES clause or subquery
+                if (insert_stmt.contains("selectStmt")) {
+                    const auto& select_stmt = insert_stmt["selectStmt"];
+                    if (select_stmt.contains("SelectStmt")) {
+                        const auto& stmt_details = select_stmt["SelectStmt"];
+                        if (stmt_details.contains("valuesLists") && stmt_details["valuesLists"].is_array()) {
+                            info.has_values = true;
+                        } else {
+                            info.has_subquery = true;
+                        }
+                    }
+                }
+                
+                return info;
+            }
+            
+            return std::nullopt;
+            
+        } catch (const std::exception& e) {
+            return std::nullopt;
+        }
+    }
+
     LogicalPlanNodePtr QueryPlanner::build_plan_from_insert(const std::string &query) { //NOLINT:static
-        // Extract table name
-        std::regex table_regex(R"(INSERT\s+INTO\s+(\w+))", std::regex_constants::icase);
-        std::smatch table_match;
-        if (!std::regex_search(query, table_match, table_regex)) {
+        // Use AST-based parsing instead of regex
+        auto insert_info = extract_insert_info_from_ast(query);
+        if (!insert_info.has_value()) {
             return nullptr;
         }
 
-        std::string table_name = table_match[1];
-        auto insert_node = std::make_shared<InsertNode>(table_name);
-
-        // Parse column list if present
-        std::regex columns_regex(R"(\(\s*([^)]+)\s*\)\s+VALUES)", std::regex_constants::icase);
-        std::smatch columns_match;
-        if (std::regex_search(query, columns_match, columns_regex)) {
-            std::string columns_str = columns_match[1];
-            std::stringstream ss(columns_str);
-            std::string column;
-            while (std::getline(ss, column, ',')) {
-                column = std::regex_replace(column, std::regex(R"(^\s+|\s+$)"), "");
-                insert_node->target_columns.push_back(column);
-            }
-        }
+        auto insert_node = std::make_shared<InsertNode>(insert_info->table_name);
+        insert_node->target_columns = insert_info->target_columns;
 
         return insert_node;
     }

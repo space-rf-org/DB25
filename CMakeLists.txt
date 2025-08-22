@@ -95,7 +95,9 @@ add_custom_target(run-tests
     COMMAND test_ast_join_conditions
     COMMAND test_where_ast
     COMMAND test_ast_projections_simple
-    DEPENDS test_database test_query_parser test_logical_planner test_physical_planner test_physical_execution test_query_executor test_ast_join_conditions test_where_ast test_ast_projections_simple
+    COMMAND test_insert_ast_comprehensive
+    COMMAND test_cte_comprehensive
+    DEPENDS test_database test_query_parser test_logical_planner test_physical_planner test_physical_execution test_query_executor test_ast_join_conditions test_where_ast test_ast_projections_simple test_insert_ast_comprehensive test_cte_comprehensive
     COMMENT "Running all individual test suites (original + AST-based tests)"
 )
 
