@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 project(lib_pg_cpp VERSION 1.0.0 LANGUAGES CXX)
 
+# Set policy for FetchContent timestamp behavior
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -10,7 +15,10 @@ find_package(PkgConfig REQUIRED)
 
 include(FetchContent)
 
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz)
+FetchContent_Declare(json 
+    URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
 FetchContent_MakeAvailable(json)
 
 # Use local libpg_query library
@@ -80,6 +88,10 @@ foreach(DEBUG_SOURCE ${DEBUG_SOURCES})
     endif()
 endforeach()
 
+# Add debug schema binder
+add_executable(debug_schema_binder tests/debug_schema_binder.cpp)
+target_link_libraries(debug_schema_binder ${PROJECT_NAME})
+
 # =============================================================================
 # CUSTOM TEST TARGETS
 # =============================================================================
@@ -97,8 +109,12 @@ add_custom_target(run-tests
     COMMAND test_ast_projections_simple
     COMMAND test_insert_ast_comprehensive
     COMMAND test_cte_comprehensive
-    DEPENDS test_database test_query_parser test_logical_planner test_physical_planner test_physical_execution test_query_executor test_ast_join_conditions test_where_ast test_ast_projections_simple test_insert_ast_comprehensive test_cte_comprehensive
-    COMMENT "Running all individual test suites (original + AST-based tests)"
+    COMMAND test_schema_registry
+    COMMAND test_schema_binder
+    COMMAND test_bound_statement_integration
+    COMMAND test_worlds_most_complex_sql
+    DEPENDS test_database test_query_parser test_logical_planner test_physical_planner test_physical_execution test_query_executor test_ast_join_conditions test_where_ast test_ast_projections_simple test_insert_ast_comprehensive test_cte_comprehensive test_schema_registry test_schema_binder test_bound_statement_integration test_worlds_most_complex_sql
+    COMMENT "Running all individual test suites (original + AST-based tests + schema registry)"
 )
 
 # Comprehensive test manager
@@ -121,3 +137,6 @@ add_custom_target(run-debug
     DEPENDS debug_ast debug_where_parsing debug_and_conditions debug_boolean_expr debug_parse_trace
     COMMENT "Running AST and WHERE condition debugging utilities"
 )
+
+add_executable(debug_cte_specific debug_cte_specific.cpp)
+target_link_libraries(debug_cte_specific lib_pg_cpp)

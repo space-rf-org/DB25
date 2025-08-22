@@ -3,7 +3,18 @@
 #include "logical_plan.hpp"
 #include "database.hpp"
 #include "pg_query_wrapper.hpp"
+#include "bound_statement.hpp"  // Include full SchemaBinder definition
 #include <unordered_set>
+
+// Forward declaration for BoundStatement integration  
+namespace db25 {
+    
+    using BoundStatementPtr = std::shared_ptr<BoundStatement>;
+    using BoundSelectPtr = std::shared_ptr<BoundSelect>;
+    using BoundInsertPtr = std::shared_ptr<BoundInsert>;
+    using BoundUpdatePtr = std::shared_ptr<BoundUpdate>;
+    using BoundDeletePtr = std::shared_ptr<BoundDelete>;
+}
 
 namespace db25 {
     // Statistics for cost estimation
@@ -29,13 +40,33 @@ namespace db25 {
 
     // Query planner class
     class QueryPlanner {
+
+
     public:
         explicit QueryPlanner(const std::shared_ptr<DatabaseSchema> &schema);
+        
+        // Enhanced constructor with schema binder
+        QueryPlanner(const std::shared_ptr<DatabaseSchema> &schema, std::unique_ptr<SchemaBinder> binder);
 
-        // Main planning interface
+        // Main planning interface (backward compatibility)
         LogicalPlan create_plan(const std::string &query);
-
         LogicalPlan create_plan(const QueryResult &parsed_query);
+        
+        // NEW: BoundStatement-based interface
+        LogicalPlan create_plan_from_bound_statement(const BoundStatementPtr& bound_stmt);
+        
+        // NEW: Integrated bind and plan workflow
+        struct BindAndPlanResult {
+            BoundStatementPtr bound_statement;
+            LogicalPlan logical_plan;
+            bool success;
+            std::vector<std::string> errors;
+        };
+        
+        BindAndPlanResult bind_and_plan(const std::string& query);
+        
+        // Schema binder access
+        SchemaBinder* get_schema_binder() const { return schema_binder_.get(); }
 
         // Configuration
         void set_config(const PlannerConfig &config) { config_ = config; }
@@ -73,36 +104,23 @@ namespace db25 {
         QueryParser parser_;
         PlannerConfig config_;
         std::unordered_map<std::string, TableStats> table_stats_;
+        
+        // BoundStatement integration
+        std::unique_ptr<SchemaBinder> schema_binder_;
 
-        // Plan generation from parse tree
-        LogicalPlanNodePtr build_plan_from_select(const std::string &query);
+        // Plan generation from Schema-Aware Query Binding
+        // Note: Old string-based methods have been removed in favor of bind_and_plan()
 
-        [[nodiscard]] bool is_star_projection(const std::vector<ExpressionPtr> &projections) const;
-
-        [[nodiscard]] std::vector<ExpressionPtr> extract_projections_from_ast(const std::string &query) const;
-
-        [[nodiscard]] ExpressionPtr parse_projection_target(const nlohmann::json &res_target) const;
-
-        [[nodiscard]] std::vector<SortNode::SortKey> extract_order_by_from_ast(const std::string &query) const;
-
-        [[nodiscard]] std::optional<size_t> extract_limit_from_ast(const std::string &query) const;
-
-        struct InsertInfo {
-            std::string table_name;
-            std::vector<std::string> target_columns;
-            bool has_values = false;
-            bool has_subquery = false;
-            bool has_cte = false;
-            std::vector<std::string> cte_names;  // Names of CTEs used
-        };
-
-        [[nodiscard]] std::optional<InsertInfo> extract_insert_info_from_ast(const std::string &query) const;
-
-        LogicalPlanNodePtr build_plan_from_insert(const std::string &query);
-
-        LogicalPlanNodePtr build_plan_from_update(const std::string &query);
-
-        LogicalPlanNodePtr build_plan_from_delete(const std::string &query);
+        // NEW: BoundStatement → LogicalPlan conversion methods
+        LogicalPlanNodePtr convert_bound_select(const BoundSelectPtr& bound_select);
+        LogicalPlanNodePtr convert_bound_insert(const BoundInsertPtr& bound_insert);
+        LogicalPlanNodePtr convert_bound_update(const BoundUpdatePtr& bound_update);
+        LogicalPlanNodePtr convert_bound_delete(const BoundDeletePtr& bound_delete);
+        
+        // BoundStatement conversion helpers
+        LogicalPlanNodePtr create_schema_aware_scan_node(const std::shared_ptr<struct BoundTableRef>& table_ref);
+        std::vector<ExpressionPtr> convert_bound_expressions(const std::vector<std::shared_ptr<struct BoundExpression>>& bound_exprs);
+        ExpressionPtr convert_bound_expression(const std::shared_ptr<struct BoundExpression>& bound_expr);
 
         // Plan building helpers
         LogicalPlanNodePtr build_scan_node(const std::string &table_name,
@@ -265,7 +283,7 @@ namespace db25 {
 
     class JoinReorderingTransformer : public PlanTransformer {
     public:
-        JoinReorderingTransformer(const QueryPlanner &planner) : planner_(planner) {
+        explicit JoinReorderingTransformer(const QueryPlanner &planner) : planner_(planner) {
         }
 
     protected:

@@ -8,6 +8,13 @@
 #include <optional>
 
 namespace db25 {
+    // Forward declarations for schema integration
+    using TableId = size_t;
+    using ColumnId = size_t;
+    using IndexId = size_t;
+}
+
+namespace db25 {
     // Forward declarations
     struct LogicalPlanNode;
     using LogicalPlanNodePtr = std::shared_ptr<LogicalPlanNode>;
@@ -113,12 +120,23 @@ namespace db25 {
 
     // Table scan node
     struct TableScanNode final : LogicalPlanNode {
-        std::string table_name;
+        std::string table_name;                    // Keep for backward compatibility
         std::string alias;
         std::vector<ExpressionPtr> filter_conditions;
+        
+        // Schema-enhanced fields
+        std::optional<TableId> table_id;           // Schema-resolved table ID
+        std::vector<ColumnId> projected_columns;   // Schema-resolved columns
+        std::unordered_map<std::string, ColumnId> column_name_to_id; // Fast column lookup
 
         explicit TableScanNode(std::string table)
             : LogicalPlanNode(PlanNodeType::TABLE_SCAN), table_name(std::move(table)) {
+        }
+        
+        // Enhanced constructor with schema information
+        TableScanNode(std::string table, TableId tid, std::vector<ColumnId> columns)
+            : LogicalPlanNode(PlanNodeType::TABLE_SCAN), table_name(std::move(table)), 
+              table_id(tid), projected_columns(std::move(columns)) {
         }
 
         [[nodiscard]] std::string to_string(int indent) const override;
@@ -128,14 +146,28 @@ namespace db25 {
 
     // Index scan node
     struct IndexScanNode final : LogicalPlanNode {
-        std::string table_name;
-        std::string index_name;
+        std::string table_name;                    // Keep for backward compatibility
+        std::string index_name;                    // Keep for backward compatibility
         std::string alias;
         std::vector<ExpressionPtr> index_conditions;
         std::vector<ExpressionPtr> filter_conditions;
+        
+        // Schema-enhanced fields
+        std::optional<TableId> table_id;           // Schema-resolved table ID
+        std::optional<IndexId> index_id;           // Schema-resolved index ID
+        std::vector<ColumnId> index_columns;       // Schema-resolved index columns
+        std::vector<ColumnId> projected_columns;   // Schema-resolved projected columns
 
         IndexScanNode(std::string table, std::string index)
             : LogicalPlanNode(PlanNodeType::INDEX_SCAN), table_name(std::move(table)), index_name(std::move(index)) {
+        }
+        
+        // Enhanced constructor with schema information
+        IndexScanNode(std::string table, std::string index, TableId tid, IndexId iid, 
+                     std::vector<ColumnId> idx_cols, std::vector<ColumnId> proj_cols)
+            : LogicalPlanNode(PlanNodeType::INDEX_SCAN), table_name(std::move(table)), 
+              index_name(std::move(index)), table_id(tid), index_id(iid), 
+              index_columns(std::move(idx_cols)), projected_columns(std::move(proj_cols)) {
         }
 
         [[nodiscard]] std::string to_string(int indent) const override;

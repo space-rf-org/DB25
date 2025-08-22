@@ -40,7 +40,16 @@ std::string TableScanNode::to_string(const int indent) const {
 }
 
 LogicalPlanNodePtr TableScanNode::copy() const {
-    auto node = std::make_shared<TableScanNode>(table_name);
+    std::shared_ptr<TableScanNode> node;
+    
+    // Preserve schema information if available
+    if (table_id.has_value()) {
+        node = std::make_shared<TableScanNode>(table_name, table_id.value(), projected_columns);
+        node->column_name_to_id = column_name_to_id;
+    } else {
+        node = std::make_shared<TableScanNode>(table_name);
+    }
+    
     node->alias = alias;
     node->filter_conditions = filter_conditions;
     node->cost = cost;
