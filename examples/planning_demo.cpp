@@ -231,9 +231,8 @@ void demonstrate_join_algorithms() {
         config.enable_hash_joins = test_case.enable_hash;
         config.enable_merge_joins = test_case.enable_merge;
         planner.set_config(config);
-        
-        auto plan = planner.create_plan(join_query);
-        if (plan.root) {
+
+        if (auto plan = planner.create_plan(join_query); plan.root) {
             std::cout << plan.to_string() << std::endl;
         }
     }

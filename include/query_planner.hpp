@@ -47,14 +47,14 @@ namespace db25 {
         [[nodiscard]] TableStats get_table_stats(const std::string &table_name) const;
 
         // Plan optimization
-        LogicalPlan optimize_plan(const LogicalPlan &plan);
+        [[nodiscard]] LogicalPlan optimize_plan(const LogicalPlan &plan);
 
-        std::vector<LogicalPlan> generate_alternative_plans(const std::string &query);
+        [[nodiscard]] std::vector<LogicalPlan> generate_alternative_plans(const std::string &query);
 
         // Cost estimation
         void estimate_costs(const LogicalPlanNodePtr &node);
 
-        double estimate_selectivity(const std::vector<ExpressionPtr> &conditions,
+        [[nodiscard]] double estimate_selectivity(const std::vector<ExpressionPtr> &conditions,
                                     const std::string &table_name) const;
 
         // Enhanced AST-based join condition extraction
@@ -76,6 +76,16 @@ namespace db25 {
 
         // Plan generation from parse tree
         LogicalPlanNodePtr build_plan_from_select(const std::string &query);
+
+        [[nodiscard]] bool is_star_projection(const std::vector<ExpressionPtr> &projections) const;
+
+        [[nodiscard]] std::vector<ExpressionPtr> extract_projections_from_ast(const std::string &query) const;
+
+        [[nodiscard]] ExpressionPtr parse_projection_target(const nlohmann::json &res_target) const;
+
+        [[nodiscard]] std::vector<SortNode::SortKey> extract_order_by_from_ast(const std::string &query) const;
+
+        [[nodiscard]] std::optional<size_t> extract_limit_from_ast(const std::string &query) const;
 
         LogicalPlanNodePtr build_plan_from_insert(const std::string &query);
 
@@ -123,16 +133,14 @@ namespace db25 {
         ExpressionPtr parse_expression(const std::string &expr_str);
 
         // AST-based WHERE parsing helpers
-        std::vector<ExpressionPtr> parse_where_clause_ast(const nlohmann::json& select_stmt) const;
-        ExpressionPtr parse_where_expression_ast(const nlohmann::json& where_node) const;
+        [[nodiscard]] std::vector<ExpressionPtr> parse_where_clause_ast(const nlohmann::json& select_stmt) const;
+        [[nodiscard]] ExpressionPtr parse_where_expression_ast(const nlohmann::json& where_node) const;
 
         void flatten_condition_tree(const ExpressionPtr &expr, std::vector<ExpressionPtr> &conditions) const;
 
-        ExpressionPtr build_case_expression(const nlohmann::json &case_node) const;
+        [[nodiscard]] ExpressionPtr build_case_expression(const nlohmann::json &case_node) const;
 
         // Existing methods enhanced
-        std::vector<ExpressionPtr> parse_condition_list_ast(const nlohmann::json& condition_node) const;
-
         ExpressionPtr parse_column_reference(const std::string &col_ref);
 
         std::vector<ExpressionPtr> parse_condition_list(const std::string &where_clause);
@@ -157,7 +165,6 @@ namespace db25 {
         LogicalPlanNodePtr apply_join_reordering(LogicalPlanNodePtr node);
 
         // Utility functions
-        [[nodiscard]] std::vector<std::string> extract_table_names_from_query(const std::string &query) const;
 
         [[nodiscard]] std::vector<ExpressionPtr> extract_join_conditions(const std::string &query) const;
 

@@ -47,13 +47,13 @@ namespace db25 {
 
         ~QueryParser();
 
-        QueryResult parse(const std::string &query);
+        [[nodiscard]] QueryResult parse(const std::string &query);
 
-        NormalizedQuery normalize(const std::string &query);
+        [[nodiscard]] NormalizedQuery normalize(const std::string &query);
 
-        std::optional<std::string> get_query_fingerprint(const std::string &query);
+        [[nodiscard]] std::optional<std::string> get_query_fingerprint(const std::string &query);
 
-        bool is_valid_sql(const std::string &query);
+        [[nodiscard]] bool is_valid_sql(const std::string &query);
 
     private:
         void cleanup_result(const PgQueryParseResult &result);

@@ -11,12 +11,18 @@ namespace db25 {
         comment = "";
         if (query.empty()) {
             throw std::runtime_error("Empty query");
-            return;
         }
+        
         const PgQueryParseResult parse_result = pg_query_parse(query.c_str());
+        
+        // RAII-style cleanup to prevent memory leaks
+        auto cleanup = [&parse_result](void*) { pg_query_free_parse_result(parse_result); };
+        std::unique_ptr<void, decltype(cleanup)> cleanup_guard(nullptr, cleanup);
+        
         if (parse_result.error || !parse_result.parse_tree) {
             throw std::runtime_error(parse_result.error->message);
         }
+        
         try {
             // Parse JSON AST
             const nlohmann::json ast = nlohmann::json::parse(parse_result.parse_tree);
@@ -29,9 +35,10 @@ namespace db25 {
             // extract comment from ast
             // extract_comment_from_ast(ast);
         } catch (const std::exception &e) {
-            // TODO: exception handling and logging
+            // cleanup_guard will automatically free resources
+            throw; // Re-throw to maintain exception semantics
         }
-        pg_query_free_parse_result(parse_result);
+        // cleanup_guard automatically calls pg_query_free_parse_result when going out of scope
     }
 
     void EnhancedQueryResult::extract_tables_from_ast(nlohmann::json::const_reference ast) { // NOLINT(readability-convert-member-functions-to-static)

@@ -757,8 +757,8 @@ namespace db25 {
 
             case PlanNodeType::SORT: {
                 if (!node->children.empty()) {
-                    auto child = node->children[0];
-                    double sort_cost = child->cost.estimated_rows * std::log2(child->cost.estimated_rows) * config_.
+                    const auto child = node->children[0];
+                    const double sort_cost = child->cost.estimated_rows * std::log2(child->cost.estimated_rows) * config_.
                                        cpu_operator_cost;
 
                     node->cost.startup_cost = child->cost.total_cost + sort_cost;
@@ -770,16 +770,16 @@ namespace db25 {
             }
 
             case PlanNodeType::LIMIT: {
-                auto limit_node = std::static_pointer_cast<LimitNode>(node);
+                const auto limit_node = std::static_pointer_cast<LimitNode>(node);
                 if (!node->children.empty()) {
-                    auto child = node->children[0];
+                    const auto child = node->children[0];
                     size_t output_rows = child->cost.estimated_rows;
 
                     if (limit_node->limit) {
                         output_rows = std::min(output_rows, *limit_node->limit);
                     }
 
-                    double fraction = static_cast<double>(output_rows) / child->cost.estimated_rows;
+                    const double fraction = static_cast<double>(output_rows) / child->cost.estimated_rows;
 
                     node->cost.startup_cost = child->cost.startup_cost;
                     node->cost.total_cost = child->cost.startup_cost + child->cost.total_cost * fraction;
@@ -827,9 +827,9 @@ namespace db25 {
     }
 
     LogicalPlanNodePtr QueryPlanner::build_plan_from_select(const std::string &query) {
-        auto result = new EnhancedQueryResult();
+        const auto result = new EnhancedQueryResult();
         result->extract_references(query);
-        std::vector<std::string> table_names = result->tables;
+        const std::vector<std::string> table_names = result->tables;
 
         if (table_names.empty()) {
             return nullptr;
@@ -855,49 +855,254 @@ namespace db25 {
             plan_root = build_selection_node(plan_root, where_conditions);
         }
 
-        // Add projection for SELECT list
-        std::regex select_regex(R"(SELECT\s+(.+?)\s+FROM)", std::regex_constants::icase);
-        if (std::smatch select_match; std::regex_search(query, select_match, select_regex)) {
-            if (std::string select_list = select_match[1]; select_list != "*") {
-                // Parse projection list - simplified
-                std::vector<ExpressionPtr> projections;
-                std::stringstream ss(select_list);
-                std::string item;
-                while (std::getline(ss, item, ',')) {
-                    item = std::regex_replace(item, std::regex(R"(^\s+|\s+$)"), "");
-                    projections.push_back(std::make_shared<Expression>(ExpressionType::COLUMN_REF, item));
-                }
-                plan_root = build_projection_node(plan_root, projections);
-            }
+        // Add projection for SELECT list - ENHANCED AST VERSION
+        if (auto projections = extract_projections_from_ast(query); !projections.empty() && !is_star_projection(projections)) {
+            plan_root = build_projection_node(plan_root, projections);
         }
+        // Note: For SELECT *, no projection node is needed as all columns are included
 
-        // Add ORDER BY
-        std::regex order_regex(R"(ORDER\s+BY\s+(.+?)(?:\s+LIMIT|$))", std::regex_constants::icase);
-        if (std::smatch order_match; std::regex_search(query, order_match, order_regex)) {
-            auto sort_node = std::make_shared<SortNode>();
+        // Add ORDER BY - ENHANCED AST VERSION
+        if (auto sort_keys = extract_order_by_from_ast(query); !sort_keys.empty()) {
+            const auto sort_node = std::make_shared<SortNode>();
             sort_node->children.push_back(plan_root);
-
-            // Simple parsing of sort keys
-            std::string order_clause = order_match[1];
-            SortNode::SortKey key;
-            key.expression = std::make_shared<Expression>(ExpressionType::COLUMN_REF, order_clause);
-            key.ascending = order_clause.find("DESC") == std::string::npos;
-            sort_node->sort_keys.push_back(key);
-
+            sort_node->sort_keys = std::move(sort_keys);
             plan_root = sort_node;
         }
 
-        // Add LIMIT
-        std::regex limit_regex(R"(LIMIT\s+(\d+))", std::regex_constants::icase);
-        std::smatch limit_match;
-        if (std::regex_search(query, limit_match, limit_regex)) {
-            auto limit_node = std::make_shared<LimitNode>();
+        // Add LIMIT - ENHANCED AST VERSION
+        if (auto limit_value = extract_limit_from_ast(query); limit_value.has_value()) {
+            const auto limit_node = std::make_shared<LimitNode>();
             limit_node->children.push_back(plan_root);
-            limit_node->limit = std::stoull(limit_match[1]);
+            limit_node->limit = limit_value.value();
             plan_root = limit_node;
         }
 
         return plan_root;
+    }
+
+    bool QueryPlanner::is_star_projection(const std::vector<ExpressionPtr>& projections) const {
+        return projections.size() == 1 &&
+               projections[0]->type == ExpressionType::COLUMN_REF &&
+               projections[0]->value == "*";
+    }
+
+    std::vector<ExpressionPtr> QueryPlanner::extract_projections_from_ast(const std::string& query) const {
+        std::vector<ExpressionPtr> projections;
+
+        try {
+            PgQueryParseResult parse_result = pg_query_parse(query.c_str());
+
+            // RAII-style cleanup to prevent memory leaks
+            auto cleanup = [&parse_result](void*) { pg_query_free_parse_result(parse_result); };
+            std::unique_ptr<void, decltype(cleanup)> cleanup_guard(nullptr, cleanup);
+
+            if (parse_result.error || !parse_result.parse_tree) {
+                return projections;
+            }
+
+            const nlohmann::json ast = nlohmann::json::parse(parse_result.parse_tree);
+
+            if (ast.contains("stmts") && ast["stmts"].is_array() && !ast["stmts"].empty()) {
+                const auto& stmt = ast["stmts"][0];
+
+                if (stmt.contains("stmt") && stmt["stmt"].contains("SelectStmt")) {
+                    const auto& select_stmt = stmt["stmt"]["SelectStmt"];
+
+                    if (select_stmt.contains("targetList") && select_stmt["targetList"].is_array()) {
+                        for (const auto& target_item : select_stmt["targetList"]) {
+                            if (target_item.contains("ResTarget")) {
+                                auto projection = parse_projection_target(target_item["ResTarget"]);
+                                if (projection) {
+                                    projections.push_back(projection);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return projections;
+
+        } catch (const std::exception& e) {
+            // cleanup_guard will automatically free resources
+            return projections;
+        }
+    }
+
+    ExpressionPtr QueryPlanner::parse_projection_target(const nlohmann::json& res_target) const {
+        if (!res_target.contains("val")) {
+            return nullptr;
+        }
+
+        // Parse the main expression using existing parse_expression_from_ast
+        auto expr = parse_expression_from_ast(res_target["val"]);
+        if (!expr) {
+            return nullptr;
+        }
+
+        // Handle SELECT * case
+        if (res_target["val"].contains("ColumnRef")) {
+            const auto& column_ref = res_target["val"]["ColumnRef"];
+            if (column_ref.contains("fields") && column_ref["fields"].is_array() &&
+                !column_ref["fields"].empty() && column_ref["fields"][0].contains("A_Star")) {
+                expr->value = "*";
+                expr->type = ExpressionType::COLUMN_REF;
+                return expr;
+                }
+        }
+
+        // Handle alias (AS clause)
+        if (res_target.contains("name") && !res_target["name"].is_null()) {
+            std::string alias = res_target["name"].get<std::string>();
+            expr->value += " AS " + alias;
+        }
+
+        return expr;
+    }
+
+    std::vector<SortNode::SortKey> QueryPlanner::extract_order_by_from_ast(const std::string& query) const {
+        std::vector<SortNode::SortKey> sort_keys;
+
+        try {
+            PgQueryParseResult parse_result = pg_query_parse(query.c_str());
+
+            // RAII-style cleanup to prevent memory leaks
+            auto cleanup = [&parse_result](void*) { pg_query_free_parse_result(parse_result); };
+            std::unique_ptr<void, decltype(cleanup)> cleanup_guard(nullptr, cleanup);
+
+            if (parse_result.error || !parse_result.parse_tree) {
+                return sort_keys;
+            }
+
+            const nlohmann::json ast = nlohmann::json::parse(parse_result.parse_tree);
+
+            if (ast.contains("stmts") && ast["stmts"].is_array() && !ast["stmts"].empty()) {
+                const auto& stmt = ast["stmts"][0];
+
+                if (stmt.contains("stmt") && stmt["stmt"].contains("SelectStmt")) {
+                    const auto& select_stmt = stmt["stmt"]["SelectStmt"];
+
+                    if (select_stmt.contains("sortClause") && select_stmt["sortClause"].is_array()) {
+                        for (const auto& sort_item : select_stmt["sortClause"]) {
+                            if (sort_item.contains("SortBy")) {
+                                const auto& sort_by = sort_item["SortBy"];
+                                
+                                SortNode::SortKey key;
+                                
+                                // Parse the sort expression
+                                if (sort_by.contains("node")) {
+                                    key.expression = parse_expression_from_ast(sort_by["node"]);
+                                }
+                                
+                                // Parse sort direction (default is ascending)
+                                key.ascending = true;
+                                if (sort_by.contains("sortby_dir")) {
+                                    // Handle both string and integer representations
+                                    if (sort_by["sortby_dir"].is_string()) {
+                                        const std::string direction = sort_by["sortby_dir"].get<std::string>();
+                                        key.ascending = (direction != "SORTBY_DESC");
+                                    } else if (sort_by["sortby_dir"].is_number()) {
+                                        const int direction = sort_by["sortby_dir"].get<int>();
+                                        // SORTBY_DESC = 2, SORTBY_ASC = 1, SORTBY_DEFAULT = 0
+                                        key.ascending = (direction != 2);  // Everything except DESC is ascending
+                                    }
+                                }
+                                
+                                // Parse NULLS ordering
+                                if (sort_by.contains("sortby_nulls")) {
+                                    // Handle both string and integer representations
+                                    // SORTBY_NULLS_FIRST = 1, SORTBY_NULLS_LAST = 2, SORTBY_NULLS_DEFAULT = 0
+                                    // For now, we'll store this information in a comment or ignore it
+                                    // since SortKey doesn't have a nulls_first field
+                                    if (sort_by["sortby_nulls"].is_string()) {
+                                        const std::string nulls_order = sort_by["sortby_nulls"].get<std::string>();
+                                        // Could store or process NULLS FIRST/LAST information here
+                                    } else if (sort_by["sortby_nulls"].is_number()) {
+                                        const int nulls_order = sort_by["sortby_nulls"].get<int>();
+                                        // Could store or process NULLS FIRST/LAST information here
+                                    }
+                                }
+                                
+                                if (key.expression) {
+                                    sort_keys.push_back(key);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return sort_keys;
+
+        } catch (const std::exception& e) {
+            // cleanup_guard will automatically free resources
+            return sort_keys;
+        }
+    }
+
+    std::optional<size_t> QueryPlanner::extract_limit_from_ast(const std::string& query) const {
+        try {
+            PgQueryParseResult parse_result = pg_query_parse(query.c_str());
+
+            // RAII-style cleanup to prevent memory leaks
+            auto cleanup = [&parse_result](void*) { pg_query_free_parse_result(parse_result); };
+            std::unique_ptr<void, decltype(cleanup)> cleanup_guard(nullptr, cleanup);
+
+            if (parse_result.error || !parse_result.parse_tree) {
+                return std::nullopt;
+            }
+
+            const nlohmann::json ast = nlohmann::json::parse(parse_result.parse_tree);
+
+            if (ast.contains("stmts") && ast["stmts"].is_array() && !ast["stmts"].empty()) {
+                const auto& stmt = ast["stmts"][0];
+
+                if (stmt.contains("stmt") && stmt["stmt"].contains("SelectStmt")) {
+                    const auto& select_stmt = stmt["stmt"]["SelectStmt"];
+
+                    if (select_stmt.contains("limitCount") && !select_stmt["limitCount"].is_null()) {
+                        const auto& limit_node = select_stmt["limitCount"];
+                        
+                        // LIMIT value should be a constant (A_Const)
+                        if (limit_node.contains("A_Const")) {
+                            const auto& const_node = limit_node["A_Const"];
+                            
+                            // Handle integer values
+                            if (const_node.contains("ival") && const_node["ival"].contains("ival")) {
+                                const int limit_value = const_node["ival"]["ival"].get<int>();
+                                if (limit_value >= 0) {
+                                    return static_cast<size_t>(limit_value);
+                                }
+                            }
+                            
+                            // Handle string representation of numbers (less common)
+                            if (const_node.contains("sval") && const_node["sval"].contains("sval")) {
+                                const std::string limit_str = const_node["sval"]["sval"].get<std::string>();
+                                try {
+                                    const size_t limit_value = std::stoull(limit_str);
+                                    return limit_value;
+                                } catch (const std::exception&) {
+                                    // Invalid number format
+                                }
+                            }
+                        }
+                        
+                        // Handle parameter references ($1, $2, etc.) for prepared statements
+                        if (limit_node.contains("ParamRef")) {
+                            // For prepared statements, we can't determine the actual value at parse time
+                            // Return a special value or handle this case appropriately
+                            // For now, we'll return nullopt to indicate unknown limit
+                        }
+                    }
+                }
+            }
+
+            return std::nullopt;
+
+        } catch (const std::exception& e) {
+            // cleanup_guard will automatically free resources
+            return std::nullopt;
+        }
     }
 
     LogicalPlanNodePtr QueryPlanner::build_plan_from_insert(const std::string &query) { //NOLINT:static
