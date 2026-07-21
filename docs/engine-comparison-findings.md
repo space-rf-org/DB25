@@ -142,6 +142,16 @@ layer-concept, testing, and Flow docs; Record Layer paper (arXiv 1901.04452).*
 
 ---
 
+## 2.5 Parser layer (how each front end is built)
+
+The comparisons above are at the IR / optimizer / execution layers; at the **parser**
+layer the four diverge too. DB25 uses a **hand-written Pratt + recursive-descent** parser
+emitting arena-allocated 128-byte AST nodes; SQLite generates its parser with **Lemon
+(LALR(1))**; DuckDB embeds Postgres's grammar via **libpgquery**; Polars has no SQL
+parser in its core dataframe path (SQL is an optional front end). Hand-written buys
+DB25 error-message control and zero codegen dependency at the cost of maintaining the
+grammar by hand. Detail: `db25-sql-parser` `docs/PARSER_COMPARISON.md`.
+
 ## 3. DB25 vs. DuckDB and Polars
 
 The two most instructive mirrors — both in-process analytical engines pairing a rewrite-
