@@ -910,7 +910,20 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
             if (!eval_node(n->child(0), ctx, child)) return false;
             std::stable_sort(child.begin(), child.end(),
                              [&](const Row& a, const Row& b) { return sort_less(a, b, n, ctx); });
-            out = std::move(child);
+            // The binder may append HIDDEN ORDER BY sort keys as trailing columns
+            // of the child (so the Sort can order by a non-selected column). The
+            // Sort node's own output schema is narrower in that case. Project each
+            // row down to the declared output width, dropping any trailing hidden
+            // key columns. Guard: only ever drop, never pad — if the child is
+            // already at (or below) the declared width this is a no-op.
+            // M13: skip the truncation, leaking trailing hidden sort keys into
+            // the result (the pre-fix bug) so the width-preservation test is
+            // falsifiable.
+            const std::size_t w = n->output.size();
+            for (Row& r : child) {
+                if (g_mutant != 13 && r.size() > w) r.resize(w);
+                out.push_back(std::move(r));
+            }
             return true;
         }
         case LogicalOp::Limit: {
@@ -1109,6 +1122,7 @@ const MutantInfo kMutants[] = {
     {10, "M10 CASE eval ignores every WHEN (falls through to ELSE)"},
     {11, "M11 membership in an empty set is UNKNOWN, not FALSE"},
     {12, "M12 second optimize() pass changes the plan (non-idempotent)"},
+    {13, "M13 Sort eval leaks hidden ORDER BY sort keys (no truncation to output width)"},
 };
 }  // namespace
 

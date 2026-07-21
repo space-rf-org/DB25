@@ -132,6 +132,26 @@ static void register_smoke_tests() {
                       "SELECT id FROM users WHERE age > 25",
                       "(1=1) AND p == p after folding");
     });
+
+    // ---- ORDER BY on a NON-selected column: the binder appends the sort key as
+    //   a hidden trailing column of the Project so Sort can order by it; the Sort
+    //   node's output schema is narrower, and the evaluator must project the
+    //   hidden key back out. `SELECT id FROM users ORDER BY age` must therefore
+    //   yield exactly one column (id), identical to the same query without the
+    //   sort. Killed by M13 (Sort eval leaks the hidden key -> width 2, and the
+    //   bag no longer matches the id-only set).
+    test("smoke.order_by_hidden_key_not_leaked", [] {
+        auto s = oracle("SELECT id FROM users ORDER BY age");
+        auto ro = eval(s.optimized, data());
+        check(ro.has_value(), "ORDER-BY-hidden-key eval supported");
+        if (ro && !ro->empty()) {
+            check(ro->front().size() == 1,
+                  "ORDER BY a non-selected column outputs one column (hidden key dropped)");
+        }
+        expect_bag_eq("SELECT id FROM users ORDER BY age",
+                      "SELECT id FROM users",
+                      "ORDER BY a hidden column does not change the projected column set");
+    });
 }
 
 static bool _smoke_registered = (register_smoke_tests(), true);
