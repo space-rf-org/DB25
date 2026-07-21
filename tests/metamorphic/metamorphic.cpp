@@ -181,6 +181,21 @@ void register_noop_derived_table() {
             return;
         }
         metamorphic_pair(derived, flat, "no-op derived table / redundant projection");
+
+        // Falsifiable anchor: a derived table that FILTERS inside is a proper
+        // subset of the flat table (id > 2 keeps 3 of 5 users). A mutant that
+        // ignores the inner filter collapses the derived table back to every row
+        // and this inequality fails - so a broken derived-table / pushdown path
+        // is caught, not silently accepted.
+        const Stages sf = run(cat, "SELECT id FROM (SELECT id FROM users WHERE id > 2) t");
+        const Stages sa = run(cat, flat);
+        if (sf.optimized && sa.optimized) {
+            auto rf = eval(sf.optimized, data());
+            auto ra = eval(sa.optimized, data());
+            if (rf && ra)
+                check(!bag_equal(*rf, *ra),
+                      "filtered derived table is a proper subset of the flat table");
+        }
     });
 }
 

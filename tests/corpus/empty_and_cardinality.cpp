@@ -142,18 +142,21 @@ static void register_empty_and_cardinality() {
                       "plain projection keeps duplicates that DISTINCT removes");
     });
 
-    // 10) A scalar subquery keyed on a UNIQUE column matches <= 1 row, so it can
-    //     never multiply the outer relation: wrapping it must preserve the exact
-    //     row count of users. Falsifier if scalar decorrelation fans out.
-    //     TODO(oracle): needs FROM-subquery + scalar-subquery eval support; if
-    //     eval returns nullopt the stage checks still guard the pipeline.
-    test("card.scalar_subquery_preserves_row_count", [] {
+    // 10) A correlated scalar COUNT selects exactly the users with no orders when
+    //     compared against zero, which must equal the NOT EXISTS form. (The
+    //     earlier FROM-subquery phrasing of this cardinality claim needed
+    //     FROM-subquery + scalar-in-projection eval the reference evaluator does
+    //     not model, so it was silently skipped -- non-falsifiable. This WHERE
+    //     phrasing exercises the same correlated-aggregate path the oracle can
+    //     evaluate.) Falsifier: a mutant that perturbs COUNT by one makes the
+    //     `= 0` test never hold, diverging from NOT EXISTS.
+    test("card.scalar_count_zero_equals_not_exists", [] {
         expect_bag_eq(
-            "SELECT COUNT(*) FROM users",
-            "SELECT COUNT(*) FROM ("
-            "  SELECT u.id, (SELECT o.amount FROM orders o WHERE o.id = u.id) AS a"
-            "  FROM users u) t",
-            "scalar subquery on a unique key preserves outer cardinality");
+            "SELECT u.id FROM users u "
+            "WHERE (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) = 0",
+            "SELECT u.id FROM users u "
+            "WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
+            "correlated COUNT(*)=0 (no orders) == NOT EXISTS");
     });
 }
 

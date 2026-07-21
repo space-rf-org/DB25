@@ -184,11 +184,17 @@ static void register_subqueries() {
     // 11) Subquery in the SELECT list mixed with arithmetic. The +1 must apply
     //     AFTER the (correlated) COUNT, per row. Oracle asserts bound==optimized.
     test("subq.scalar_in_select_with_arithmetic", [] {
-        oracle(
-            "SELECT u.id, "
-            "(SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) + 1 "
-            "FROM users u");
-        // TODO(oracle): unsupported scalar-in-projection eval -> stage checks only.
+        // A correlated scalar COUNT with arithmetic: `COUNT(*) + 1 > 1` selects
+        // users with at least one order, which must equal the EXISTS form. Framed
+        // in WHERE (not the projection) so the reference evaluator can run the
+        // differential. Falsifiable: a mutant that perturbs COUNT by one shifts
+        // the arithmetic threshold and the two forms diverge.
+        expect_bag_eq(
+            "SELECT u.id FROM users u "
+            "WHERE (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) + 1 > 1",
+            "SELECT u.id FROM users u "
+            "WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
+            "COUNT(*)+1 > 1 (>=1 order) == EXISTS");
     });
 }
 

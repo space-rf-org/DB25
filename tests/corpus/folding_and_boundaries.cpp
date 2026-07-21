@@ -43,6 +43,14 @@ void expect_bag_eq(std::string_view a, std::string_view b, std::string_view what
     if (ra && rb) check(bag_equal(*ra, *rb), what);
 }
 
+void expect_bag_ne(std::string_view a, std::string_view b, std::string_view what) {
+    auto sa = oracle(a);
+    auto sb = oracle(b);
+    auto ra = eval(sa.optimized, data());
+    auto rb = eval(sb.optimized, data());
+    if (ra && rb) check(!bag_equal(*ra, *rb), what);
+}
+
 void expect_empty(std::string_view sql, std::string_view what) {
     auto s = oracle(sql);
     auto ro = eval(s.optimized, data());
@@ -60,9 +68,13 @@ static void register_folding_and_boundaries() {
     //    is independent of any single row's value only if folding is faithful.
     test("fold.int64_overflow_not_miscomputed", [] {
         oracle("SELECT id FROM users WHERE (9223372036854775807 + 1) < 0");
-        // TODO(oracle): if the evaluator declines 64-bit overflow arithmetic
-        // (returns nullopt) the four stage checks still guard the pipeline; the
-        // equality claim is then unverified rather than falsely green.
+        // Falsifiable anchor: `id < 0` is FALSE for every user (ids 1..5), so the
+        // whole conjunction is empty regardless of how the overflow term folds.
+        // The `id < 0` term is a genuine row filter, so a mutant that ignores or
+        // drops the predicate (returning all rows) makes the result non-empty.
+        expect_empty(
+            "SELECT id FROM users WHERE id < 0 AND (9223372036854775807 + 1) < 0",
+            "a real row filter ANDed with the overflow term stays empty");
     });
 
     // 2) Division by zero must be PRESERVED (error/NULL), never folded to a
@@ -106,6 +118,13 @@ static void register_folding_and_boundaries() {
         expect_bag_eq("SELECT id FROM users WHERE (1 = 1) OR (age > 1000000)",
                       "SELECT id FROM users",
                       "(TRUE OR p) is TRUE everywhere, even where p is UNKNOWN");
+        // Falsifiable anchor: the dual `(FALSE OR p)` simplifies to `p`, which
+        // is a PROPER subset here (id > 2 keeps only 3 of 5 users). A mutant
+        // that ignores or drops the surviving filter makes it keep every row,
+        // collapsing the inequality.
+        expect_bag_ne("SELECT id FROM users WHERE (1 = 0) OR (id > 2)",
+                      "SELECT id FROM users",
+                      "(FALSE OR p) filters to p, not the whole table");
     });
 
     // 7) int vs double promotion: integer division truncates, real division does
