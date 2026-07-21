@@ -51,6 +51,14 @@ void expect_bag_eq(std::string_view a, std::string_view b, std::string_view what
     if (ra && rb) check(bag_equal(*ra, *rb), what);
 }
 
+void expect_bag_ne(std::string_view a, std::string_view b, std::string_view what) {
+    auto sa = oracle(a);
+    auto sb = oracle(b);
+    auto ra = eval(sa.optimized, data());
+    auto rb = eval(sb.optimized, data());
+    if (ra && rb) check(!bag_equal(*ra, *rb), what);
+}
+
 }  // namespace
 
 static void register_joins_degenerate() {
@@ -62,6 +70,14 @@ static void register_joins_degenerate() {
             "SELECT u.id, p.id FROM users u CROSS JOIN products p",
             "SELECT u.id, p.id FROM users u JOIN products p ON 1 = 1",
             "CROSS JOIN == INNER JOIN ON TRUE (full cartesian product)");
+        // Falsifiable anchor: the cartesian product is STRICTLY larger than a
+        // real key-join (users.id and products.id never overlap, so the ON join
+        // is empty). A mutant that drops the join predicate collapses the key
+        // join back to the cartesian product and this inequality fails.
+        expect_bag_ne(
+            "SELECT u.id, p.id FROM users u CROSS JOIN products p",
+            "SELECT u.id, p.id FROM users u JOIN products p ON u.id = p.id",
+            "CROSS JOIN is strictly larger than a real key-join");
     });
 
     // 2) Self-join on a unique key. Joining emp to emp on mgr_id = manager.id

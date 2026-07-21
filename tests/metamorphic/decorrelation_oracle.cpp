@@ -350,6 +350,17 @@ void register_scalar_aggregates() {
 // into a LEFT-join+aggregate rewrite, and (b) optimized == bound (both compute
 // the true per-row COUNT, including 0 for outer rows with no matching orders).
 // ===========================================================================
+// Optimized-vs-optimized differential over the shared harness data: both forms
+// must yield the same bag where the evaluator supports them.
+void expect_bag_eq(std::string_view a, std::string_view b, std::string_view what) {
+    const Stages sa = run(catalog(), a);
+    const Stages sb = run(catalog(), b);
+    if (sa.optimized == nullptr || sb.optimized == nullptr) return;
+    auto ra = eval(sa.optimized, data());
+    auto rb = eval(sb.optimized, data());
+    if (ra && rb) check(bag_equal(*ra, *rb), what);
+}
+
 void register_count_no_decorrelate() {
     test("decorrelation: correlated scalar COUNT must NOT decorrelate (0-vs-NULL trap)", [] {
         constexpr std::string_view sql =
@@ -363,6 +374,17 @@ void register_count_no_decorrelate() {
             check(j == nullptr || j->join_type != db25::ast::JoinType::Left,
                   "scalar COUNT: no LEFT Join was introduced");
         }
+        // Falsifiable differential of the same 0-vs-NULL trap, in a form the
+        // reference evaluator can run: `COUNT(*) = 0` in WHERE selects exactly
+        // the users with no orders (the COUNT reads 0, never NULL). Compared
+        // against the NOT EXISTS reference, a mutant that perturbs COUNT-over-
+        // empty (0 vs +1 vs NULL) diverges the two.
+        expect_bag_eq(
+            "SELECT u.id FROM users u "
+            "WHERE (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) = 0",
+            "SELECT u.id FROM users u "
+            "WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)",
+            "scalar COUNT(*)=0 (0-not-NULL over empty) == NOT EXISTS");
     });
 }
 
