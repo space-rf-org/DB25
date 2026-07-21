@@ -17,6 +17,19 @@
 //   M5  optimize() output has a predicate dropped - the first Filter/Join
 //       predicate in the optimized tree is nulled out. Caught by a filter
 //       differential test (optimized loses rows relative to bound).
+//   M6  optimize() corrupts the root output SCHEMA (appends a spurious column)
+//       without touching the produced rows. Caught by the no-crash /
+//       well-formedness and schema-preservation property tests.
+//   M7  an optimizer pass, applied in isolation, drops a predicate (injected in
+//       the property suite's apply_pass). Caught by the per-pass safety tests.
+//   M8  Distinct eval does not de-duplicate. Caught by the DISTINCT==GROUP BY
+//       and duplicates-survive-without-DISTINCT cardinality tests.
+//   M9  COUNT(expr) counts NULL argument rows (so COUNT(nullable)==COUNT(*)).
+//       Caught by the COUNT(nullable) < COUNT(*) NULL test.
+//   M10 CASE eval ignores every WHEN and falls through to ELSE. Caught by the
+//       CASE-vs-COALESCE equivalence test.
+//   M11 membership in an EMPTY set evaluates to UNKNOWN, not FALSE (so
+//       `x NOT IN (empty)` drops rows). Caught by the NOT-IN-over-empty test.
 //
 // A test is FALSIFIABLE iff some mutant makes it fail. The gate reports any test
 // that survives every mutant as NON-FALSIFIABLE (vacuous) and exits non-zero.
@@ -290,7 +303,11 @@ Value eval_subquery(const Expr* e, const Row& row, EvalCtx& ctx) {
             elems.reserve(inner.size());
             for (const Row& r : inner)
                 elems.push_back(r.empty() ? null() : r[0]);
-            Bool3 m = in_membership(left, elems);
+            // M11: treat membership in an EMPTY set as UNKNOWN instead of FALSE,
+            // so `x NOT IN (empty)` becomes UNKNOWN (drops the row) rather than
+            // TRUE. Caught by the NOT-IN-over-empty-keeps-all test.
+            Bool3 m = (g_mutant == 11 && elems.empty()) ? Bool3::Unknown
+                                                        : in_membership(left, elems);
             if (e->negated()) {
                 if (m == Bool3::True) m = Bool3::False;
                 else if (m == Bool3::False) m = Bool3::True;
@@ -418,9 +435,16 @@ Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
             // children: when0, then0, when1, then1, ..., [else]
             const std::size_t n = e->children.size();
             std::size_t i = 0;
-            for (; i + 1 < n; i += 2) {
-                const Value w = eval_expr(e->children[i].get(), row, ctx);
-                if (is_true(w)) return eval_expr(e->children[i + 1].get(), row, ctx);
+            // M10: ignore every WHEN test and fall straight through to ELSE, so a
+            // `CASE WHEN age IS NULL THEN -1 ELSE age END` no longer maps NULL to
+            // -1. Caught by the CASE-vs-COALESCE equivalence test.
+            if (g_mutant != 10) {
+                for (; i + 1 < n; i += 2) {
+                    const Value w = eval_expr(e->children[i].get(), row, ctx);
+                    if (is_true(w)) return eval_expr(e->children[i + 1].get(), row, ctx);
+                }
+            } else {
+                i = (n % 2 == 1) ? n - 1 : n;  // jump to the ELSE slot (if any)
             }
             if (i < n) return eval_expr(e->children[i].get(), row, ctx);  // else
             return null();
@@ -490,7 +514,9 @@ Value compute_aggregate(const Expr* call, const std::vector<Row>& group_rows, Ev
             std::vector<Value> seen;
             for (const Row& r : group_rows) {
                 Value v = eval_expr(call->children[0].get(), r, ctx);
-                if (is_null(v)) continue;
+                // M9: count NULL argument rows too, so COUNT(age) wrongly equals
+                // COUNT(*). Caught by the COUNT(nullable) < COUNT(*) test.
+                if (is_null(v)) { if (g_mutant == 9) ++n; continue; }
                 if (distinct) {
                     bool dup = false;
                     for (const Value& s : seen) if (value_identical(s, v)) { dup = true; break; }
@@ -742,6 +768,28 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
             const bool is_cross = (jt == JoinType::Cross);
             const bool keep_left = (jt == JoinType::Left || jt == JoinType::Full);
             const bool keep_right = (jt == JoinType::Right || jt == JoinType::Full);
+            // A JOIN ... USING / NATURAL join compacts its output: the predicate is
+            // evaluated over the full left++right frame, but the emitted row drops
+            // the duplicate right-hand columns (those whose name matches a left
+            // column), so `output` is narrower than lw+rw. Mirror that here so the
+            // Project above indexes the same (merged) frame the binder built.
+            const bool full_concat = (n->output.size() == lw + rw);
+            std::vector<bool> keep_col(lw + rw, true);
+            if (!full_concat) {
+                const auto& ls = n->child(0)->output;
+                const auto& rs = n->child(1)->output;
+                for (std::size_t j = 0; j < rw; ++j)
+                    for (std::size_t i = 0; i < lw; ++i)
+                        if (rs[j].name == ls[i].name) { keep_col[lw + j] = false; break; }
+            }
+            auto emit = [&](Row&& full) {
+                if (full_concat) { out.push_back(std::move(full)); return; }
+                Row o;
+                o.reserve(n->output.size());
+                for (std::size_t k = 0; k < full.size(); ++k)
+                    if (keep_col[k]) o.push_back(std::move(full[k]));
+                out.push_back(std::move(o));
+            };
             std::vector<bool> right_matched(right.size(), false);
             for (const Row& lr : left) {
                 bool matched = false;
@@ -754,12 +802,12 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
                         if (!ctx.ok) return false;
                         keep = is_true(v);
                     }
-                    if (keep) { out.push_back(std::move(combined)); matched = true; right_matched[ri] = true; }
+                    if (keep) { emit(std::move(combined)); matched = true; right_matched[ri] = true; }
                 }
                 if (keep_left && !matched) {
                     Row combined = lr;
                     for (std::size_t k = 0; k < rw; ++k) combined.push_back(null());
-                    out.push_back(std::move(combined));
+                    emit(std::move(combined));
                 }
             }
             if (keep_right) {
@@ -769,7 +817,7 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
                     combined.reserve(lw + rw);
                     for (std::size_t k = 0; k < lw; ++k) combined.push_back(null());
                     combined.insert(combined.end(), right[ri].begin(), right[ri].end());
-                    out.push_back(std::move(combined));
+                    emit(std::move(combined));
                 }
             }
             return true;
@@ -837,6 +885,10 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
         case LogicalOp::Distinct: {
             Table child;
             if (!eval_node(n->child(0), ctx, child)) return false;
+            // M8: skip de-duplication entirely (pass every child row through), so
+            // DISTINCT no longer removes duplicates. Caught by the
+            // DISTINCT==GROUP BY and duplicates-survive-without-DISTINCT tests.
+            if (g_mutant == 8) { out = std::move(child); return true; }
             for (const Row& r : child) {
                 bool dup = false;
                 for (const Row& e : out) {
@@ -1020,6 +1072,15 @@ Stages run(const db25::semantic::InMemoryCatalog& cat, std::string_view sql) {
     } else {
         st.optimized_owner = std::shared_ptr<LogicalNode>(db25::plan::optimize(std::move(second.root)));
         if (g_mutant == 5) drop_first_predicate(st.optimized_owner.get());  // M5
+        if (g_mutant == 6 && st.optimized_owner && !st.optimized_owner->output.empty()) {
+            // M6: corrupt the optimized plan's output SCHEMA - append a spurious
+            // column at the root. This breaks the output-width IR invariant and
+            // changes the root result schema, but leaves the produced ROWS
+            // untouched (eval builds rows from exprs/children, not this vector),
+            // so the differential oracle is unaffected. Caught by the no-crash /
+            // well-formedness and schema-preservation property tests.
+            st.optimized_owner->output.push_back(st.optimized_owner->output.back());
+        }
     }
     st.optimized = st.optimized_owner.get();
     st.optimized_dump = db25::plan::dump_plan(st.optimized);
@@ -1038,6 +1099,12 @@ const MutantInfo kMutants[] = {
     {3, "M3 SemiJoin eval keeps all left rows (as cross)"},
     {4, "M4 Aggregate COUNT/SUM off by one"},
     {5, "M5 optimize() drops first predicate"},
+    {6, "M6 optimize() corrupts the root output schema (spurious column)"},
+    {7, "M7 an isolated optimizer pass drops a predicate"},
+    {8, "M8 Distinct eval does not de-duplicate"},
+    {9, "M9 COUNT(expr) counts NULL argument rows"},
+    {10, "M10 CASE eval ignores every WHEN (falls through to ELSE)"},
+    {11, "M11 membership in an empty set is UNKNOWN, not FALSE"},
 };
 }  // namespace
 

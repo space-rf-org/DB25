@@ -94,6 +94,10 @@ static void register_joins_degenerate() {
     });
 
     // 4) NATURAL JOIN over the sole common column `id` behaves like USING(id).
+    // KNOWN-RED: NATURAL JOIN is currently dropped by the tokenizer/parser (the
+    // AST keeps only the left relation), so this equivalence fails until that is
+    // fixed. Tracked as a db25-sql-parser bug; left asserting so the harness
+    // keeps flagging the gap rather than silently skipping it.
     test("join.natural_equals_using", [] {
         expect_bag_eq(
             "SELECT u.id FROM users u NATURAL JOIN orders o",
