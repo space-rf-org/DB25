@@ -58,3 +58,7 @@ the harness surfaced four genuine `db25-logical-plan` bugs on day one.
   with ranked, actionable inspiration for the next layers.
 - [`docs/harness-findings.md`](docs/harness-findings.md) — first-run harness results and
   the bugs/vacuous-tests it surfaced.
+- [`docs/sql-surface.md`](docs/sql-surface.md) — the SQL surface the **whole stack**
+  accepts (stack-tested), reconciled against the parser's permissive grammar.
+- [`docs/arena-allocator/`](docs/arena-allocator/) — the arena / cache-aligned
+  allocation strategy paper, a stack-wide methodology (relocated from the parser).
