@@ -30,6 +30,9 @@
 //       CASE-vs-COALESCE equivalence test.
 //   M11 membership in an EMPTY set evaluates to UNKNOWN, not FALSE (so
 //       `x NOT IN (empty)` drops rows). Caught by the NOT-IN-over-empty test.
+//   M12 a second optimize() pass changes the plan - a dropped predicate makes
+//       optimize(optimize(p)) differ from optimize(p) (injected in the property
+//       suite's idempotence check). Caught by the optimizer-idempotence property.
 //
 // A test is FALSIFIABLE iff some mutant makes it fail. The gate reports any test
 // that survives every mutant as NON-FALSIFIABLE (vacuous) and exits non-zero.
@@ -1105,6 +1108,7 @@ const MutantInfo kMutants[] = {
     {9, "M9 COUNT(expr) counts NULL argument rows"},
     {10, "M10 CASE eval ignores every WHEN (falls through to ELSE)"},
     {11, "M11 membership in an empty set is UNKNOWN, not FALSE"},
+    {12, "M12 second optimize() pass changes the plan (non-idempotent)"},
 };
 }  // namespace
 
