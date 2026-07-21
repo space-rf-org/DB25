@@ -109,11 +109,10 @@ static void register_joins_degenerate() {
             "USING(id) matches the same rows as ON u.id = o.id");
     });
 
-    // 4) NATURAL JOIN over the sole common column `id` behaves like USING(id).
-    // KNOWN-RED: NATURAL JOIN is currently dropped by the tokenizer/parser (the
-    // AST keeps only the left relation), so this equivalence fails until that is
-    // fixed. Tracked as a db25-sql-parser bug; left asserting so the harness
-    // keeps flagging the gap rather than silently skipping it.
+    // 4) NATURAL JOIN over the sole common column `id` behaves like USING(id):
+    // the parser now emits the join (db25-sql-parser) and the binder resolves a
+    // NATURAL join to USING over the common columns (db25-logical-plan), so the
+    // two forms produce the same rows.
     test("join.natural_equals_using", [] {
         expect_bag_eq(
             "SELECT u.id FROM users u NATURAL JOIN orders o",

@@ -99,6 +99,9 @@ struct BoundPlan {
     bool ok = false;
 };
 
+// Null the first Filter/Join predicate (mutant helper; defined below).
+bool drop_first_predicate_local(LogicalNode* n);
+
 BoundPlan bind_owned(const db25::semantic::InMemoryCatalog& cat, std::string_view sql) {
     BoundPlan bp;
     bp.parser = std::make_unique<db25::parser::Parser>();
@@ -338,6 +341,11 @@ void prop_optimizer_idempotence() {
         if (!once) return;
         const std::string dump_once = db25::plan::dump_plan(once.get());
         LogicalNodePtr twice = db25::plan::optimize(std::move(once));
+        // M12: simulate a non-idempotent optimizer - the second pass changes the
+        // plan (a predicate dropped) - so the property has a mutant that kills it.
+        // Without this the property is vacuous once optimize() really is
+        // idempotent (nothing else perturbs a direct optimize()/optimize()).
+        if (db25::harness::g_mutant == 12) drop_first_predicate_local(twice.get());
         const std::string dump_twice = db25::plan::dump_plan(twice.get());
         db25::harness::check(dump_once == dump_twice,
                              seed_tag(seed, sql) + " : optimize() not idempotent");
