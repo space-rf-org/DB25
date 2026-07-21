@@ -394,6 +394,24 @@ const char* pass_name(PassId p) {
     return "?";
 }
 
+// M7: after the real pass runs, null out the first Filter/Join predicate, so the
+// isolated pass appears to have silently dropped a condition. This makes the
+// per-pass safety property falsifiable - a pass that changes the result multiset
+// must be caught. (A nulled Join predicate becomes a cross product and a nulled
+// Filter drops the row test, both of which the differential eval detects.)
+bool drop_first_predicate_local(LogicalNode* n) {
+    if (n == nullptr) return false;
+    if ((n->op == LogicalOp::Filter || n->op == LogicalOp::Join ||
+         n->op == LogicalOp::SemiJoin || n->op == LogicalOp::AntiJoin) &&
+        n->predicate) {
+        n->predicate.reset();
+        return true;
+    }
+    for (auto& c : n->children)
+        if (drop_first_predicate_local(c.get())) return true;
+    return false;
+}
+
 void apply_pass(PassId p, LogicalNodePtr& root) {
     switch (p) {
         case PassId::Fold: db25::plan::fold_constants(root.get()); break;
@@ -402,6 +420,7 @@ void apply_pass(PassId p, LogicalNodePtr& root) {
         case PassId::PruneColumns: db25::plan::prune_columns(root); break;
         case PassId::Decorrelate: db25::plan::decorrelate_exists(root); break;
     }
+    if (db25::harness::g_mutant == 7) drop_first_predicate_local(root.get());
 }
 
 void run_single_pass_property(PassId pass) {
