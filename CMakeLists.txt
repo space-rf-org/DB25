@@ -66,3 +66,6 @@ target_compile_definitions(db25_gate PRIVATE DB25_GATE_MAIN)
 enable_testing()
 add_test(NAME db25_harness COMMAND db25_harness)
 add_test(NAME db25_gate COMMAND db25_gate)
+
+# Tutorial examples (docs/tutorial.md): runnable end-to-end walkthroughs.
+add_subdirectory(examples)
