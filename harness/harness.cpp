@@ -39,6 +39,10 @@
 //       direction). Invisible to every bag_equal (multiset) check; caught ONLY
 //       by the order-sensitive ORDER BY sequence test (seq_equal vs a literal
 //       ordered oracle).
+//   M15 COALESCE keeps only its first operand. Models a USING/NATURAL RIGHT/FULL
+//       merge that keeps the left copy instead of COALESCE(left, right), so the
+//       merged column is NULL for right-only rows. Caught by the RIGHT-JOIN-USING
+//       merged-value test (literal oracle over an all-right-only join).
 //
 // A test is FALSIFIABLE iff some mutant makes it fail. The gate reports any test
 // that survives every mutant as NON-FALSIFIABLE (vacuous) and exits non-zero.
@@ -469,6 +473,12 @@ Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
                     Value v = eval_expr(c.get(), row, ctx);
                     if (!ctx.ok) return null();
                     if (!is_null(v)) return v;
+                    // M15: consider ONLY the first operand, dropping the rest. This
+                    // models a USING/NATURAL RIGHT/FULL merge that keeps only the
+                    // left copy instead of COALESCE(left, right): the merged column
+                    // becomes NULL for every right-only row. Invisible unless a
+                    // test pins the actual merged value.
+                    if (g_mutant == 15) break;
                 }
                 return null();
             }
@@ -1150,6 +1160,7 @@ const MutantInfo kMutants[] = {
     {12, "M12 second optimize() pass changes the plan (non-idempotent)"},
     {13, "M13 Sort eval leaks hidden ORDER BY sort keys (no truncation to output width)"},
     {14, "M14 Sort eval reverses the row order (wrong ORDER BY direction)"},
+    {15, "M15 COALESCE keeps only its first operand (USING/NATURAL merge loses the right copy)"},
 };
 }  // namespace
 
