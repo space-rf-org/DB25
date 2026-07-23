@@ -152,6 +152,31 @@ static void register_smoke_tests() {
                       "SELECT id FROM users",
                       "ORDER BY a hidden column does not change the projected column set");
     });
+
+    // ---- ORDER BY row SEQUENCE (order-SENSITIVE). Every other comparison in the
+    //   suite is bag_equal (multiset), so a Sort that drops or reverses the order
+    //   is completely invisible. Pin the actual row sequence against a literal
+    //   ordered oracle - the only check that can detect a wrong sort. emp
+    //   salaries: id5=90, id1=100, id4=120, id3=150, id2=200 (no NULLs).
+    //   Killed by M14 (Sort eval reverses the order).
+    test("smoke.order_by_sequence", [] {
+        auto asc = oracle("SELECT id FROM emp ORDER BY salary");
+        auto ra = eval(asc.optimized, data());
+        check(ra.has_value(), "ORDER BY salary ASC eval supported");
+        if (ra) {
+            Table expected = { {vi(5)}, {vi(1)}, {vi(4)}, {vi(3)}, {vi(2)} };
+            check(seq_equal(*ra, expected),
+                  "ORDER BY salary ASC yields ids in exactly [5,1,4,3,2]");
+        }
+        auto desc = oracle("SELECT id FROM emp ORDER BY salary DESC");
+        auto rd = eval(desc.optimized, data());
+        check(rd.has_value(), "ORDER BY salary DESC eval supported");
+        if (rd) {
+            Table expected = { {vi(2)}, {vi(3)}, {vi(4)}, {vi(1)}, {vi(5)} };
+            check(seq_equal(*rd, expected),
+                  "ORDER BY salary DESC yields ids in exactly [2,3,4,1,5]");
+        }
+    });
 }
 
 static bool _smoke_registered = (register_smoke_tests(), true);
