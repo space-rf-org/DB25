@@ -880,13 +880,17 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
                     }
                     if (keep) { emit(std::move(combined)); matched = true; right_matched[ri] = true; }
                 }
-                if (keep_left && !matched) {
+                // M16: drop the null-extended row an outer join must emit for an
+                // unmatched left row, degrading LEFT/FULL to an inner join. Caught
+                // by the outer-join null-extension anchors (a NULL-padded row that
+                // must appear goes missing).
+                if (keep_left && !matched && g_mutant != 16) {
                     Row combined = lr;
                     for (std::size_t k = 0; k < rw; ++k) combined.push_back(null());
                     emit(std::move(combined));
                 }
             }
-            if (keep_right) {
+            if (keep_right && g_mutant != 16) {  // M16: also drop right-side null-extension
                 for (std::size_t ri = 0; ri < right.size(); ++ri) {
                     if (right_matched[ri]) continue;
                     Row combined;
@@ -1218,6 +1222,7 @@ const MutantInfo kMutants[] = {
     {13, "M13 Sort eval leaks hidden ORDER BY sort keys (no truncation to output width)"},
     {14, "M14 Sort eval reverses the row order (wrong ORDER BY direction)"},
     {15, "M15 COALESCE keeps only its first operand (USING/NATURAL merge loses the right copy)"},
+    {16, "M16 outer-join eval drops null-extended rows (LEFT/RIGHT/FULL degrade to inner)"},
 };
 }  // namespace
 

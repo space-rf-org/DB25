@@ -102,9 +102,14 @@ static void register_subqueries() {
     //    the optimizer keeps, bound and optimized must still agree. Pure oracle.
     test("subq.not_in_nullable_stays_correct", [] {
         // orders.user_id is nullable -> decorrelation to AntiJoin is illegal.
-        oracle("SELECT id FROM users WHERE id NOT IN (SELECT user_id FROM orders)");
-        // TODO(oracle): if eval cannot run the retained-subquery form, only the
-        // stage checks fire; that still fails on a broken pipeline (non-vacuous).
+        // Independent ground-truth anchor (not just the self-referential oracle):
+        // orders.user_id contains a NULL (order 104), so `id NOT IN (...)` is
+        // UNKNOWN for EVERY user under 3VL -> the result is empty. A rewrite to an
+        // AntiJoin (which ignores the NULL) would instead return eve (user 5), so
+        // this empty-result anchor is exactly what falsifies an illegal
+        // decorrelation. Killed by M2 (Filter ignored -> all 5 users returned).
+        expect_empty("SELECT id FROM users WHERE id NOT IN (SELECT user_id FROM orders)",
+                     "NOT IN over a NULL-bearing inner is UNKNOWN everywhere -> empty");
     });
 
     // 6) Nested subquery (subquery within subquery) == a two-join equivalent.
@@ -123,14 +128,24 @@ static void register_subqueries() {
     //    query's row (u.age), past the middle subquery. Decorrelation must not
     //    lose that correlation. Oracle-only (no simple flat equivalent).
     test("subq.skip_level_correlation", [] {
-        oracle(
+        auto s = oracle(
             "SELECT u.id FROM users u WHERE EXISTS ("
             "  SELECT 1 FROM orders o WHERE o.user_id = u.id AND EXISTS ("
             "    SELECT 1 FROM products p WHERE p.id = o.product_id "
             "      AND p.price > u.age))");
-        // TODO(oracle): if the nested-correlated shape is unsupported by eval,
-        // the stage checks still guard correctness; the differential claim is
-        // then unverified (documented here, not silently passed).
+        // Independent ground-truth anchor for the skip-level correlation (the
+        // inner EXISTS references u.age from the OUTERMOST block). Hand-computed:
+        //   u1 age30: orders p10(price9),p11(NULL) -> 9>30 F, NULL>30 UNK -> no
+        //   u2 ageNULL: order p12(75) -> 75>NULL UNK -> no
+        //   u3 age5:  order p13(150) -> 150>5 T -> YES
+        //   u4 age40: order p12(75)  -> 75>40 T -> YES
+        //   u5 age25: no orders -> no
+        // => exactly {3, 4}. Killed by M2 (inner Filter ignored -> every user
+        // with any order qualifies) and M3 (SemiJoin keeps all left rows).
+        auto ro = eval(s.optimized, data());
+        check(ro.has_value(), "skip-level correlation eval supported");
+        if (ro) check(bag_equal(*ro, Table{ {vi(3)}, {vi(4)} }),
+                      "skip-level correlated EXISTS yields exactly {3,4}");
     });
 
     // 8) Correlated scalar SUM decorrelates to a LEFT JOIN grouped by the
@@ -176,9 +191,18 @@ static void register_subqueries() {
     //     MIN, so the two result sets must NOT be equal (falsifier if the scalar
     //     is folded to a constant that collapses them).
     test("subq.scalar_in_where_comparison", [] {
-        oracle("SELECT id FROM orders WHERE amount > (SELECT AVG(amount) FROM orders)");
-        // TODO(oracle): if scalar-subquery-in-predicate eval is unsupported the
-        // oracle stage checks still guard the pipeline.
+        auto s = oracle("SELECT id FROM orders WHERE amount > (SELECT AVG(amount) FROM orders)");
+        // Independent ground-truth anchor. Non-NULL amounts: 50,5,30,8,120,40
+        // (order 103's amount is NULL and is excluded from AVG). AVG = 253/6 =
+        // 42.17. amount > 42.17 -> only order 100 (50) and order 105 (120); order
+        // 103's NULL amount also fails the comparison (UNKNOWN). => exactly
+        // {100, 105}. This pins the scalar-subquery-in-predicate result instead
+        // of leaving it to the self-referential oracle. Killed by M2 (Filter
+        // ignored -> all 7 orders).
+        auto ro = eval(s.optimized, data());
+        check(ro.has_value(), "scalar-subquery-in-predicate eval supported");
+        if (ro) check(bag_equal(*ro, Table{ {vi(100)}, {vi(105)} }),
+                      "amount > AVG(amount) yields exactly {100,105}");
     });
 
     // 11) Subquery in the SELECT list mixed with arithmetic. The +1 must apply
