@@ -33,6 +33,12 @@
 //   M12 a second optimize() pass changes the plan - a dropped predicate makes
 //       optimize(optimize(p)) differ from optimize(p) (injected in the property
 //       suite's idempotence check). Caught by the optimizer-idempotence property.
+//   M13 Sort eval leaks hidden ORDER BY sort keys (skips the truncation to the
+//       output width). Caught by the ORDER-BY-hidden-key width test.
+//   M14 Sort eval reverses the row order (models a dropped/reversed ORDER BY
+//       direction). Invisible to every bag_equal (multiset) check; caught ONLY
+//       by the order-sensitive ORDER BY sequence test (seq_equal vs a literal
+//       ordered oracle).
 //
 // A test is FALSIFIABLE iff some mutant makes it fail. The gate reports any test
 // that survives every mutant as NON-FALSIFIABLE (vacuous) and exits non-zero.
@@ -910,6 +916,11 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
             if (!eval_node(n->child(0), ctx, child)) return false;
             std::stable_sort(child.begin(), child.end(),
                              [&](const Row& a, const Row& b) { return sort_less(a, b, n, ctx); });
+            // M14: reverse the sorted order, modelling a Sort that produces the
+            // wrong row order (a dropped or reversed ORDER BY direction). Caught
+            // ONLY by the order-sensitive ORDER BY tests (seq_equal against a
+            // literal ordered oracle); a bag_equal / multiset check cannot see it.
+            if (g_mutant == 14) std::reverse(child.begin(), child.end());
             // The binder may append HIDDEN ORDER BY sort keys as trailing columns
             // of the child (so the Sort can order by a non-selected column). The
             // Sort node's own output schema is narrower in that case. Project each
@@ -984,6 +995,21 @@ bool bag_equal(const Table& a, const Table& b) {
             if (same) { used[j] = true; matched = true; break; }
         }
         if (!matched) return false;
+    }
+    return true;
+}
+
+// ===========================================================================
+// seq_equal (sequence equality, order-SENSITIVE, NULL-aware). Rows must match
+// position-by-position - the only way to detect a dropped/reversed Sort, which
+// bag_equal (multiset) is blind to.
+// ===========================================================================
+bool seq_equal(const Table& a, const Table& b) {
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        if (a[i].size() != b[i].size()) return false;
+        for (std::size_t j = 0; j < a[i].size(); ++j)
+            if (!value_identical(a[i][j], b[i][j])) return false;
     }
     return true;
 }
@@ -1123,6 +1149,7 @@ const MutantInfo kMutants[] = {
     {11, "M11 membership in an empty set is UNKNOWN, not FALSE"},
     {12, "M12 second optimize() pass changes the plan (non-idempotent)"},
     {13, "M13 Sort eval leaks hidden ORDER BY sort keys (no truncation to output width)"},
+    {14, "M14 Sort eval reverses the row order (wrong ORDER BY direction)"},
 };
 }  // namespace
 

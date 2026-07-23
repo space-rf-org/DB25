@@ -98,6 +98,10 @@ struct Stages {
 // Multiset (order-independent) equality with NULL-aware element comparison.
 [[nodiscard]] bool bag_equal(const Table& a, const Table& b);
 
+// Sequence (order-SENSITIVE) equality: rows must match position-by-position.
+// Use for ORDER BY tests - bag_equal cannot detect a dropped/reversed Sort.
+[[nodiscard]] bool seq_equal(const Table& a, const Table& b);
+
 // ---------------------------------------------------------------------------
 // Structural plan predicates (for tests that assert an optimization happened).
 // ---------------------------------------------------------------------------
