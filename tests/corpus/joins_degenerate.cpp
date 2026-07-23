@@ -151,6 +151,33 @@ static void register_joins_degenerate() {
             "FULL JOIN == LEFT JOIN + (RIGHT-only null-extended rows)");
     });
 
+    // 7b) RIGHT JOIN ... USING(id): the merged output column is
+    //     COALESCE(left.id, right.id). users.id (1..5) and orders.id (100..106)
+    //     are disjoint, so EVERY RIGHT-JOIN row is right-only (no left match) -
+    //     the exact case the coalesce matters: the merged id must take the RIGHT
+    //     value, never NULL. This was a total blind spot (the suite tested USING
+    //     only over INNER, and RIGHT/FULL only with ON). Pinned against a literal
+    //     oracle, and cross-checked against the explicit COALESCE/ON phrasing.
+    //     Killed by M15 (COALESCE keeps only its left operand -> all-NULL id).
+    test("join.right_using_coalesces_to_right", [] {
+        auto s = oracle("SELECT id FROM users u RIGHT JOIN orders o USING (id)");
+        auto ro = eval(s.optimized, data());
+        check(ro.has_value(), "RIGHT JOIN USING eval supported");
+        if (ro) {
+            Table expected = { {vi(100)}, {vi(101)}, {vi(102)}, {vi(103)},
+                               {vi(104)}, {vi(105)}, {vi(106)} };
+            check(bag_equal(*ro, expected),
+                  "RIGHT JOIN USING(id): merged id is the right value for every "
+                  "right-only row (never NULL)");
+        }
+        // The USING merge must equal an explicit COALESCE(left,right) over ON.
+        expect_bag_eq(
+            "SELECT id FROM users u RIGHT JOIN orders o USING (id)",
+            "SELECT COALESCE(u.id, o.id) FROM users u RIGHT JOIN orders o "
+            "ON u.id = o.id",
+            "USING merge == explicit COALESCE(left,right) over ON u.id=o.id");
+    });
+
     // 8) THE pushdown trap: a predicate on the NULL-SUPPLYING (right) side of a
     //    LEFT JOIN must NOT be pushed below the join. `WHERE o.amount IS NULL`
     //    legitimately selects BOTH null-extended non-matches AND real NULL
