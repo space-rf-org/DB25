@@ -332,6 +332,36 @@ Value eval_subquery(const Expr* e, const Row& row, EvalCtx& ctx) {
     return null();
 }
 
+// SQL LIKE matcher: `%` matches any run (>= 0 chars), `_` matches exactly one.
+// When `has_esc`, an `esc` char makes the next pattern char a literal (%, _, or
+// esc). Recursive backtracking on `%`; patterns/strings here are short.
+bool like_match(const char* s, const char* se, const char* p, const char* pe,
+                char esc, bool has_esc) {
+    while (p < pe) {
+        char pc = *p;
+        if (has_esc && pc == esc) {
+            ++p;
+            if (p >= pe) return false;          // dangling escape: no match
+            if (s < se && *s == *p) { ++s; ++p; continue; }
+            return false;
+        }
+        if (pc == '%') {
+            ++p;
+            for (const char* t = s;; ++t) {      // try every suffix, incl. empty
+                if (like_match(t, se, p, pe, esc, has_esc)) return true;
+                if (t >= se) return false;
+            }
+        }
+        if (pc == '_') {
+            if (s >= se) return false;
+            ++s; ++p; continue;
+        }
+        if (s < se && *s == pc) { ++s; ++p; continue; }
+        return false;
+    }
+    return s == se;
+}
+
 Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
     if (e == nullptr) { ctx.ok = false; return null(); }
     switch (e->kind) {
@@ -443,6 +473,33 @@ Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
                 else if (both == Bool3::False) both = Bool3::True;
             }
             return from_bool3(both);
+        }
+        case ExprKind::Like: {
+            // {input, pattern[, escape]}. NULL input or pattern -> UNKNOWN (and
+            // NOT LIKE of UNKNOWN is still UNKNOWN, i.e. NULL). Otherwise match
+            // per SQL LIKE, then invert for NOT LIKE.
+            const Value in = eval_expr(e->children[0].get(), row, ctx);
+            const Value pat = eval_expr(e->children[1].get(), row, ctx);
+            if (!ctx.ok) return null();
+            if (is_null(in) || is_null(pat)) return null();
+            const std::string* si = std::get_if<std::string>(&in);
+            const std::string* pi = std::get_if<std::string>(&pat);
+            if (si == nullptr || pi == nullptr) { ctx.ok = false; return null(); }
+            char esc = '\0';
+            bool has_esc = false;
+            if (e->children.size() >= 3) {
+                const Value ev = eval_expr(e->children[2].get(), row, ctx);
+                if (!ctx.ok) return null();
+                if (is_null(ev)) return null();
+                const std::string* es = std::get_if<std::string>(&ev);
+                if (es == nullptr || es->size() != 1) { ctx.ok = false; return null(); }
+                esc = (*es)[0];
+                has_esc = true;
+            }
+            bool m = like_match(si->data(), si->data() + si->size(),
+                                pi->data(), pi->data() + pi->size(), esc, has_esc);
+            if (e->negated()) m = !m;
+            return vb(m);
         }
         case ExprKind::Case: {
             // children: when0, then0, when1, then1, ..., [else]

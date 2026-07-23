@@ -133,6 +133,35 @@ static void register_smoke_tests() {
                       "(1=1) AND p == p after folding");
     });
 
+    // ---- LIKE pattern matching against a literal oracle. The evaluator now
+    //   implements LIKE (% = any run, _ = one char, NOT LIKE, NULL -> UNKNOWN);
+    //   before this it returned nullopt and every LIKE query was silently skipped
+    //   (the whole property-differential LIKE population - ~13% of queries - was
+    //   unverified). users.name: alice, bob, carol, dave, eve.
+    //   Killed by M2 (Filter eval ignores the predicate -> all rows returned).
+    test("smoke.like_patterns", [] {
+        struct C { const char* sql; Table want; };
+        const std::vector<C> cases = {
+            {"SELECT name FROM users WHERE name LIKE 'a%'",   {{vs("alice")}}},          // prefix
+            {"SELECT name FROM users WHERE name LIKE '%e'",   {{vs("alice")},{vs("dave")},{vs("eve")}}},  // suffix
+            {"SELECT name FROM users WHERE name LIKE '%a%'",  {{vs("alice")},{vs("carol")},{vs("dave")}}}, // contains
+            {"SELECT name FROM users WHERE name LIKE '_o_'",  {{vs("bob")}}},            // single-char wildcard
+            {"SELECT name FROM users WHERE name LIKE '____'", {{vs("dave")}}},           // exactly 4 chars
+            {"SELECT name FROM users WHERE name LIKE 'alice'",{{vs("alice")}}},          // exact, no wildcard
+            {"SELECT name FROM users WHERE name LIKE '%'",                               // matches everything
+                {{vs("alice")},{vs("bob")},{vs("carol")},{vs("dave")},{vs("eve")}}},
+            {"SELECT name FROM users WHERE name NOT LIKE 'a%'",
+                {{vs("bob")},{vs("carol")},{vs("dave")},{vs("eve")}}},
+        };
+        for (const auto& c : cases) {
+            auto s = oracle(c.sql);
+            auto ro = eval(s.optimized, data());
+            check(ro.has_value(), std::string("LIKE eval supported: ") + c.sql);
+            if (ro) check(bag_equal(*ro, c.want),
+                          std::string("LIKE result matches oracle: ") + c.sql);
+        }
+    });
+
     // ---- ORDER BY on a NON-selected column: the binder appends the sort key as
     //   a hidden trailing column of the Project so Sort can order by it; the Sort
     //   node's output schema is narrower, and the evaluator must project the
