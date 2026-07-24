@@ -134,6 +134,39 @@ static void register_conformance_tests() {
         }
     });
 
+    // ---- Aliased aggregate columns end-to-end. Regression guard for an oracle
+    //   defect the stage suite surfaced: the evaluator identified an aggregate
+    //   output column by matching its name to the aggregate's func_name, so an
+    //   ALIAS (`SUM(x) AS s`) renamed the column, the value was never placed, and
+    //   the column collapsed to NULL - which in turn made any HAVING or ORDER BY
+    //   over an aliased aggregate wrong (HAVING dropped every row; ORDER BY
+    //   returned NULL aggregates). The DB25 plans were correct throughout; only
+    //   the reference evaluator was wrong. These pin the corrected behavior.
+    //   Killed by M4 (aggregate off by one) and M14 (sort reversed).
+    test("conformance.aliased_aggregate_columns", [] {
+        // Bare aliased aggregates.
+        auto s1 = conform("SELECT dept_id, SUM(salary) AS s, COUNT(*) AS c "
+                          "FROM emp GROUP BY dept_id");
+        if (auto r = eval(s1.optimized, data())) {
+            Table want = { {vi(10), vi(390), vi(3)}, {vi(20), vi(270), vi(2)} };
+            check(bag_equal(*r, want), "aliased SUM/COUNT resolve (not NULL)");
+        }
+        // HAVING over an aliased aggregate (repeats the aggregate expression).
+        auto s2 = conform("SELECT dept_id, SUM(salary) AS total FROM emp "
+                          "GROUP BY dept_id HAVING SUM(salary) > 300");
+        if (auto r = eval(s2.optimized, data())) {
+            Table want = { {vi(10), vi(390)} };  // dept 20's 270 is filtered out
+            check(bag_equal(*r, want), "HAVING over aliased aggregate keeps dept 10 only");
+        }
+        // ORDER BY an aliased aggregate (order-sensitive).
+        auto s3 = conform("SELECT dept_id, SUM(salary) AS s FROM emp "
+                          "GROUP BY dept_id ORDER BY s DESC");
+        if (auto r = eval(s3.optimized, data())) {
+            Table want = { {vi(10), vi(390)}, {vi(20), vi(270)} };  // 390 > 270
+            check(seq_equal(*r, want), "ORDER BY aliased aggregate sorts by its value");
+        }
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the
