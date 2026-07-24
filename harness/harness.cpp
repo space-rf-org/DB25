@@ -657,10 +657,24 @@ Value compute_aggregate(const Expr* call, const std::vector<Row>& group_rows, Ev
 }
 
 // Map each Aggregate output column to its producer value (group key or aggregate)
-// and build the group's output row. See the design note in the report: aggregate
-// output columns are named by func_name; group-key columns by their source
-// column (and carry provenance column_id/table_id). Aggregates are consumed in
-// select-list order; group keys are matched by source id / name / type.
+// and build the group's output row. The output is select-list-shaped: each column
+// is EITHER a group-key passthrough (carrying its source column's provenance /
+// name) OR an aggregate result. We identify the group-key columns first, by
+// provenance then by name, and treat every remaining column as the next
+// aggregate value in select-list order.
+//
+// This deliberately does NOT identify an aggregate column by matching its name to
+// the aggregate's func_name: an alias (`SUM(x) AS s`) renames the output column,
+// so a func_name test silently fails to place the value and the column collapses
+// to NULL - which corrupted every aliased aggregate (and, transitively, any
+// HAVING / ORDER BY over one). Consuming the non-group-key columns positionally
+// is alias-agnostic.
+//
+// Residual limitation: a group key that is a non-column EXPRESSION (e.g.
+// `GROUP BY a + b`) carries no column provenance or source name, so it cannot be
+// distinguished from an aggregate here and would be mis-consumed if interleaved
+// with one. The corpus does not exercise expression group keys; revisit if it
+// starts to.
 Row build_aggregate_output_row(const LogicalNode* agg, const std::vector<Value>& gk_vals,
                                const std::vector<Value>& agg_vals) {
     const db25::plan::Schema& in = agg->child(0)->output;
@@ -670,16 +684,19 @@ Row build_aggregate_output_row(const LogicalNode* agg, const std::vector<Value>&
     std::vector<bool> gk_used(agg->group_keys.size(), false);
 
     for (const auto& col : agg->output) {
-        // Aggregate column? Its output name equals the next aggregate's func_name.
+        // (A) Unaliased aggregate: its output name is the next aggregate's
+        //     func_name. This is the fast, unambiguous path and covers every
+        //     query that does not alias its aggregates (incl. the decorrelated
+        //     LEFT JOIN + Aggregate the optimizer builds).
         if (agg_cursor < agg->aggregates.size() &&
             col.name == agg->aggregates[agg_cursor]->func_name) {
             out.push_back(agg_cursor < agg_vals.size() ? agg_vals[agg_cursor] : null());
             ++agg_cursor;
             continue;
         }
-        // Otherwise a group-key passthrough: match to a group_keys entry.
+        // (B) Group-key passthrough: match to a group_keys entry by source column
+        //     id / table id, then by source column name.
         int chosen = -1;
-        // (1) by source column id / table id.
         for (std::size_t i = 0; i < agg->group_keys.size(); ++i) {
             if (gk_used[i]) continue;
             const Expr* gk = agg->group_keys[i].get();
@@ -688,7 +705,6 @@ Row build_aggregate_output_row(const LogicalNode* agg, const std::vector<Value>&
             if (col.column_id != 0 && in[gk->input_index].column_id == col.column_id &&
                 in[gk->input_index].table_id == col.table_id) { chosen = static_cast<int>(i); break; }
         }
-        // (2) by name.
         if (chosen < 0) {
             for (std::size_t i = 0; i < agg->group_keys.size(); ++i) {
                 if (gk_used[i]) continue;
@@ -697,13 +713,30 @@ Row build_aggregate_output_row(const LogicalNode* agg, const std::vector<Value>&
                     !col.name.empty() && in[gk->input_index].name == col.name) { chosen = static_cast<int>(i); break; }
             }
         }
-        // (3) first unused.
-        if (chosen < 0) {
-            for (std::size_t i = 0; i < agg->group_keys.size(); ++i)
-                if (!gk_used[i]) { chosen = static_cast<int>(i); break; }
-        }
         if (chosen >= 0) {
-            gk_used[chosen] = true;
+            gk_used[static_cast<std::size_t>(chosen)] = true;
+            out.push_back(gk_vals[static_cast<std::size_t>(chosen)]);
+            continue;
+        }
+        // (C) A NON-EMPTY-named column that is neither a func_name match nor a
+        //     group key is an ALIASED aggregate (`SUM(x) AS s` renamed the
+        //     column). Consume the next aggregate value positionally - the fix for
+        //     the alias -> NULL bug. The agg_cursor is shared with path (A), so
+        //     mixed aliased/unaliased aggregates stay in select-list order.
+        //     The name test is what separates this from (D): decorrelation emits a
+        //     group-key passthrough with an EMPTY name and no provenance, which
+        //     must NOT steal an aggregate value.
+        if (!col.name.empty() && agg_cursor < agg_vals.size()) {
+            out.push_back(agg_vals[agg_cursor++]);
+            continue;
+        }
+        // (D) An empty-named / unmatched column is a group key whose provenance and
+        //     name were rewritten (e.g. by decorrelation, which emits the grouping
+        //     key with an empty name). Fall back to the first unused key, else NULL.
+        for (std::size_t i = 0; i < agg->group_keys.size(); ++i)
+            if (!gk_used[i]) { chosen = static_cast<int>(i); break; }
+        if (chosen >= 0) {
+            gk_used[static_cast<std::size_t>(chosen)] = true;
             out.push_back(gk_vals[static_cast<std::size_t>(chosen)]);
         } else {
             out.push_back(null());
