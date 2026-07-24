@@ -289,6 +289,28 @@ static void register_conformance_tests() {
                              "NOT (age>20) -> {3} (UNKNOWN row dropped)");
     });
 
+    // ---- ILIKE (case-insensitive LIKE). users.name is lower-case
+    //   (alice/bob/carol/dave/eve). `name ILIKE 'A%'` matches alice
+    //   case-insensitively -> {1}, whereas the case-sensitive `name LIKE 'A%'`
+    //   matches nothing -> {}. That contrast is the whole feature. NOT ILIKE
+    //   inverts to the complement. Killed by M2 (filter ignored -> all rows).
+    test("conformance.ilike", [] {
+        auto s = conform("SELECT id FROM users WHERE name ILIKE 'A%'");
+        check(ast_has(s, NT::LikeExpr), "AST has LikeExpr (ILIKE)");
+        check(error_count(s) == 0, "analyzer clean");
+        check(plan_contains(s.bound, LogicalOp::Filter), "plan has Filter");
+        if (auto r = eval(s.optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)}}), "name ILIKE 'A%' -> {1} (alice)");
+        // The distinction from case-sensitive LIKE: same pattern, no match.
+        if (auto r = eval(conform("SELECT id FROM users WHERE name LIKE 'A%'")
+                              .optimized, data()))
+            check(bag_equal(*r, Table{}), "name LIKE 'A%' -> {} (case-sensitive)");
+        if (auto r = eval(conform("SELECT id FROM users WHERE name NOT ILIKE 'A%'")
+                              .optimized, data()))
+            check(bag_equal(*r, Table{{vi(2)},{vi(3)},{vi(4)},{vi(5)}}),
+                  "name NOT ILIKE 'A%' -> {2,3,4,5}");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the

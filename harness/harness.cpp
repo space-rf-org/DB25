@@ -522,8 +522,24 @@ Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
                 esc = (*es)[0];
                 has_esc = true;
             }
-            bool m = like_match(si->data(), si->data() + si->size(),
-                                pi->data(), pi->data() + pi->size(), esc, has_esc);
+            bool m;
+            if (e->case_insensitive()) {
+                // ILIKE: ASCII-fold both input and pattern (and the escape char)
+                // to lower case, then match. Folding both sides yields
+                // case-insensitive semantics through the same matcher.
+                auto fold = [](char c) {
+                    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+                };
+                std::string ls(*si), lp(*pi);
+                for (char& c : ls) c = fold(c);
+                for (char& c : lp) c = fold(c);
+                const char fesc = has_esc ? fold(esc) : esc;
+                m = like_match(ls.data(), ls.data() + ls.size(),
+                               lp.data(), lp.data() + lp.size(), fesc, has_esc);
+            } else {
+                m = like_match(si->data(), si->data() + si->size(),
+                               pi->data(), pi->data() + pi->size(), esc, has_esc);
+            }
             if (e->negated()) m = !m;
             return vb(m);
         }
