@@ -53,6 +53,7 @@
 #include "db25/plan/optimizer.hpp"
 #include "db25/parser/parser.hpp"
 #include "db25/semantic/analyzer.hpp"
+#include "db25/ast/ast_node.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -1135,6 +1136,29 @@ std::size_t count_subqueries(const LogicalNode* n) {
     return total;
 }
 
+// --- Stage-artifact predicates over the fingerprints captured by run() ---
+bool ast_has(const Stages& s, db25::ast::NodeType kind) {
+    for (const auto k : s.ast_kinds) {
+        if (k == kind) return true;
+    }
+    return false;
+}
+
+bool has_diagnostic(const Stages& s, db25::semantic::DiagnosticCode code) {
+    for (const auto& d : s.diags) {
+        if (d.code == code) return true;
+    }
+    return false;
+}
+
+std::size_t error_count(const Stages& s) {
+    std::size_t n = 0;
+    for (const auto& d : s.diags) {
+        if (d.severity == db25::semantic::Severity::Error) ++n;
+    }
+    return n;
+}
+
 // ===========================================================================
 // Pipeline driver.
 // ===========================================================================
@@ -1153,6 +1177,20 @@ bool drop_first_predicate(LogicalNode* n) {
 }
 }  // namespace
 
+// Depth-first walk of the parsed AST, recording every NodeType encountered.
+// This is the parse-stage "feature fingerprint" a conformance test asserts
+// against (e.g. a query that uses a window function must yield a WindowFunction
+// node here). The AST is arena-owned by the Parser, so this runs while the
+// Parser is still alive inside run() and copies only the small kind vector out.
+static void collect_ast_kinds(const db25::ast::ASTNode* n,
+                              std::vector<db25::ast::NodeType>& out) {
+    if (n == nullptr) return;
+    out.push_back(n->node_type);
+    for (const db25::ast::ASTNode* c = n->first_child; c != nullptr; c = c->next_sibling) {
+        collect_ast_kinds(c, out);
+    }
+}
+
 Stages run(const db25::semantic::InMemoryCatalog& cat, std::string_view sql) {
     Stages st;
     db25::parser::Parser parser;
@@ -1160,9 +1198,15 @@ Stages run(const db25::semantic::InMemoryCatalog& cat, std::string_view sql) {
     st.parsed = parsed.has_value();
     if (!st.parsed) return st;
 
+    // Parse-stage artifact: fingerprint the AST before it is discarded.
+    collect_ast_kinds(parsed.value(), st.ast_kinds);
+
     db25::semantic::Analyzer analyzer(cat);
     analyzer.analyze(parsed.value());
     st.analyze_ok = !analyzer.has_errors();
+    // Analyze-stage artifact: snapshot the diagnostics (the analyzer is a
+    // run()-local and will not outlive this call).
+    st.diags = analyzer.diagnostics();
 
     // Bind twice so the pre- and post-optimization plans are both live.
     db25::plan::Binder binder_a(analyzer, cat);
