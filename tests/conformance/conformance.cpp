@@ -336,6 +336,39 @@ static void register_conformance_tests() {
                   "SUM(amount) FILTER (WHERE status='paid') -> 63");
     });
 
+    // ---- Row constructors and row comparison. (a, b) and ROW(a, b) build a
+    //   RowConstructor; comparing two rows is element-wise with lexicographic
+    //   3VL semantics. users.city is {NYC,LA,NYC,LA,NULL} for ids {1,2,3,4,5}.
+    //   (city, id) = ('NYC', 3) matches ONLY carol (id 3) -- the id component
+    //   discriminates the two NYC rows, which a first-column-only comparison
+    //   would not (city='NYC' alone matches {1,3}). (city, id) > ('NYC', 1) is
+    //   lexicographic: same city NYC, id must exceed 1 -> {3}; NULL city (eve)
+    //   is UNKNOWN and excluded. Killed by M18 (row comparison collapses to the
+    //   first component) and M2 (filter ignored).
+    test("conformance.row_constructor", [] {
+        auto s = conform("SELECT id FROM users WHERE (city, id) = ('NYC', 3)");
+        check(ast_has(s, NT::RowConstructor), "AST has RowConstructor");
+        check(error_count(s) == 0, "analyzer clean");
+        check(plan_contains(s.bound, LogicalOp::Filter), "plan has Filter");
+        if (auto r = eval(s.optimized, data()))
+            check(bag_equal(*r, Table{{vi(3)}}),
+                  "(city,id)=('NYC',3) -> {3} (id discriminates the two NYC rows)");
+        // The same first column alone matches BOTH NYC rows -- the second
+        // component is what narrows it, proving element-wise comparison.
+        if (auto r = eval(conform("SELECT id FROM users WHERE city = 'NYC'")
+                              .optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)},{vi(3)}}), "city='NYC' alone -> {1,3}");
+        // Lexicographic ordering; NULL city (eve) is UNKNOWN and excluded.
+        if (auto r = eval(conform("SELECT id FROM users WHERE (city, id) > ('NYC', 1)")
+                              .optimized, data()))
+            check(bag_equal(*r, Table{{vi(3)}}),
+                  "(city,id)>('NYC',1) -> {3} (lexicographic, NULL excluded)");
+        // Explicit ROW(...) keyword form evaluates identically.
+        if (auto r = eval(conform("SELECT id FROM users WHERE ROW(id, age) = ROW(4, 40)")
+                              .optimized, data()))
+            check(bag_equal(*r, Table{{vi(4)}}), "ROW(id,age)=ROW(4,40) -> {4}");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the
