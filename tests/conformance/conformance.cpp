@@ -311,6 +311,31 @@ static void register_conformance_tests() {
                   "name NOT ILIKE 'A%' -> {2,3,4,5}");
     });
 
+    // ---- Aggregate FILTER (WHERE p). Only rows where p is TRUE feed the
+    //   aggregate. orders.amount is {50,5,30,NULL,8,120,40}; amount > 40 is TRUE
+    //   for 2 of the 7 rows (50, 120), so COUNT(*) FILTER (WHERE amount > 40)
+    //   is 2 -- versus 7 unfiltered. SUM(amount) FILTER (WHERE status='paid')
+    //   sums the paid rows {50,5,NULL,8} -> 63 (NULL skipped). Killed by M17
+    //   (filter ignored -> filtered aggregate equals the unfiltered one) and by
+    //   M4 (COUNT/SUM off by one).
+    test("conformance.aggregate_filter", [] {
+        auto s = conform("SELECT COUNT(*) FILTER (WHERE amount > 40) FROM orders");
+        check(ast_has(s, NT::FunctionCall), "AST has the aggregate call");
+        check(error_count(s) == 0, "analyzer clean");
+        check(plan_contains(s.bound, LogicalOp::Aggregate), "plan has Aggregate");
+        if (auto r = eval(s.optimized, data()))
+            check(bag_equal(*r, Table{{vi(2)}}),
+                  "COUNT(*) FILTER (WHERE amount>40) -> 2");
+        // Contrast with the unfiltered count over the same group.
+        if (auto r = eval(conform("SELECT COUNT(*) FROM orders").optimized, data()))
+            check(bag_equal(*r, Table{{vi(7)}}), "COUNT(*) -> 7 (unfiltered)");
+        // FILTER also restricts SUM; NULL amounts are skipped as usual.
+        if (auto r = eval(conform("SELECT SUM(amount) FILTER (WHERE status = 'paid') "
+                                  "FROM orders").optimized, data()))
+            check(bag_equal(*r, Table{{vi(63)}}),
+                  "SUM(amount) FILTER (WHERE status='paid') -> 63");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the
