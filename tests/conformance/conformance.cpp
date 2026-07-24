@@ -256,6 +256,39 @@ static void register_conformance_tests() {
         if (r1 && r2) check(bag_equal(*r1, *r2), "x::T evaluates identically to CAST(x AS T)");
     });
 
+    // ---- IS [NOT] TRUE / FALSE / UNKNOWN. A three-valued boolean test that
+    //   collapses the operand's 3VL truth value to a plain 2VL boolean (never
+    //   NULL). Over users, `age > 20` is TRUE for {1,4,5}, FALSE for {3}, and
+    //   UNKNOWN for {2} (bob's NULL age). Each IS-test selects exactly one
+    //   bucket. The load-bearing distinction: `(age>20) IS NOT TRUE` keeps the
+    //   UNKNOWN row {2} that a plain `NOT (age>20)` drops - that difference is
+    //   the whole reason the feature exists. Killed by M2 (filter ignored ->
+    //   every row passes, so the anchors change).
+    test("conformance.boolean_test", [] {
+        auto s = conform("SELECT id FROM users WHERE (age > 20) IS TRUE");
+        check(ast_has(s, NT::BooleanTestExpr), "AST has BooleanTestExpr");
+        check(error_count(s) == 0, "analyzer clean");
+        check(plan_contains(s.bound, LogicalOp::Filter), "plan has Filter");
+        if (auto r = eval(s.optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)},{vi(4)},{vi(5)}}),
+                  "(age>20) IS TRUE -> {1,4,5}");
+        if (auto r = eval(conform("SELECT id FROM users WHERE (age > 20) IS FALSE")
+                              .optimized, data()))
+            check(bag_equal(*r, Table{{vi(3)}}), "(age>20) IS FALSE -> {3}");
+        if (auto r = eval(conform("SELECT id FROM users WHERE (age > 20) IS UNKNOWN")
+                              .optimized, data()))
+            check(bag_equal(*r, Table{{vi(2)}}), "(age>20) IS UNKNOWN -> {2} (NULL age)");
+        // The 3VL distinction: IS NOT TRUE keeps the UNKNOWN row; NOT drops it.
+        auto not_true = eval(conform("SELECT id FROM users WHERE (age > 20) IS NOT TRUE")
+                                 .optimized, data());
+        auto plain_not = eval(conform("SELECT id FROM users WHERE NOT (age > 20)")
+                                  .optimized, data());
+        if (not_true) check(bag_equal(*not_true, Table{{vi(2)},{vi(3)}}),
+                            "(age>20) IS NOT TRUE -> {2,3} (keeps the UNKNOWN row)");
+        if (plain_not) check(bag_equal(*plain_not, Table{{vi(3)}}),
+                             "NOT (age>20) -> {3} (UNKNOWN row dropped)");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the
