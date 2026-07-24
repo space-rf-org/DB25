@@ -1,0 +1,79 @@
+name: CI
+
+# Builds the full native stack (tokenizer -> parser + analyzer -> logical plan ->
+# harness) from the pinned submodules and runs the test suite AND the
+# falsifiability gate. The gate (db25_gate) is the load-bearing check: it fails
+# the build if any test is non-falsifiable (survives every mutant) or if a
+# mutant escapes, so a change that weakens the harness cannot merge silently.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-gate:
+    name: build & gate (${{ matrix.cxx }}, ${{ matrix.build_type }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { cxx: g++-13, build_type: Release }
+          - { cxx: g++-14, build_type: Release }
+          - { cxx: g++-14, build_type: Debug }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.cxx }}
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+      - name: Build
+        run: cmake --build build -j
+
+      # Runs db25_harness (the suite), db25_gate (the falsifiability gate), and
+      # the logical-plan unit tests brought in via add_subdirectory.
+      - name: Suite + falsifiability gate
+        working-directory: build
+        run: ctest --output-on-failure
+
+  sanitizers:
+    name: ASan + UBSan (g++-14)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++-14
+
+      - name: Configure (ASan/UBSan)
+        run: >
+          cmake -S . -B build-san
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_COMPILER=g++-14
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build
+        run: cmake --build build-san -j
+
+      # Runs the suite + logical-plan unit tests under ASan/UBSan to catch memory
+      # and UB defects. The falsifiability gate is excluded here: it is pure logic
+      # (already enforced by the non-sanitized build-gate jobs) and its mutant x
+      # property-test loop is far too slow to be worth re-running under ASan.
+      - name: Suite under sanitizers (gate excluded)
+        working-directory: build-san
+        run: ctest --output-on-failure -E db25_gate

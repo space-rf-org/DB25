@@ -193,10 +193,20 @@ Value eval_arith(BinaryOp op, const Value& a, const Value& b, EvalCtx& ctx) {
     double da, db;
     if (!numeric_of(a, da) || !numeric_of(b, db)) { ctx.ok = false; return null(); }
     const bool ints = both_int(a, b);
+    // Integer arithmetic that would overflow int64 is not representable, so the
+    // reference returns NULL - consistent with division by zero below, and (via
+    // __builtin_*_overflow) free of the signed-overflow UB a plain `+`/`-`/`*`
+    // would hit on out-of-range operands.
     switch (op) {
-        case BinaryOp::Add: return ints ? vi(std::get<std::int64_t>(a) + std::get<std::int64_t>(b)) : vd(da + db);
-        case BinaryOp::Subtract: return ints ? vi(std::get<std::int64_t>(a) - std::get<std::int64_t>(b)) : vd(da - db);
-        case BinaryOp::Multiply: return ints ? vi(std::get<std::int64_t>(a) * std::get<std::int64_t>(b)) : vd(da * db);
+        case BinaryOp::Add:
+            if (!ints) return vd(da + db);
+            { std::int64_t r; return __builtin_add_overflow(std::get<std::int64_t>(a), std::get<std::int64_t>(b), &r) ? null() : vi(r); }
+        case BinaryOp::Subtract:
+            if (!ints) return vd(da - db);
+            { std::int64_t r; return __builtin_sub_overflow(std::get<std::int64_t>(a), std::get<std::int64_t>(b), &r) ? null() : vi(r); }
+        case BinaryOp::Multiply:
+            if (!ints) return vd(da * db);
+            { std::int64_t r; return __builtin_mul_overflow(std::get<std::int64_t>(a), std::get<std::int64_t>(b), &r) ? null() : vi(r); }
         case BinaryOp::Divide:
             if (db == 0.0) return null();  // reference: division by zero -> NULL
             return ints ? vi(std::get<std::int64_t>(a) / std::get<std::int64_t>(b)) : vd(da / db);
