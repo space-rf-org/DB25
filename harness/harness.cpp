@@ -624,13 +624,25 @@ Value compute_aggregate(const Expr* call, const std::vector<Row>& group_rows, Ev
     const std::string& fn = call->func_name;
     const bool distinct = call->distinct;
 
+    // Aggregate FILTER (WHERE p): only rows for which the predicate is TRUE
+    // contribute to this aggregate. M17 ignores the filter, so a filtered
+    // COUNT(*) wrongly equals the unfiltered COUNT(*).
+    std::vector<Row> filtered;
+    const std::vector<Row>* src = &group_rows;
+    if (call->filter && g_mutant != 17) {
+        for (const Row& r : group_rows)
+            if (is_true(eval_expr(call->filter.get(), r, ctx))) filtered.push_back(r);
+        src = &filtered;
+    }
+    const std::vector<Row>& rows = *src;
+
     if (fn == "COUNT") {
         std::int64_t n = 0;
         if (call->children.empty()) {
-            n = static_cast<std::int64_t>(group_rows.size());  // COUNT(*)
+            n = static_cast<std::int64_t>(rows.size());  // COUNT(*)
         } else {
             std::vector<Value> seen;
-            for (const Row& r : group_rows) {
+            for (const Row& r : rows) {
                 Value v = eval_expr(call->children[0].get(), r, ctx);
                 // M9: count NULL argument rows too, so COUNT(age) wrongly equals
                 // COUNT(*). Caught by the COUNT(nullable) < COUNT(*) test.
@@ -650,7 +662,7 @@ Value compute_aggregate(const Expr* call, const std::vector<Row>& group_rows, Ev
 
     // SUM / AVG / MIN / MAX collect non-null argument values.
     std::vector<Value> vals;
-    for (const Row& r : group_rows) {
+    for (const Row& r : rows) {
         Value v = eval_expr(call->children.empty() ? nullptr : call->children[0].get(), r, ctx);
         if (is_null(v)) continue;
         if (distinct) {
@@ -1365,6 +1377,7 @@ const MutantInfo kMutants[] = {
     {14, "M14 Sort eval reverses the row order (wrong ORDER BY direction)"},
     {15, "M15 COALESCE keeps only its first operand (USING/NATURAL merge loses the right copy)"},
     {16, "M16 outer-join eval drops null-extended rows (LEFT/RIGHT/FULL degrade to inner)"},
+    {17, "M17 aggregate FILTER ignored (filtered aggregate degrades to unfiltered)"},
 };
 }  // namespace
 
