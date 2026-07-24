@@ -223,6 +223,25 @@ static void register_conformance_tests() {
                   "EXCEPT ALL cancels one NYC -> {NYC,LA,NULL} (3 rows)");
     });
 
+    // ---- CTE column-list rename and LIKE ... ESCAPE, end to end. `WITH t(x)`
+    //   renames the CTE's output so `SELECT x` resolves; ESCAPE makes the
+    //   following pattern character literal. Both previously failed (analyze /
+    //   parse). Killed by M2 (the age>20 / name filter).
+    test("conformance.cte_columnlist_and_escape", [] {
+        auto s1 = conform("WITH t(x) AS (SELECT id FROM users WHERE age > 20) SELECT x FROM t");
+        if (auto r = eval(s1.optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)},{vi(4)},{vi(5)}}),
+                  "CTE column-list rename resolves -> {1,4,5}");
+
+        // 'a%' matches alice; 'a!%' ESCAPE '!' means a-then-literal-% -> no match.
+        auto s2 = conform("SELECT name FROM users WHERE name LIKE 'a%'");
+        if (auto r = eval(s2.optimized, data()))
+            check(bag_equal(*r, Table{{vs("alice")}}), "LIKE 'a%' -> {alice}");
+        auto s3 = conform("SELECT name FROM users WHERE name LIKE 'a!%' ESCAPE '!'");
+        if (auto r = eval(s3.optimized, data()))
+            check(bag_equal(*r, Table{}), "LIKE 'a!%' ESCAPE '!' (literal %) -> empty");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the
