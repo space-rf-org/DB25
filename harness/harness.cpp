@@ -65,6 +65,7 @@ namespace db25::harness {
 
 using db25::plan::Expr;
 using db25::plan::ExprKind;
+using db25::plan::BoolTest;
 using db25::plan::LogicalNode;
 using db25::plan::LogicalNodePtr;
 using db25::plan::LogicalOp;
@@ -455,6 +456,20 @@ Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
             const Value a = eval_expr(e->children[0].get(), row, ctx);
             const bool isnull = is_null(a);
             return vb(e->negated() ? !isnull : isnull);  // negated == IS NOT NULL
+        }
+        case ExprKind::BooleanTest: {
+            // IS [NOT] TRUE/FALSE/UNKNOWN collapses the operand's 3VL truth value
+            // to a plain 2VL boolean (never NULL). This is exactly what makes
+            // `x IS NOT TRUE` differ from `NOT x`: the former keeps NULL/UNKNOWN
+            // rows, the latter propagates them as UNKNOWN and drops them.
+            const Bool3 b = to_bool3(eval_expr(e->children[0].get(), row, ctx));
+            bool result = false;
+            switch (e->bool_test) {
+                case BoolTest::True:    result = (b == Bool3::True);    break;
+                case BoolTest::False:   result = (b == Bool3::False);   break;
+                case BoolTest::Unknown: result = (b == Bool3::Unknown); break;
+            }
+            return vb(e->negated() ? !result : result);
         }
         case ExprKind::InList: {
             const Value v = eval_expr(e->children[0].get(), row, ctx);
