@@ -245,6 +245,68 @@ Value eval_compare(BinaryOp op, const Value& a, const Value& b) {
     return vb(r);
 }
 
+bool is_row_comparison_op(BinaryOp op) {
+    switch (op) {
+        case BinaryOp::Equal:
+        case BinaryOp::NotEqual:
+        case BinaryOp::LessThan:
+        case BinaryOp::LessEqual:
+        case BinaryOp::GreaterThan:
+        case BinaryOp::GreaterEqual:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// Row comparison: (a0,a1,...) <op> (b0,b1,...) under SQL three-valued logic.
+//   =  : TRUE iff every pair is equal; FALSE if any pair is definitely unequal;
+//        UNKNOWN if a NULL pair is reached with no earlier definite inequality.
+//   <> : the negation of =.
+//   ordering (< <= > >=): lexicographic. The first position where the rows
+//        differ decides; a NULL reached before any decisive difference makes the
+//        whole comparison UNKNOWN.
+Value eval_row_compare(BinaryOp op, const Expr* la, const Expr* lb,
+                       const Row& row, EvalCtx& ctx) {
+    if (la->kind != ExprKind::Row || lb->kind != ExprKind::Row ||
+        la->children.size() != lb->children.size() || la->children.empty()) {
+        ctx.ok = false;  // arity mismatch / non-row operand: unsupported shape
+        return null();
+    }
+    // M18: compare only the first component, so (1,2) = (1,9) wrongly holds and
+    // (1,2) < (1,9) wrongly fails. Models a row comparison that ignores all but
+    // the leading column.
+    const std::size_t n = (g_mutant == 18) ? 1 : la->children.size();
+    const bool eq_family = (op == BinaryOp::Equal || op == BinaryOp::NotEqual);
+    bool any_unknown = false;
+    for (std::size_t i = 0; i < n; ++i) {
+        const Value ai = eval_expr(la->children[i].get(), row, ctx);
+        const Value bi = eval_expr(lb->children[i].get(), row, ctx);
+        int cmp = 0;
+        bool unk = false;
+        compare3(ai, bi, cmp, unk);
+        if (eq_family) {
+            if (unk) { any_unknown = true; continue; }
+            if (cmp != 0) return vb(op == BinaryOp::NotEqual);  // definitely unequal
+            // equal at this position -> continue
+        } else {
+            if (unk) return null();      // cannot order past a NULL
+            if (cmp != 0) {
+                // First decisive position: strict inequality fixes the order, and
+                // <= / >= agree with < / > here because the rows are not equal.
+                const bool less = (op == BinaryOp::LessThan || op == BinaryOp::LessEqual);
+                return vb(less ? (cmp < 0) : (cmp > 0));
+            }
+            // equal at this position -> continue
+        }
+    }
+    // All compared positions were equal (eq-family may have seen NULLs).
+    if (op == BinaryOp::Equal)    return any_unknown ? null() : vb(true);
+    if (op == BinaryOp::NotEqual) return any_unknown ? null() : vb(false);
+    // Ordering with all positions equal: < and > are false, <= and >= are true.
+    return vb(op == BinaryOp::LessEqual || op == BinaryOp::GreaterEqual);
+}
+
 // 3VL membership: value IN {elems}. Returns True / False / Unknown.
 Bool3 in_membership(const Value& v, const std::vector<Value>& elems) {
     // IN over an EMPTY set is definitely FALSE - even for a NULL probe - because
@@ -392,6 +454,15 @@ Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
             return null();
         }
         case ExprKind::BinaryOp: {
+            // Row comparison: (a,...) <op> (b,...). Compare element-wise with
+            // lexicographic 3VL before the scalar path evaluates the Row operands
+            // (a Row has no scalar value).
+            if (is_row_comparison_op(e->bin_op) &&
+                (e->children[0]->kind == ExprKind::Row ||
+                 e->children[1]->kind == ExprKind::Row)) {
+                return eval_row_compare(e->bin_op, e->children[0].get(),
+                                        e->children[1].get(), row, ctx);
+            }
             const Value a = eval_expr(e->children[0].get(), row, ctx);
             // Short-circuit AND/OR under 3VL.
             if (e->bin_op == BinaryOp::And) {
@@ -471,6 +542,13 @@ Value eval_expr(const Expr* e, const Row& row, EvalCtx& ctx) {
             }
             return vb(e->negated() ? !result : result);
         }
+        case ExprKind::Row:
+            // A row/tuple only has meaning inside a row comparison, which is
+            // handled in the BinaryOp case before the operands are evaluated.
+            // A standalone row value (e.g. SELECT (a, b)) has no scalar
+            // representation in this evaluator - an explicit eval boundary.
+            ctx.ok = false;
+            return null();
         case ExprKind::InList: {
             const Value v = eval_expr(e->children[0].get(), row, ctx);
             std::vector<Value> elems;
@@ -1378,6 +1456,7 @@ const MutantInfo kMutants[] = {
     {15, "M15 COALESCE keeps only its first operand (USING/NATURAL merge loses the right copy)"},
     {16, "M16 outer-join eval drops null-extended rows (LEFT/RIGHT/FULL degrade to inner)"},
     {17, "M17 aggregate FILTER ignored (filtered aggregate degrades to unfiltered)"},
+    {18, "M18 row comparison uses only the first component (ignores later columns)"},
 };
 }  // namespace
 
