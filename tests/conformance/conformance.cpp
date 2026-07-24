@@ -242,6 +242,20 @@ static void register_conformance_tests() {
             check(bag_equal(*r, Table{}), "LIKE 'a!%' ESCAPE '!' (literal %) -> empty");
     });
 
+    // ---- `::` cast shorthand. x::T is CAST(x AS T); it must lower to the same
+    //   Cast and produce the same result. age::BIGINT > 20 keeps {1,4,5} (bob's
+    //   NULL age dropped), identical to the CAST(...) form. Killed by M2 (filter).
+    test("conformance.cast_shorthand", [] {
+        auto s = conform("SELECT id FROM users WHERE age::BIGINT > 20");
+        if (auto r = eval(s.optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)},{vi(4)},{vi(5)}}),
+                  ":: cast in a predicate -> {1,4,5}");
+        auto s2 = conform("SELECT id FROM users WHERE CAST(age AS BIGINT) > 20");
+        auto r1 = eval(s.optimized, data());
+        auto r2 = eval(s2.optimized, data());
+        if (r1 && r2) check(bag_equal(*r1, *r2), "x::T evaluates identically to CAST(x AS T)");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the
