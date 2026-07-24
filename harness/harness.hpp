@@ -21,6 +21,8 @@
 #include "db25/plan/logical_plan.hpp"
 #include "db25/plan/expr_ir.hpp"
 #include "db25/semantic/catalog.hpp"
+#include "db25/semantic/diagnostic.hpp"
+#include "db25/ast/node_types.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -74,6 +76,20 @@ struct Stages {
     std::string bound_dump;
     std::string optimized_dump;
 
+    // --- Stage-artifact fingerprints (for the conformance suite) ---
+    // The parser's AST and the analyzer's diagnostics live only *inside* run()
+    // (the AST is arena-owned by the Parser, which is a run()-local). To let a
+    // conformance test assert what each pipeline STAGE produced - not just the
+    // final plan - run() snapshots their salient contents here while they are
+    // still alive. `ast_kinds` is every NodeType present in the parsed tree (the
+    // parse-stage feature fingerprint); `diags` is a copy of the analyzer's
+    // diagnostics (the analyze-stage effect). Plan-stage propagation is asserted
+    // directly against `bound` / `optimized` with plan_contains(). Together they
+    // let a test verify a feature seen at parse time actually reaches - and
+    // transforms into - the expected downstream artifact.
+    std::vector<db25::ast::NodeType> ast_kinds;
+    std::vector<db25::semantic::Diagnostic> diags;
+
     // Owners - keep the plans alive for the lifetime of the Stages value. Held
     // by shared_ptr so Stages is copyable (the test suites pass Stages around by
     // value and store them in `const` locals); copies share the same plans. The
@@ -107,6 +123,17 @@ struct Stages {
 // ---------------------------------------------------------------------------
 [[nodiscard]] bool plan_contains(const db25::plan::LogicalNode* n, db25::plan::LogicalOp op);
 [[nodiscard]] std::size_t count_subqueries(const db25::plan::LogicalNode* n);
+
+// ---------------------------------------------------------------------------
+// Stage-artifact predicates (for the conformance suite). These read the
+// per-stage fingerprints captured on Stages so a test can assert that a SQL
+// feature (a) was parsed, (b) produced / avoided a given analyzer diagnostic,
+// and (c) propagated to the expected LogicalOp - i.e. its EFFECT survived into
+// each subsequent artifact, not just that the query ran.
+// ---------------------------------------------------------------------------
+[[nodiscard]] bool ast_has(const Stages& s, db25::ast::NodeType kind);
+[[nodiscard]] bool has_diagnostic(const Stages& s, db25::semantic::DiagnosticCode code);
+[[nodiscard]] std::size_t error_count(const Stages& s);
 
 // ---------------------------------------------------------------------------
 // Shared default schema + data (rich enough for pessimistic tests).
