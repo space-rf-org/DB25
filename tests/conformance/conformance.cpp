@@ -167,6 +167,36 @@ static void register_conformance_tests() {
         }
     });
 
+    // ---- CTEs and derived/CTE self-joins, end to end. Guards two binder fixes:
+    //   (1) a FROM reference to a WITH name binds the CTE body as a derived table
+    //       (previously every WITH query failed to bind); (2) two references to
+    //       the same CTE / two derived tables over the same body stay
+    //       distinguishable, so a self-join predicate resolves to distinct slots
+    //       instead of collapsing to a cross product. users age>20 = {1,4,5}.
+    //   Killed by M2 (the age>20 filter is what makes each result {1,4,5}; ignore
+    //   it and every row returns).
+    test("conformance.cte_and_selfjoin", [] {
+        // Single CTE reference.
+        auto s1 = conform("WITH t AS (SELECT id FROM users WHERE age > 20) SELECT id FROM t");
+        check(ast_has(s1, NT::CTEClause) || ast_has(s1, NT::WithClause), "AST has WITH");
+        if (auto r = eval(s1.optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)},{vi(4)},{vi(5)}}), "CTE filter -> {1,4,5}");
+
+        // Self-join of two references to the SAME CTE (was a cross product).
+        auto s2 = conform("WITH t AS (SELECT id FROM users WHERE age > 20) "
+                          "SELECT x.id FROM t x JOIN t y ON x.id = y.id");
+        if (auto r = eval(s2.optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)},{vi(4)},{vi(5)}}),
+                  "CTE self-join stays 3 rows (not a 9-row cross product)");
+
+        // Self-join of two derived tables over the same body (same fix).
+        auto s3 = conform("SELECT p.id FROM (SELECT id FROM users WHERE age > 20) p "
+                          "JOIN (SELECT id FROM users WHERE age > 20) q ON p.id = q.id");
+        if (auto r = eval(s3.optimized, data()))
+            check(bag_equal(*r, Table{{vi(1)},{vi(4)},{vi(5)}}),
+                  "derived-table self-join stays 3 rows (not a cross product)");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the
