@@ -197,6 +197,32 @@ static void register_conformance_tests() {
                   "derived-table self-join stays 3 rows (not a cross product)");
     });
 
+    // ---- INTERSECT ALL / EXCEPT ALL (multiset set operations). Previously the
+    //   binder dropped the ALL keyword for intersect/except, silently collapsing
+    //   them to the de-duplicating forms. Now they carry through to the plan and
+    //   preserve duplicate rows. `WHERE age IS NOT NULL` drops bob, so each side's
+    //   cities are {NYC,NYC,LA,NULL}. Killed by M2 (ignoring the filter changes
+    //   the multiset).
+    test("conformance.intersect_except_all", [] {
+        auto si = conform("SELECT city FROM users WHERE age IS NOT NULL "
+                          "INTERSECT ALL SELECT city FROM users WHERE age IS NOT NULL");
+        check(si.optimized_dump.find("INTERSECT ALL") != std::string::npos,
+              "plan carries INTERSECT ALL (not collapsed to INTERSECT)");
+        if (auto r = eval(si.optimized, data()))
+            check(bag_equal(*r, Table{ {vs("NYC")}, {vs("NYC")}, {vs("LA")}, {null()} }),
+                  "INTERSECT ALL keeps the duplicate NYC -> 4 rows (min multiplicity)");
+
+        // {NYC,NYC,LA,NULL} EXCEPT ALL {NYC} = {NYC,LA,NULL}: one NYC survives,
+        // whereas the de-duplicating EXCEPT would drop every NYC.
+        auto se = conform("SELECT city FROM users WHERE age IS NOT NULL "
+                          "EXCEPT ALL SELECT city FROM users WHERE id = 1");
+        check(se.optimized_dump.find("EXCEPT ALL") != std::string::npos,
+              "plan carries EXCEPT ALL (not collapsed to EXCEPT)");
+        if (auto r = eval(se.optimized, data()))
+            check(bag_equal(*r, Table{ {vs("NYC")}, {vs("LA")}, {null()} }),
+                  "EXCEPT ALL cancels one NYC -> {NYC,LA,NULL} (3 rows)");
+    });
+
     // ---- FEATURE MANIFEST. One row per supported feature: assert its AST node,
     //   a clean analyze, its LogicalOp (when it maps to one), AND its exact
     //   result. The result anchors keep this test falsifiable (M2/M4/... kill the

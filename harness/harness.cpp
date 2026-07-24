@@ -951,6 +951,20 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
                 return false;
             };
             auto push_distinct = [&](const Row& r) { if (!row_in(r, out)) out.push_back(r); };
+            // Remove ONE row of `t` equal to `r` (multiset take); report success.
+            // Used by the ALL variants to consume matched duplicates so the output
+            // multiplicity is min(count_a, count_b) for INTERSECT ALL and
+            // max(0, count_a - count_b) for EXCEPT ALL.
+            auto take_one = [](const Row& r, Table& t) -> bool {
+                for (std::size_t i = 0; i < t.size(); ++i) {
+                    if (t[i].size() != r.size()) continue;
+                    bool same = true;
+                    for (std::size_t k = 0; k < r.size(); ++k)
+                        if (!value_identical(t[i][k], r[k])) { same = false; break; }
+                    if (same) { t.erase(t.begin() + static_cast<std::ptrdiff_t>(i)); return true; }
+                }
+                return false;
+            };
             switch (n->set_op) {
                 case db25::ast::SetOp::UnionAll:
                     out = std::move(a);
@@ -963,9 +977,19 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
                 case db25::ast::SetOp::Intersect:
                     for (const Row& r : a) if (row_in(r, b)) push_distinct(r);
                     return true;
+                case db25::ast::SetOp::IntersectAll: {
+                    Table brem = b;  // consume matches so multiplicity is min(a,b)
+                    for (const Row& r : a) if (take_one(r, brem)) out.push_back(r);
+                    return true;
+                }
                 case db25::ast::SetOp::Except:
                     for (const Row& r : a) if (!row_in(r, b)) push_distinct(r);
                     return true;
+                case db25::ast::SetOp::ExceptAll: {
+                    Table brem = b;  // each b row cancels one a row: max(0, a - b)
+                    for (const Row& r : a) if (!take_one(r, brem)) out.push_back(r);
+                    return true;
+                }
             }
             ctx.ok = false;
             return false;
