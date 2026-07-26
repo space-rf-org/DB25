@@ -936,7 +936,7 @@ Project (#1:Text, #4:Text) [name:Text?, name:Text?]
 
 ---
 
-## 22. Query: derived table column-alias list — the AST captures ColumnList[dept,hi] (parse fix), but analyze does not yet apply the aliases, so s.hi is unresolved (a documented follow-up)
+## 22. Query: derived table column-alias list — end to end: the alias list renames the derived output columns, and s.hi (an aliased COMPUTED column, MAX) resolves and plans through the rename
 
 ```sql
 SELECT s.hi FROM (SELECT dept_id, MAX(salary) FROM emp GROUP BY dept_id) AS s(dept, hi)
@@ -966,13 +966,29 @@ SelectStmt
 
 **analyze → diagnostics**
 
-- error: unresolved column 's.hi'
+_clean (no diagnostics)_
 
-**logical plan** → not produced (unresolved column reference 's.hi')
+**bind → logical plan**
+
+```
+Project (#1:Double) [hi:Double?]
+  Project (#0:Integer, #1:Double) [dept:Integer?, hi:Double?]
+    Aggregate group=(#2:Integer) aggs=(MAX(#3:Double):Double) [dept_id:Integer?, MAX:Double?]
+      Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#0:Double) [hi:Double?]
+  Project (#1:Double) [hi:Double?]
+    Aggregate group=(#0:Integer) aggs=(MAX(#1:Double):Double) [dept_id:Integer?, MAX:Double?]
+      Scan emp [dept_id:Integer?, salary:Double?]
+```
 
 ---
 
-## 23. Query: VALUES derived table — the AST is Subquery->ValuesStmt (parse fix), but analyze does not yet bind VALUES columns, so v.label / v.id are unresolved (a documented follow-up)
+## 23. Query: VALUES derived table — end to end: (VALUES ...) AS v(id, label) lowers to a Values node whose columns are named by the alias list and typed, so v.id / v.label resolve and plan
 
 ```sql
 SELECT v.label FROM (VALUES (1, 'eng'), (2, 'sales')) AS v(id, label) WHERE v.id = 1
@@ -1005,10 +1021,23 @@ SelectStmt
 
 **analyze → diagnostics**
 
-- error: unresolved column 'v.label'
-- error: unresolved column 'v.id'
+_clean (no diagnostics)_
 
-**logical plan** → not produced (derived table without a query body)
+**bind → logical plan**
+
+```
+Project (#1:Text) [label:Text?]
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer?, label:Text?]
+    Values rows=2 (1:Integer, 'eng':Text) (2:Unknown, 'sales':Unknown) [id:Integer?, label:Text?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#1:Text) [label:Text?]
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer?, label:Text?]
+    Values rows=2 (1:Integer, 'eng':Text) (2:Unknown, 'sales':Unknown) [id:Integer?, label:Text?]
+```
 
 ---
 

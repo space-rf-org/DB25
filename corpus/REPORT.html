@@ -423,25 +423,43 @@ ul.ast>li{padding-left:.2rem}ul.ast>li::before{display:none}
     Scan emp AS b [id:Integer, name:Text?, dept_id:Integer?]
 </pre>
 </div></section>
-<section class="stmt"><h2><span class="num">22</span>Query: derived table column-alias list — the AST captures ColumnList[dept,hi] (parse fix), but analyze does not yet apply the aliases, so s.hi is unresolved (a documented follow-up)</h2>
+<section class="stmt"><h2><span class="num">22</span>Query: derived table column-alias list — end to end: the alias list renames the derived output columns, and s.hi (an aliased COMPUTED column, MAX) resolves and plans through the rename</h2>
 <pre class="sql">SELECT s.hi FROM (SELECT dept_id, MAX(salary) FROM emp GROUP BY dept_id) AS s(dept, hi)</pre>
 <div class="body">
 <div class="stage">parse → AST</div>
 <ul class="ast"><li><span class="node"><span class="nt">SelectStmt</span></span><ul><li><span class="node"><span class="nt">SelectList</span></span><ul><li><span class="node"><span class="nt">ColumnRef</span><span class="ntext">s.hi</span></span></li></ul></li><li><span class="node"><span class="nt">FromClause</span></span><ul><li><span class="node"><span class="nt">Subquery</span><span class="nalias">s</span></span><ul><li><span class="node"><span class="nt">SelectStmt</span></span><ul><li><span class="node"><span class="nt">SelectList</span></span><ul><li><span class="node"><span class="nt">ColumnRef</span><span class="ntext">dept_id</span></span></li><li><span class="node"><span class="nt">FunctionCall</span><span class="ntext">MAX</span></span><ul><li><span class="node"><span class="nt">Identifier</span><span class="ntext">salary</span></span></li></ul></li></ul></li><li><span class="node"><span class="nt">FromClause</span></span><ul><li><span class="node"><span class="nt">TableRef</span><span class="ntext">emp</span></span></li></ul></li><li><span class="node"><span class="nt">GroupByClause</span></span><ul><li><span class="node"><span class="nt">ColumnRef</span><span class="ntext">dept_id</span></span></li></ul></li></ul></li><li><span class="node"><span class="nt">ColumnList</span></span><ul><li><span class="node"><span class="nt">Identifier</span><span class="ntext">dept</span></span></li><li><span class="node"><span class="nt">Identifier</span><span class="ntext">hi</span></span></li></ul></li></ul></li></ul></li></ul></li></ul>
 <div class="stage">analyze → diagnostics</div>
-<ul class="diag"><li class="err">error: unresolved column 's.hi'</li></ul>
-<div class="stage">logical plan</div>
-<p class="note">not produced (unresolved column reference 's.hi')</p>
+<p class="ok">clean (no diagnostics)</p>
+<div class="stage">bind → logical plan</div>
+<pre class="art">Project (#1:Double) [hi:Double?]
+  Project (#0:Integer, #1:Double) [dept:Integer?, hi:Double?]
+    Aggregate group=(#2:Integer) aggs=(MAX(#3:Double):Double) [dept_id:Integer?, MAX:Double?]
+      Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+</pre>
+<div class="stage">optimize → logical plan</div>
+<pre class="art">Project (#0:Double) [hi:Double?]
+  Project (#1:Double) [hi:Double?]
+    Aggregate group=(#0:Integer) aggs=(MAX(#1:Double):Double) [dept_id:Integer?, MAX:Double?]
+      Scan emp [dept_id:Integer?, salary:Double?]
+</pre>
 </div></section>
-<section class="stmt"><h2><span class="num">23</span>Query: VALUES derived table — the AST is Subquery-&gt;ValuesStmt (parse fix), but analyze does not yet bind VALUES columns, so v.label / v.id are unresolved (a documented follow-up)</h2>
+<section class="stmt"><h2><span class="num">23</span>Query: VALUES derived table — end to end: (VALUES ...) AS v(id, label) lowers to a Values node whose columns are named by the alias list and typed, so v.id / v.label resolve and plan</h2>
 <pre class="sql">SELECT v.label FROM (VALUES (1, 'eng'), (2, 'sales')) AS v(id, label) WHERE v.id = 1</pre>
 <div class="body">
 <div class="stage">parse → AST</div>
 <ul class="ast"><li><span class="node"><span class="nt">SelectStmt</span></span><ul><li><span class="node"><span class="nt">SelectList</span></span><ul><li><span class="node"><span class="nt">ColumnRef</span><span class="ntext">v.label</span></span></li></ul></li><li><span class="node"><span class="nt">FromClause</span></span><ul><li><span class="node"><span class="nt">Subquery</span><span class="nalias">v</span></span><ul><li><span class="node"><span class="nt">ValuesStmt</span></span><ul><li><span class="node"><span class="nt">ValuesClause</span></span><ul><li><span class="node"><span class="nt">ColumnList</span></span><ul><li><span class="node"><span class="nt">IntegerLiteral</span><span class="ntext">1</span></span></li><li><span class="node"><span class="nt">StringLiteral</span><span class="ntext">'eng'</span></span></li></ul></li><li><span class="node"><span class="nt">ColumnList</span></span><ul><li><span class="node"><span class="nt">IntegerLiteral</span><span class="ntext">2</span></span></li><li><span class="node"><span class="nt">StringLiteral</span><span class="ntext">'sales'</span></span></li></ul></li></ul></li></ul></li><li><span class="node"><span class="nt">ColumnList</span></span><ul><li><span class="node"><span class="nt">Identifier</span><span class="ntext">id</span></span></li><li><span class="node"><span class="nt">Identifier</span><span class="ntext">label</span></span></li></ul></li></ul></li></ul></li><li><span class="node"><span class="nt">WhereClause</span></span><ul><li><span class="node"><span class="nt">BinaryExpr</span><span class="ntext">=</span></span><ul><li><span class="node"><span class="nt">ColumnRef</span><span class="ntext">v.id</span></span></li><li><span class="node"><span class="nt">IntegerLiteral</span><span class="ntext">1</span></span></li></ul></li></ul></li></ul></li></ul>
 <div class="stage">analyze → diagnostics</div>
-<ul class="diag"><li class="err">error: unresolved column 'v.label'</li><li class="err">error: unresolved column 'v.id'</li></ul>
-<div class="stage">logical plan</div>
-<p class="note">not produced (derived table without a query body)</p>
+<p class="ok">clean (no diagnostics)</p>
+<div class="stage">bind → logical plan</div>
+<pre class="art">Project (#1:Text) [label:Text?]
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer?, label:Text?]
+    Values rows=2 (1:Integer, 'eng':Text) (2:Unknown, 'sales':Unknown) [id:Integer?, label:Text?]
+</pre>
+<div class="stage">optimize → logical plan</div>
+<pre class="art">Project (#1:Text) [label:Text?]
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer?, label:Text?]
+    Values rows=2 (1:Integer, 'eng':Text) (2:Unknown, 'sales':Unknown) [id:Integer?, label:Text?]
+</pre>
 </div></section>
 <section class="stmt"><h2><span class="num">24</span>Query: EXCEPT set operation</h2>
 <pre class="sql">SELECT id FROM dept EXCEPT SELECT dept_id FROM emp</pre>

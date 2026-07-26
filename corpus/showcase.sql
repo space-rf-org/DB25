@@ -40,9 +40,9 @@ SELECT name, CASE WHEN salary > 100 THEN 'high' ELSE 'low' END FROM emp;
 SELECT d.name, e.name FROM dept d LEFT JOIN emp e ON e.dept_id = d.id;
 -- Query: self-join (same table twice under different aliases)
 SELECT a.name, b.name FROM emp a JOIN emp b ON a.dept_id = b.dept_id AND a.id <> b.id;
--- Query: derived table column-alias list — the AST captures ColumnList[dept,hi] (parse fix), but analyze does not yet apply the aliases, so s.hi is unresolved (a documented follow-up)
+-- Query: derived table column-alias list — end to end: the alias list renames the derived output columns, and s.hi (an aliased COMPUTED column, MAX) resolves and plans through the rename
 SELECT s.hi FROM (SELECT dept_id, MAX(salary) FROM emp GROUP BY dept_id) AS s(dept, hi);
--- Query: VALUES derived table — the AST is Subquery->ValuesStmt (parse fix), but analyze does not yet bind VALUES columns, so v.label / v.id are unresolved (a documented follow-up)
+-- Query: VALUES derived table — end to end: (VALUES ...) AS v(id, label) lowers to a Values node whose columns are named by the alias list and typed, so v.id / v.label resolve and plan
 SELECT v.label FROM (VALUES (1, 'eng'), (2, 'sales')) AS v(id, label) WHERE v.id = 1;
 -- Query: EXCEPT set operation
 SELECT id FROM dept EXCEPT SELECT dept_id FROM emp;
