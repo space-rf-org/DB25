@@ -936,7 +936,7 @@ Project (#1:Text, #4:Text) [name:Text?, name:Text?]
 
 ---
 
-## 22. Query: derived table column-alias list — the AST captures ColumnList[dept,hi] (parse fix), but analyze does not yet apply the aliases, so s.hi is unresolved (a documented follow-up)
+## 22. Query: derived table column-alias list — analyze now applies the aliases and resolves s.hi (clean); the binder does not yet map an aliased computed column to a plan slot, so no plan is produced (binder follow-up)
 
 ```sql
 SELECT s.hi FROM (SELECT dept_id, MAX(salary) FROM emp GROUP BY dept_id) AS s(dept, hi)
@@ -966,13 +966,13 @@ SelectStmt
 
 **analyze → diagnostics**
 
-- error: unresolved column 's.hi'
+_clean (no diagnostics)_
 
 **logical plan** → not produced (unresolved column reference 's.hi')
 
 ---
 
-## 23. Query: VALUES derived table — the AST is Subquery->ValuesStmt (parse fix), but analyze does not yet bind VALUES columns, so v.label / v.id are unresolved (a documented follow-up)
+## 23. Query: VALUES derived table — analyze now types and names the columns and resolves v.id / v.label (clean); the binder does not yet build a plan node for a VALUES derived table (binder follow-up)
 
 ```sql
 SELECT v.label FROM (VALUES (1, 'eng'), (2, 'sales')) AS v(id, label) WHERE v.id = 1
@@ -1005,8 +1005,7 @@ SelectStmt
 
 **analyze → diagnostics**
 
-- error: unresolved column 'v.label'
-- error: unresolved column 'v.id'
+_clean (no diagnostics)_
 
 **logical plan** → not produced (derived table without a query body)
 
