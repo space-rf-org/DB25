@@ -36,5 +36,29 @@ SELECT id FROM dept UNION SELECT dept_id FROM emp;
 SELECT id FROM dept INTERSECT SELECT dept_id FROM emp;
 -- Query: CASE expression
 SELECT name, CASE WHEN salary > 100 THEN 'high' ELSE 'low' END FROM emp;
+-- Query: LEFT JOIN (outer join nullability shows in the plan schema)
+SELECT d.name, e.name FROM dept d LEFT JOIN emp e ON e.dept_id = d.id;
+-- Query: self-join (same table twice under different aliases)
+SELECT a.name, b.name FROM emp a JOIN emp b ON a.dept_id = b.dept_id AND a.id <> b.id;
+-- Query: derived table column-alias list — the AST captures ColumnList[dept,hi] (parse fix), but analyze does not yet apply the aliases, so s.hi is unresolved (a documented follow-up)
+SELECT s.hi FROM (SELECT dept_id, MAX(salary) FROM emp GROUP BY dept_id) AS s(dept, hi);
+-- Query: VALUES derived table — the AST is Subquery->ValuesStmt (parse fix), but analyze does not yet bind VALUES columns, so v.label / v.id are unresolved (a documented follow-up)
+SELECT v.label FROM (VALUES (1, 'eng'), (2, 'sales')) AS v(id, label) WHERE v.id = 1;
+-- Query: EXCEPT set operation
+SELECT id FROM dept EXCEPT SELECT dept_id FROM emp;
+-- Query: DISTINCT projection
+SELECT DISTINCT dept_id FROM emp;
+-- Query: ORDER BY with LIMIT and OFFSET
+SELECT name, salary FROM emp ORDER BY salary DESC LIMIT 5 OFFSET 2;
+-- Query: BETWEEN, IN-list and LIKE predicates together
+SELECT name FROM emp WHERE salary BETWEEN 50 AND 500 AND dept_id IN (1, 2) AND name LIKE 'a%';
+-- Query: CAST and COALESCE / NULLIF scalar functions
+SELECT CAST(salary AS INTEGER), COALESCE(name, 'n/a'), NULLIF(dept_id, 0) FROM emp;
+-- Query: two chained CTEs, the second referencing the first
+WITH per_dept AS (SELECT dept_id, COUNT(*) AS n FROM emp GROUP BY dept_id), busy AS (SELECT dept_id FROM per_dept WHERE n > 1) SELECT dept_id FROM busy;
+-- Query: INSERT ... SELECT (row source is a query, arity checked against the target)
+INSERT INTO dept (id, name) SELECT dept_id, 'dup' FROM emp WHERE dept_id IS NOT NULL;
+-- DML: UPDATE whose SET value violates the CHECK (salary = -1 vs CHECK salary >= 0)
+UPDATE emp SET salary = -1 WHERE id = 1;
 -- Query: a deliberate error — an unresolved column, to show the analyze stage catching it
 SELECT nonexistent_column FROM emp;

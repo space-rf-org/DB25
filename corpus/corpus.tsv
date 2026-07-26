@@ -279,3 +279,48 @@ in1	ok	query	accept	clean	SELECT null IN (SELECT * FROM t8)
 in1	ok	query	accept	clean	SELECT null NOT IN (SELECT * FROM t8)
 in1	ok	query	accept	clean	SELECT null IN (SELECT * FROM t8n)
 in1	ok	query	accept	clean	SELECT null NOT IN (SELECT * FROM t8n)
+pg_case	ok	ddl	accept	exec_ok	CREATE TABLE CASE_TBL ( i integer, f double precision )
+pg_case	ok	ddl	accept	exec_ok	CREATE TABLE CASE2_TBL ( i integer, j integer )
+pg_case	ok	dml	accept	clean	INSERT INTO CASE_TBL VALUES (1, 10.1)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE_TBL VALUES (2, 20.2)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE_TBL VALUES (3, -30.3)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE_TBL VALUES (4, NULL)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE2_TBL VALUES (1, -1)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE2_TBL VALUES (2, -2)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE2_TBL VALUES (3, -3)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE2_TBL VALUES (2, -4)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE2_TBL VALUES (1, NULL)
+pg_case	ok	dml	accept	clean	INSERT INTO CASE2_TBL VALUES (NULL, -6)
+pg_case	ok	query	accept	clean	SELECT '3' AS "One", CASE WHEN 1 < 2 THEN 3 END AS "Simple WHEN"
+pg_case	ok	query	accept	clean	SELECT '<NULL>' AS "One", CASE WHEN 1 > 2 THEN 3 END AS "Simple default"
+pg_case	ok	query	accept	clean	SELECT '3' AS "One", CASE WHEN 1 < 2 THEN 3 ELSE 4 END AS "Simple ELSE"
+pg_case	ok	query	accept	clean	SELECT '4' AS "One", CASE WHEN 1 > 2 THEN 3 ELSE 4 END AS "ELSE default"
+pg_case	ok	query	accept	clean	SELECT '6' AS "One", CASE WHEN 1 > 2 THEN 3 WHEN 4 < 5 THEN 6 ELSE 7 END AS "Two WHEN with default"
+pg_case	ok	query	accept	clean	SELECT '7' AS "None", CASE WHEN random() < 0 THEN 1 END AS "NULL on no matches"
+pg_case	ok	query	accept	clean	SELECT CASE WHEN 1=0 THEN 1/0 WHEN 1=1 THEN 1 ELSE 2/0 END
+pg_case	ok	query	accept	clean	SELECT CASE 1 WHEN 0 THEN 1/0 WHEN 1 THEN 1 ELSE 2/0 END
+pg_case	ok	query	accept	diag	SELECT CASE WHEN i > 100 THEN 1/0 ELSE 0 END FROM case_tbl
+pg_case	ok	query	accept	clean	SELECT CASE 'a' WHEN 'a' THEN 1 ELSE 2 END
+pg_case	ok	query	accept	clean	SELECT CASE WHEN i >= 3 THEN i END AS ">= 3 or Null" FROM CASE_TBL
+pg_case	ok	query	accept	clean	SELECT CASE WHEN i >= 3 THEN (i + i) ELSE i END AS "Simplest Math" FROM CASE_TBL
+pg_case	ok	query	accept	clean	SELECT i AS "Value", CASE WHEN (i < 0) THEN 'small' WHEN (i = 0) THEN 'zero' WHEN (i = 1) THEN 'one' WHEN (i = 2) THEN 'two' ELSE 'big' END AS "Category" FROM CASE_TBL
+pg_case	ok	query	accept	clean	SELECT CASE WHEN ((i < 0) or (i < 0)) THEN 'small' WHEN ((i = 0) or (i = 0)) THEN 'zero' WHEN ((i = 1) or (i = 1)) THEN 'one' WHEN ((i = 2) or (i = 2)) THEN 'two' ELSE 'big' END AS "Category" FROM CASE_TBL
+pg_case	ok	query	accept	clean	SELECT * FROM CASE_TBL WHERE COALESCE(f,i) = 4
+pg_case	ok	query	accept	clean	SELECT * FROM CASE_TBL WHERE NULLIF(f,i) = 2
+pg_case	ok	query	accept	clean	SELECT COALESCE(a.f, b.i, b.j) FROM CASE_TBL a, CASE2_TBL b
+pg_case	ok	query	accept	clean	SELECT * FROM CASE_TBL a, CASE2_TBL b WHERE COALESCE(a.f, b.i, b.j) = 2
+pg_case	ok	query	accept	clean	SELECT NULLIF(a.i,b.i) AS "NULLIF(a.i,b.i)", NULLIF(b.i, 4) AS "NULLIF(b.i,4)" FROM CASE_TBL a, CASE2_TBL b
+pg_case	ok	query	accept	clean	SELECT * FROM CASE_TBL a, CASE2_TBL b WHERE COALESCE(f,b.i) = 2
+pg_case	ok	dml	accept	clean	UPDATE CASE_TBL SET i = CASE WHEN i >= 3 THEN (- i) ELSE (2 * i) END
+pg_case	ok	query	accept	clean	SELECT * FROM CASE_TBL
+pg_case	ok	dml	accept	clean	UPDATE CASE_TBL SET i = CASE WHEN i >= 2 THEN (2 * i) ELSE (3 * i) END
+pg_case	ok	query	accept	clean	SELECT * FROM CASE_TBL
+pg_case	ok	dml	accept	clean	UPDATE CASE_TBL SET i = CASE WHEN b.i >= 2 THEN (2 * j) ELSE (3 * j) END FROM CASE2_TBL b WHERE j = -CASE_TBL.i
+pg_case	ok	query	accept	clean	SELECT * FROM CASE_TBL
+pg_case	ok	query	accept	clean	SELECT CASE (CASE vol('bar') WHEN 'foo' THEN 'it was foo!' WHEN vol(null) THEN 'null input' WHEN 'bar' THEN 'it was bar!' END ) WHEN 'it was foo!' THEN 'foo recognized' WHEN 'it was bar!' THEN 'bar recognized' ELSE 'unrecognized' END
+pg_case	ok	query	accept	clean	SELECT CASE volfoo('bar') WHEN 'foo'::foodomain THEN 'is foo' ELSE 'is not foo' END
+pg_case	ok	query	accept	clean	SELECT CASE make_ad(1,2) WHEN array[2,4]::arrdomain THEN 'wrong' WHEN array[2,5]::arrdomain THEN 'still wrong' WHEN array[1,2]::arrdomain THEN 'right' END
+pg_case	ok	query	accept	clean	SELECT NULLIF(make_ad(1,2), array[2,3]::arrdomain)
+pg_case	ok	query	accept	clean	SELECT CASE 'foo'::text WHEN 'foo' THEN ARRAY['a', 'b', 'c', 'd'] || enum_range(NULL::casetestenum)::text[] ELSE ARRAY['x', 'y'] END
+pg_case	ok	ddl	accept	exec_ok	DROP TABLE CASE_TBL
+pg_case	ok	ddl	accept	exec_ok	DROP TABLE CASE2_TBL

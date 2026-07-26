@@ -1,25 +1,36 @@
 # Corpus coverage
 
-Sources (sqllogictest; SQLite = public domain, sqllogictest = MIT):
+Sources (see SOURCES.md for provenance + licensing):
 
-- `sample_select1.test.slt` -> session `select1` (<= 150 in-scope)
-- `sample_in1.test.slt` -> session `in1` (<= 400 in-scope)
+- `sample_select1.test.slt` (slt) -> session `select1` (<= 150 in-scope)
+- `sample_in1.test.slt` (slt) -> session `in1` (<= 400 in-scope)
+- `pg/case.sql` (pg) -> session `pg_case` (<= 400 in-scope)
 
-- records scanned: 366
-- in-scope (kept): 280
-- excluded: 86
+- records scanned: 430
+- in-scope (kept): 325
+- excluded: 105
 
 ## Exclusions by reason (no silent drops)
 
 - `engine-only:sqlite`: 82
+- `out-of-scope:create-function`: 5
+- `out-of-scope:explain`: 3
+- `out-of-scope:begin`: 3
+- `out-of-scope:rollback`: 3
 - `dialect:sqlite-blob-literal`: 2
 - `engine-only:mysql`: 2
+- `out-of-scope:create-domain`: 2
+- `out-of-scope:create-operator`: 2
+- `out-of-scope:create-type`: 1
 
-## In-scope by session / category
+## In-scope by session
 
 - select1: 150
 - in1: 130
+- pg_case: 45
 
-- query: 222
-- dml: 45
-- ddl: 13
+## In-scope by category
+
+- query: 250
+- dml: 58
+- ddl: 17
