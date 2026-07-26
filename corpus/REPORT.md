@@ -840,7 +840,563 @@ Project (#0:Text, CASE((#1:Double > 100:Integer):Boolean, 'high':Text, 'low':Tex
 
 ---
 
-## 20. Query: a deliberate error — an unresolved column, to show the analyze stage catching it
+## 20. Query: LEFT JOIN (outer join nullability shows in the plan schema)
+
+```sql
+SELECT d.name, e.name FROM dept d LEFT JOIN emp e ON e.dept_id = d.id
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'd.name'
+    ColumnRef 'e.name'
+  FromClause
+    TableRef 'dept' [d]
+    JoinClause 'LEFT JOIN'
+      TableRef 'emp' [e]
+      BinaryExpr '='
+        ColumnRef 'e.dept_id'
+        ColumnRef 'd.id'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Project (#1:Text, #3:Text) [name:Text, name:Text?]
+  Join (LEFT) ON (#4:Integer = #0:Integer):Boolean [id:Integer, name:Text, id:Integer?, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+    Scan dept AS d [id:Integer, name:Text]
+    Scan emp AS e [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#1:Text, #2:Text) [name:Text, name:Text?]
+  Join (LEFT) ON (#3:Integer = #0:Integer):Boolean [id:Integer, name:Text, name:Text?, dept_id:Integer?]
+    Scan dept AS d [id:Integer, name:Text]
+    Scan emp AS e [name:Text?, dept_id:Integer?]
+```
+
+---
+
+## 21. Query: self-join (same table twice under different aliases)
+
+```sql
+SELECT a.name, b.name FROM emp a JOIN emp b ON a.dept_id = b.dept_id AND a.id <> b.id
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'a.name'
+    ColumnRef 'b.name'
+  FromClause
+    TableRef 'emp' [a]
+    JoinClause 'JOIN'
+      TableRef 'emp' [b]
+      BinaryExpr 'AND'
+        BinaryExpr '='
+          ColumnRef 'a.dept_id'
+          ColumnRef 'b.dept_id'
+        BinaryExpr '<>'
+          ColumnRef 'a.id'
+          ColumnRef 'b.id'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Project (#1:Text, #6:Text) [name:Text?, name:Text?]
+  Join (INNER) ON ((#2:Integer = #7:Integer):Boolean AND (#0:Integer != #5:Integer):Boolean):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?, id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+    Scan emp AS a [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+    Scan emp AS b [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#1:Text, #4:Text) [name:Text?, name:Text?]
+  Join (INNER) ON ((#2:Integer = #5:Integer):Boolean AND (#0:Integer != #3:Integer):Boolean):Boolean [id:Integer, name:Text?, dept_id:Integer?, id:Integer, name:Text?, dept_id:Integer?]
+    Scan emp AS a [id:Integer, name:Text?, dept_id:Integer?]
+    Scan emp AS b [id:Integer, name:Text?, dept_id:Integer?]
+```
+
+---
+
+## 22. Query: derived table column-alias list — the AST captures ColumnList[dept,hi] (parse fix), but analyze does not yet apply the aliases, so s.hi is unresolved (a documented follow-up)
+
+```sql
+SELECT s.hi FROM (SELECT dept_id, MAX(salary) FROM emp GROUP BY dept_id) AS s(dept, hi)
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 's.hi'
+  FromClause
+    Subquery [s]
+      SelectStmt
+        SelectList
+          ColumnRef 'dept_id'
+          FunctionCall 'MAX'
+            Identifier 'salary'
+        FromClause
+          TableRef 'emp'
+        GroupByClause
+          ColumnRef 'dept_id'
+      ColumnList
+        Identifier 'dept'
+        Identifier 'hi'
+```
+
+**analyze → diagnostics**
+
+- error: unresolved column 's.hi'
+
+**logical plan** → not produced (unresolved column reference 's.hi')
+
+---
+
+## 23. Query: VALUES derived table — the AST is Subquery->ValuesStmt (parse fix), but analyze does not yet bind VALUES columns, so v.label / v.id are unresolved (a documented follow-up)
+
+```sql
+SELECT v.label FROM (VALUES (1, 'eng'), (2, 'sales')) AS v(id, label) WHERE v.id = 1
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'v.label'
+  FromClause
+    Subquery [v]
+      ValuesStmt
+        ValuesClause
+          ColumnList
+            IntegerLiteral '1'
+            StringLiteral ''eng''
+          ColumnList
+            IntegerLiteral '2'
+            StringLiteral ''sales''
+      ColumnList
+        Identifier 'id'
+        Identifier 'label'
+  WhereClause
+    BinaryExpr '='
+      ColumnRef 'v.id'
+      IntegerLiteral '1'
+```
+
+**analyze → diagnostics**
+
+- error: unresolved column 'v.label'
+- error: unresolved column 'v.id'
+
+**logical plan** → not produced (derived table without a query body)
+
+---
+
+## 24. Query: EXCEPT set operation
+
+```sql
+SELECT id FROM dept EXCEPT SELECT dept_id FROM emp
+```
+
+**parse → AST**
+
+```
+ExceptStmt 'EXCEPT'
+  SelectStmt
+    SelectList
+      ColumnRef 'id'
+    FromClause
+      TableRef 'dept'
+  SelectStmt
+    SelectList
+      ColumnRef 'dept_id'
+    FromClause
+      TableRef 'emp'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+SetOp (EXCEPT) [id:Integer?]
+  Project (#0:Integer) [id:Integer]
+    Scan dept [id:Integer, name:Text]
+  Project (#2:Integer) [dept_id:Integer?]
+    Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+SetOp (EXCEPT) [id:Integer?]
+  Project (#0:Integer) [id:Integer]
+    Scan dept [id:Integer, name:Text]
+  Project (#2:Integer) [dept_id:Integer?]
+    Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+---
+
+## 25. Query: DISTINCT projection
+
+```sql
+SELECT DISTINCT dept_id FROM emp
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'dept_id'
+  FromClause
+    TableRef 'emp'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Distinct [dept_id:Integer?]
+  Project (#2:Integer) [dept_id:Integer?]
+    Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Distinct [dept_id:Integer?]
+  Project (#0:Integer) [dept_id:Integer?]
+    Scan emp [dept_id:Integer?]
+```
+
+---
+
+## 26. Query: ORDER BY with LIMIT and OFFSET
+
+```sql
+SELECT name, salary FROM emp ORDER BY salary DESC LIMIT 5 OFFSET 2
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'name'
+    ColumnRef 'salary'
+  FromClause
+    TableRef 'emp'
+  OrderByClause
+    ColumnRef 'salary'
+  LimitClause
+    IntegerLiteral '5'
+    IntegerLiteral '2'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Limit limit=5 offset=2 [name:Text?, salary:Double?]
+  Sort keys=(#1:Double DESC) [name:Text?, salary:Double?]
+    Project (#1:Text, #3:Double) [name:Text?, salary:Double?]
+      Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Limit limit=5 offset=2 [name:Text?, salary:Double?]
+  Sort keys=(#1:Double DESC) [name:Text?, salary:Double?]
+    Project (#0:Text, #1:Double) [name:Text?, salary:Double?]
+      Scan emp [name:Text?, salary:Double?]
+```
+
+---
+
+## 27. Query: BETWEEN, IN-list and LIKE predicates together
+
+```sql
+SELECT name FROM emp WHERE salary BETWEEN 50 AND 500 AND dept_id IN (1, 2) AND name LIKE 'a%'
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'name'
+  FromClause
+    TableRef 'emp'
+  WhereClause
+    BinaryExpr 'AND'
+      BinaryExpr 'AND'
+        BetweenExpr 'BETWEEN'
+          ColumnRef 'salary'
+          IntegerLiteral '50'
+          IntegerLiteral '500'
+        InExpr 'IN'
+          ColumnRef 'dept_id'
+          IntegerLiteral '1'
+          IntegerLiteral '2'
+      LikeExpr 'LIKE'
+        ColumnRef 'name'
+        StringLiteral ''a%''
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Project (#1:Text) [name:Text?]
+  Filter (((#3:Double BETWEEN 50:Integer AND 500:Integer):Boolean AND (#2:Integer IN [1:Integer, 2:Integer]):Boolean):Boolean AND (#1:Text LIKE 'a%':Text):Boolean):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+    Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#0:Text) [name:Text?]
+  Filter (((#2:Double BETWEEN 50:Integer AND 500:Integer):Boolean AND (#1:Integer IN [1:Integer, 2:Integer]):Boolean):Boolean AND (#0:Text LIKE 'a%':Text):Boolean):Boolean [name:Text?, dept_id:Integer?, salary:Double?]
+    Scan emp [name:Text?, dept_id:Integer?, salary:Double?]
+```
+
+---
+
+## 28. Query: CAST and COALESCE / NULLIF scalar functions
+
+```sql
+SELECT CAST(salary AS INTEGER), COALESCE(name, 'n/a'), NULLIF(dept_id, 0) FROM emp
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    CastExpr 'CAST'
+      ColumnRef 'salary'
+      Identifier 'INTEGER'
+    FunctionCall 'COALESCE'
+      Identifier 'name'
+      StringLiteral ''n/a''
+    FunctionCall 'NULLIF'
+      Identifier 'dept_id'
+      IntegerLiteral '0'
+  FromClause
+    TableRef 'emp'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Project (CAST(#3:Double AS Integer), COALESCE(#1:Text, 'n/a':Text):Text, NULLIF(#2:Integer, 0:Integer):Integer) [CAST:Integer?, COALESCE:Text, NULLIF:Integer?]
+  Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (CAST(#2:Double AS Integer), COALESCE(#0:Text, 'n/a':Text):Text, NULLIF(#1:Integer, 0:Integer):Integer) [CAST:Integer?, COALESCE:Text, NULLIF:Integer?]
+  Scan emp [name:Text?, dept_id:Integer?, salary:Double?]
+```
+
+---
+
+## 29. Query: two chained CTEs, the second referencing the first
+
+```sql
+WITH per_dept AS (SELECT dept_id, COUNT(*) AS n FROM emp GROUP BY dept_id), busy AS (SELECT dept_id FROM per_dept WHERE n > 1) SELECT dept_id FROM busy
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  CTEClause
+    CTEDefinition 'per_dept'
+      SelectStmt
+        SelectList
+          ColumnRef 'dept_id'
+          FunctionCall 'COUNT' [n]
+            Star
+        FromClause
+          TableRef 'emp'
+        GroupByClause
+          ColumnRef 'dept_id'
+    CTEDefinition 'busy'
+      SelectStmt
+        SelectList
+          ColumnRef 'dept_id'
+        FromClause
+          TableRef 'per_dept'
+        WhereClause
+          BinaryExpr '>'
+            ColumnRef 'n'
+            IntegerLiteral '1'
+  SelectList
+    ColumnRef 'dept_id'
+  FromClause
+    TableRef 'busy'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Project (#0:Integer) [dept_id:Integer?]
+  Project (#0:Integer) [dept_id:Integer?]
+    Filter (#1:BigInt > 1:Integer):Boolean [dept_id:Integer?, n:BigInt]
+      Project (#0:Integer, #1:BigInt) [dept_id:Integer?, n:BigInt]
+        Aggregate group=(#2:Integer) aggs=(COUNT():BigInt) [dept_id:Integer?, n:BigInt]
+          Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#0:Integer) [dept_id:Integer?]
+  Project (#0:Integer) [dept_id:Integer?]
+    Filter (#1:BigInt > 1:Integer):Boolean [dept_id:Integer?, n:BigInt]
+      Project (#0:Integer, #1:BigInt) [dept_id:Integer?, n:BigInt]
+        Aggregate group=(#0:Integer) aggs=(COUNT():BigInt) [dept_id:Integer?, n:BigInt]
+          Scan emp [dept_id:Integer?]
+```
+
+---
+
+## 30. Query: INSERT ... SELECT (row source is a query, arity checked against the target)
+
+```sql
+INSERT INTO dept (id, name) SELECT dept_id, 'dup' FROM emp WHERE dept_id IS NOT NULL
+```
+
+**parse → AST**
+
+```
+InsertStmt
+  TableRef 'dept'
+  ColumnList
+    Identifier 'id'
+    Identifier 'name'
+  SelectStmt
+    SelectList
+      ColumnRef 'dept_id'
+      StringLiteral ''dup''
+    FromClause
+      TableRef 'emp'
+    WhereClause
+      IsNullExpr 'IS NOT NULL'
+        ColumnRef 'dept_id'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Insert dept []
+  Project (#2:Integer, 'dup':Text) [dept_id:Integer?, 'dup':Text]
+    Filter (#2:Integer IS NOT NULL):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+      Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Insert dept []
+  Project (#2:Integer, 'dup':Text) [dept_id:Integer?, 'dup':Text]
+    Filter (#2:Integer IS NOT NULL):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+      Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+---
+
+## 31. DML: UPDATE whose SET value violates the CHECK (salary = -1 vs CHECK salary >= 0)
+
+```sql
+UPDATE emp SET salary = -1 WHERE id = 1
+```
+
+**parse → AST**
+
+```
+UpdateStmt
+  TableRef 'emp'
+  SetClause
+    BinaryExpr 'salary'
+      IntegerLiteral '-1'
+  WhereClause
+    BinaryExpr '='
+      ColumnRef 'id'
+      IntegerLiteral '1'
+```
+
+**analyze → diagnostics**
+
+- error: row violates CHECK constraint 'ck_sal' (salary >= 0) on 'emp'
+
+**bind → logical plan**
+
+```
+Update emp set=(col#4 := -1:Integer) []
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+    Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Update emp set=(col#4 := -1:Integer) []
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+    Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+---
+
+## 32. Query: a deliberate error — an unresolved column, to show the analyze stage catching it
 
 ```sql
 SELECT nonexistent_column FROM emp

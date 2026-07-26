@@ -10,6 +10,25 @@ the corpus is reproducible.
 |---------|---------------|---------|---------|
 | `select1` | `test/select1.test` | sqllogictest (`gregrahn/sqllogictest`, mirror of the original SQLite suite) | Public Domain (SQLite) / MIT (sqllogictest harness) |
 | `in1` | `test/evidence/in1.test` | sqllogictest (`gregrahn/sqllogictest`) | Public Domain / MIT |
+| `pg_case` | `src/test/regress/sql/case.sql` | PostgreSQL (`postgres/postgres`) | PostgreSQL License (permissive) |
+
+PostgreSQL is DB25's canonical dialect anchor, so its regression SQL is the
+closest source to the canon and the natural one to grow (`select`, `join`,
+`aggregates`, … next). `case.sql` is self-contained (it creates its own tables)
+and standard — no dialect transforms were needed; only non-core statement kinds
+are excluded (see the harvest policy below).
+
+## Documented divergences
+
+The corpus is honest about where DB25 currently differs from the canon; the
+golden records the real behaviour rather than hiding it:
+
+- **`pg_case` — unquoted identifiers are case-sensitive.** `case.sql` writes both
+  `CASE_TBL` (in the CREATE) and `case_tbl` (in one query). SQL folds unquoted
+  identifiers to a single case, so both should name one table; DB25 matches them
+  case-sensitively, so the lowercase reference resolves as an unresolved table
+  (one `diag` row in the golden). A candidate follow-up fix, surfaced by this
+  corpus.
 
 ## Harvest policy (implemented in `generate.py`)
 
