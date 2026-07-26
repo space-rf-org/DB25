@@ -128,6 +128,10 @@ target_link_libraries(corpus_report PRIVATE db25logicalplan)
 target_compile_options(corpus_report PRIVATE -fno-exceptions -Wall -Wextra)
 add_test(NAME corpus_report
          COMMAND corpus_report ${CMAKE_CURRENT_SOURCE_DIR}/corpus/showcase.sql)
+# The HTML emitter (AST tree + stage artifacts) shares the same replay; run it
+# too so its rendering path is exercised (a crash / UB fails under sanitizers).
+add_test(NAME corpus_report_html
+         COMMAND corpus_report --html ${CMAKE_CURRENT_SOURCE_DIR}/corpus/showcase.sql)
 
 # Tutorial examples (docs/tutorial.md): runnable end-to-end walkthroughs.
 add_subdirectory(examples)
