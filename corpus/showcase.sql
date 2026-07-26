@@ -1,0 +1,40 @@
+-- DDL: create the parent table with a primary key and a unique constraint
+CREATE TABLE dept (id INTEGER PRIMARY KEY, name TEXT NOT NULL, CONSTRAINT uq_name UNIQUE (name));
+-- DDL: create a child table with a NOT NULL column, a DEFAULT, a CHECK and a FK
+CREATE TABLE emp (id INTEGER NOT NULL, name TEXT, dept_id INTEGER, salary DOUBLE DEFAULT 0, CONSTRAINT ck_sal CHECK (salary >= 0), CONSTRAINT fk_dept FOREIGN KEY (dept_id) REFERENCES dept (id));
+-- DDL: secondary index
+CREATE INDEX ix_emp_dept ON emp (dept_id);
+-- DDL: ALTER TABLE add a column with a default
+ALTER TABLE emp ADD COLUMN active INTEGER DEFAULT 1;
+-- DML: a clean multi-row INSERT
+INSERT INTO dept (id, name) VALUES (1, 'eng'), (2, 'sales');
+-- DML: INSERT that violates the CHECK constraint (salary = -5)
+INSERT INTO emp (id, name, dept_id, salary) VALUES (1, 'ann', 1, -5);
+-- DML: UPDATE with a WHERE predicate
+UPDATE emp SET salary = salary * 1.1 WHERE dept_id = 1;
+-- DML: DELETE with a predicate
+DELETE FROM emp WHERE active = 0;
+-- Query: simple projection with a filter
+SELECT id, name FROM emp WHERE salary > 100;
+-- Query: inner join across the FK
+SELECT e.name, d.name FROM emp e JOIN dept d ON e.dept_id = d.id;
+-- Query: aggregation with GROUP BY and HAVING
+SELECT dept_id, COUNT(*), AVG(salary) FROM emp GROUP BY dept_id HAVING COUNT(*) > 1;
+-- Query: scalar subquery in the WHERE clause
+SELECT name FROM emp WHERE salary > (SELECT AVG(salary) FROM emp);
+-- Query: correlated EXISTS subquery
+SELECT d.name FROM dept d WHERE EXISTS (SELECT 1 FROM emp e WHERE e.dept_id = d.id);
+-- Query: IN subquery
+SELECT name FROM emp WHERE dept_id IN (SELECT id FROM dept WHERE name = 'eng');
+-- Query: common table expression (CTE)
+WITH big AS (SELECT dept_id FROM emp WHERE salary > 100) SELECT dept_id FROM big;
+-- Query: window function
+SELECT name, ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) FROM emp;
+-- Query: set operation (UNION)
+SELECT id FROM dept UNION SELECT dept_id FROM emp;
+-- Query: set operation (INTERSECT)
+SELECT id FROM dept INTERSECT SELECT dept_id FROM emp;
+-- Query: CASE expression
+SELECT name, CASE WHEN salary > 100 THEN 'high' ELSE 'low' END FROM emp;
+-- Query: a deliberate error — an unresolved column, to show the analyze stage catching it
+SELECT nonexistent_column FROM emp;

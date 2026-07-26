@@ -90,5 +90,44 @@ target_link_libraries(db25_integration PRIVATE db25logicalplan)
 target_compile_options(db25_integration PRIVATE -fno-exceptions -Wall -Wextra)
 add_test(NAME db25_integration COMMAND db25_integration)
 
+# ---------------------------------------------------------------------------
+# corpus_runner: replays a committed corpus of real SQL (harvested from
+# sqllogictest, dialect-corrected to DB25's Postgres-leaning canon; see
+# corpus/README.md) through the frontend. Two tiers: robustness (parse ->
+# analyze without crash/UB - the safety net under the sanitizer job) and
+# expectation (each statement's committed db25_parse / db25_analyze columns must
+# match what the frontend produces now, so behaviour cannot drift silently).
+# Statements replay per session so DDL builds the catalog later statements bind
+# against. Uses the same analyzer TUs as db25_integration.
+# ---------------------------------------------------------------------------
+add_executable(corpus_runner
+    integration/corpus_runner.cpp
+    ${ANALYZER_SRC_DIR}/ddl.cpp
+    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
+    ${ANALYZER_SRC_DIR}/check_eval.cpp
+    ${ANALYZER_SRC_DIR}/transaction.cpp)
+target_link_libraries(corpus_runner PRIVATE db25logicalplan)
+target_compile_options(corpus_runner PRIVATE -fno-exceptions -Wall -Wextra)
+add_test(NAME corpus_runner
+         COMMAND corpus_runner ${CMAKE_CURRENT_SOURCE_DIR}/corpus/corpus.tsv)
+
+# ---------------------------------------------------------------------------
+# corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown
+# report of the artifact each frontend stage produces per statement (AST,
+# diagnostics, catalog effect, logical + optimized plan) - see corpus/REPORT.md.
+# Run as a test it also exercises the full parse -> analyze -> bind -> optimize
+# chain on every showcase statement (a crash / UB fails under the sanitizer job).
+# ---------------------------------------------------------------------------
+add_executable(corpus_report
+    integration/corpus_report.cpp
+    ${ANALYZER_SRC_DIR}/ddl.cpp
+    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
+    ${ANALYZER_SRC_DIR}/check_eval.cpp
+    ${ANALYZER_SRC_DIR}/transaction.cpp)
+target_link_libraries(corpus_report PRIVATE db25logicalplan)
+target_compile_options(corpus_report PRIVATE -fno-exceptions -Wall -Wextra)
+add_test(NAME corpus_report
+         COMMAND corpus_report ${CMAKE_CURRENT_SOURCE_DIR}/corpus/showcase.sql)
+
 # Tutorial examples (docs/tutorial.md): runnable end-to-end walkthroughs.
 add_subdirectory(examples)
