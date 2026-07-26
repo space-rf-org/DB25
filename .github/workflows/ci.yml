@@ -1,7 +1,9 @@
 name: CI
 
 # Builds the full native stack (tokenizer -> parser + analyzer -> logical plan ->
-# harness) from the pinned submodules and runs the test suite AND the
+# harness) from the submodules floated to their current main (the committed
+# gitlinks stay pinned for reproducible local / release builds) and runs the
+# test suite AND the
 # falsifiability gate. The gate (db25_gate) is the load-bearing check: it fails
 # the build if any test is non-falsifiable (survives every mutant) or if a
 # mutant escapes, so a change that weakens the harness cannot merge silently.
@@ -25,6 +27,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Float submodules on main
+        # The committed gitlinks stay pinned (reproducible local / release builds),
+        # but CI exercises the suite + integration test against the CURRENT main of
+        # every component, so a parser / analyzer / logical-plan change is validated
+        # end to end without waiting for a pin bump - cross-repo drift surfaces here.
+        run: |
+          set -e
+          git submodule update --init --recursive
+          float() {
+            git -C "$1" fetch --quiet --depth=1 origin main
+            git -C "$1" checkout --quiet FETCH_HEAD
+            echo "floated $1 -> $(git -C "$1" rev-parse --short HEAD)"
+          }
+          float external/db25-logical-plan
+          git -C external/db25-logical-plan submodule update --init --recursive
+          float external/db25-logical-plan/external/parser
+          float external/db25-logical-plan/external/analyzer
 
       - name: Install compiler
         run: |
@@ -53,6 +73,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Float submodules on main
+        # The committed gitlinks stay pinned (reproducible local / release builds),
+        # but CI exercises the suite + integration test against the CURRENT main of
+        # every component, so a parser / analyzer / logical-plan change is validated
+        # end to end without waiting for a pin bump - cross-repo drift surfaces here.
+        run: |
+          set -e
+          git submodule update --init --recursive
+          float() {
+            git -C "$1" fetch --quiet --depth=1 origin main
+            git -C "$1" checkout --quiet FETCH_HEAD
+            echo "floated $1 -> $(git -C "$1" rev-parse --short HEAD)"
+          }
+          float external/db25-logical-plan
+          git -C external/db25-logical-plan submodule update --init --recursive
+          float external/db25-logical-plan/external/parser
+          float external/db25-logical-plan/external/analyzer
 
       - name: Install compiler
         run: |
