@@ -67,5 +67,28 @@ enable_testing()
 add_test(NAME db25_harness COMMAND db25_harness)
 add_test(NAME db25_gate COMMAND db25_gate)
 
+# ---------------------------------------------------------------------------
+# db25_integration: a standalone full-stack integration test covering DDL, DML
+# and queries end to end, asserting the artifact each stage produces (AST,
+# catalog + durable snapshot, diagnostics, transaction state). It is NOT part of
+# the mutation gate, so broad structural assertions are welcome. It drives
+# execute_ddl / the CatalogManager / snapshot persistence / CHECK evaluation /
+# the transaction manager, which the logical-plan library does not compile in,
+# so those analyzer translation units are compiled straight into this target.
+# ---------------------------------------------------------------------------
+set(ANALYZER_SRC_DIR
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/db25-logical-plan/external/analyzer/src)
+add_executable(db25_integration
+    integration/full_stack_integration.cpp
+    ${ANALYZER_SRC_DIR}/ddl.cpp
+    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
+    ${ANALYZER_SRC_DIR}/check_eval.cpp
+    ${ANALYZER_SRC_DIR}/transaction.cpp)
+target_link_libraries(db25_integration PRIVATE db25logicalplan)
+# -Wall/-Wextra as elsewhere, but not the harness -fno-exceptions/-Werror set:
+# these analyzer TUs are already -fno-exceptions-clean in their own build.
+target_compile_options(db25_integration PRIVATE -fno-exceptions -Wall -Wextra)
+add_test(NAME db25_integration COMMAND db25_integration)
+
 # Tutorial examples (docs/tutorial.md): runnable end-to-end walkthroughs.
 add_subdirectory(examples)
