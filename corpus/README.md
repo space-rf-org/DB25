@@ -44,15 +44,23 @@ outside DB25's canon) is counted against a **named reason** in
 | `COVERAGE.md` | how many statements were scanned / kept / excluded, and why |
 | `SOURCES.md` | upstream provenance + licensing for every source |
 | `generate.py` | re-harvests + re-classifies from the upstream sources (documents the transform / exclusion rules) |
+| `showcase.sql` | a curated session (every statement shape) driving the per-stage artifact report |
+| `REPORT.md` | the per-stage artifact report (AST · diagnostics · catalog effect · logical + optimized plans) rendered as Markdown |
+| `REPORT.html` | the same report as a self-contained HTML page — the AST is drawn as a **tree diagram**; open it in a browser |
 
 ## Regenerating
 
 ```
+# the golden corpus:
 # 1. re-harvest + re-classify from the upstream sources (see SOURCES.md)
 python3 corpus/generate.py
 # 2. fill the db25 behaviour columns from the current frontend, then review the diff
 ./build/corpus_runner --update corpus/corpus.tsv
 git diff corpus/corpus.tsv        # every changed row is a behaviour change to explain
+
+# the artifact report (Markdown + HTML):
+./build/corpus_report        corpus/showcase.sql > corpus/REPORT.md
+./build/corpus_report --html corpus/showcase.sql > corpus/REPORT.html
 ```
 
 A golden change is never rubber-stamped: each flipped row is a real
