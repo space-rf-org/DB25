@@ -89,6 +89,10 @@ void section_parse_artifacts(parser::Parser& p) {
         {"DELETE FROM t WHERE a = 1", "DeleteStmt"},
         {"SELECT a FROM t", "SelectStmt"},
         {"SELECT a FROM t1 UNION SELECT b FROM t2", "UnionStmt"},
+        {"SELECT a FROM t1 INTERSECT SELECT b FROM t2", "IntersectStmt"},
+        {"SELECT a FROM t1 EXCEPT SELECT b FROM t2", "ExceptStmt"},
+        {"CREATE VIEW v AS SELECT a FROM t", "CreateViewStmt"},
+        {"TRUNCATE TABLE t", "TruncateStmt"},
         {"BEGIN", "BeginStmt"},
         {"COMMIT", "CommitStmt"},
         {"SAVEPOINT s1", "SavepointStmt"},
@@ -163,6 +167,44 @@ void section_parse_artifacts(parser::Parser& p) {
         auto b = p.parse("ALTER TABLE t ALTER COLUMN c SET NOT NULL");
         EXPECT((first_type(b.value(), "AlterTableAction")->semantic_flags & 0x08) != 0,
                "SET NOT NULL flag");
+    }
+
+    // CREATE VIEW: the view name is captured on the root and the body is a full
+    // SELECT subtree (its clauses are real query nodes, not opaque text).
+    {
+        auto r = p.parse("CREATE VIEW active AS SELECT id, name FROM users WHERE age > 18");
+        const auto* n = r.value();
+        EXPECT(root_is(n, "CreateViewStmt") && txt(n) == "active", "view name captured");
+        const auto* body = first_type(n, "SelectStmt");
+        EXPECT(body != nullptr && count_type(body, "SelectList") == 1 &&
+               count_type(body, "WhereClause") == 1 && count_type(body, "FromClause") == 1,
+               "view body is a SELECT (list + FROM + WHERE)");
+    }
+
+    // TRUNCATE: a single utility statement carrying its target table name.
+    {
+        auto r = p.parse("TRUNCATE TABLE users");
+        EXPECT(root_is(r.value(), "TruncateStmt") && txt(r.value()) == "users",
+               "TRUNCATE target captured");
+    }
+
+    // INTERSECT / EXCEPT: a dedicated set-op root over exactly two SELECT
+    // branches; the ALL variant keeps the same root type. Each result is asserted
+    // before the next parse - the parser reuses its arena, so an earlier result's
+    // nodes are invalidated by the following parse().
+    {
+        auto in = p.parse("SELECT a FROM t1 INTERSECT SELECT b FROM t2");
+        EXPECT(root_is(in.value(), "IntersectStmt") &&
+               count_type(in.value(), "SelectStmt") == 2, "INTERSECT: two SELECT branches");
+    }
+    {
+        auto ex = p.parse("SELECT a FROM t1 EXCEPT SELECT c FROM t3");
+        EXPECT(root_is(ex.value(), "ExceptStmt") &&
+               count_type(ex.value(), "SelectStmt") == 2, "EXCEPT: two SELECT branches");
+    }
+    {
+        auto ia = p.parse("SELECT a FROM t1 INTERSECT ALL SELECT b FROM t2");
+        EXPECT(root_is(ia.value(), "IntersectStmt"), "INTERSECT ALL roots to IntersectStmt");
     }
 }
 
@@ -283,6 +325,40 @@ void section_dml_diagnostics(parser::Parser& p) {
     EXPECT(errs("UPDATE users SET name = 'x' WHERE id = 1") == 0, "clean UPDATE");
     EXPECT(errs("DELETE FROM users WHERE id = 1") == 0, "clean DELETE");
 
+    // Set operations reconcile branch arity and column types pairwise. Matching
+    // arity and compatible types analyze clean; the mismatches appear below.
+    EXPECT(errs("SELECT id FROM users INTERSECT SELECT uid FROM orders") == 0,
+           "clean INTERSECT (int vs int)");
+    EXPECT(errs("SELECT id FROM users EXCEPT SELECT oid FROM orders") == 0,
+           "clean EXCEPT (int vs int)");
+
+    // TRUNCATE and CREATE VIEW are unmodeled utility statements: whole-statement
+    // analysis degrades to a no-op (no diagnostics, no crash) rather than
+    // misreporting against the catalog.
+    EXPECT(errs("TRUNCATE TABLE users") == 0, "TRUNCATE degrades clean");
+    EXPECT(errs("CREATE VIEW v AS SELECT missing FROM users") == 0,
+           "CREATE VIEW whole-stmt degrades clean");
+
+    // ...but a view's body IS a real query: extracted and analyzed on its own it
+    // resolves when valid and surfaces the same diagnostics as a bare SELECT when
+    // not - the view definition is not a blind spot. Each parse result is fully
+    // consumed before the next parse() (the parser reuses its arena).
+    {
+        auto good = p.parse("CREATE VIEW v AS SELECT id, name FROM users");
+        auto* gbody = const_cast<ast::ASTNode*>(first_type(good.value(), "SelectStmt"));
+        Analyzer ag(cat); ag.analyze(gbody);
+        int gerr = 0; for (const auto& d : ag.diagnostics()) gerr += d.severity == Severity::Error;
+        EXPECT(gerr == 0, "view body (clean) analyzes clean");
+    }
+    {
+        auto bad = p.parse("CREATE VIEW v AS SELECT missing FROM users");
+        auto* bbody = const_cast<ast::ASTNode*>(first_type(bad.value(), "SelectStmt"));
+        Analyzer ab(cat); ab.analyze(bbody);
+        int bcol = 0; for (const auto& d : ab.diagnostics())
+            bcol += d.code == DiagnosticCode::UnresolvedColumn;
+        EXPECT(bcol == 1, "view body (bad column) surfaces UnresolvedColumn");
+    }
+
     // Each diagnostic fires exactly where expected.
     struct DCase { const char* sql; DiagnosticCode code; int n; const char* what; };
     const DCase cases[] = {
@@ -308,6 +384,10 @@ void section_dml_diagnostics(parser::Parser& p) {
         {"SELECT id FROM users LIMIT -1", DiagnosticCode::InvalidLimit, 1, "invalid LIMIT"},
         {"SELECT id FROM users u, orders u", DiagnosticCode::DuplicateRelation, 1,
          "duplicate relation"},
+        {"SELECT id FROM users INTERSECT SELECT oid, uid FROM orders",
+         DiagnosticCode::SetOpArityMismatch, 1, "INTERSECT arity mismatch (1 vs 2)"},
+        {"SELECT name FROM users EXCEPT SELECT oid FROM orders",
+         DiagnosticCode::SetOpTypeMismatch, 1, "EXCEPT type mismatch (text vs int)"},
     };
     for (const DCase& c : cases)
         EXPECT(n_code(c.sql, c.code) == c.n, c.what);
