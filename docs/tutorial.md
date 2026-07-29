@@ -240,19 +240,19 @@ Project (#0:Text, #1:BigInt)                     Project (#0:Text, #1:BigInt)
 ```
 
 The plan is exactly right: three groups (`NYC`, `LA`, and one for the NULL city),
-with a `COUNT(*)` per group; the correct answer is `NYC → 2, LA → 2, NULL → 1`.
+with a `COUNT(*)` per group. The reference evaluator groups the rows (NULL is its
+own group, `NULL == NULL` for grouping) and computes the per-group count:
 
-> **A note on the result here.** DB25 has no executor yet, and the bundled reference
-> evaluator computes group **keys** but does not yet compute grouped aggregate
-> **values**, so it prints the count column as `NULL`:
-> ```
-> 'NYC' | NULL      ← should be 2
-> 'LA'  | NULL      ← should be 2
-> NULL  | NULL      ← should be 1
-> ```
-> The **logical plan is the deliverable** at this stage of the project; the
-> evaluator is a partial stand-in (§7). Scalar aggregates *do* evaluate — see the
-> `COUNT(*)` inside Level 5.
+```
+'NYC' | 2
+'LA'  | 2
+NULL  | 1
+(3 rows)
+```
+
+The **logical plan is the deliverable** at this stage of the project; the evaluator
+is a test stand-in (§7) that nonetheless computes grouped-aggregate values, so the
+counts above are real, not placeholders.
 
 ### Level 4 — Join + predicate pushdown (with a hex literal)
 
@@ -379,10 +379,8 @@ stand-in for the executor DB25 does not have yet, and it is intentionally partia
 - It returns `std::nullopt` for a plan shape it does not implement (a first-class,
   non-crashing "unsupported" outcome), so a differential test skips rather than lies.
 - It implements scans, filters, projects, joins, sorts, limits, DISTINCT, scalar
-  aggregates, and correlated subqueries (nested-loop semantics) with correct
-  three-valued logic.
-- It does **not** yet compute grouped-aggregate values (Level 3), which is why that
-  query's count column shows `NULL`.
+  and grouped aggregates (`GROUP BY`, including a NULL group), and correlated
+  subqueries (nested-loop semantics) with correct three-valued logic.
 
 None of this reflects a gap in the **engine** — the engine's job today ends at the
 optimized logical plan, and those plans are correct. The evaluator is a testing
