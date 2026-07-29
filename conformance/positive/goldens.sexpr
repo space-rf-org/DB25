@@ -1,0 +1,14 @@
+# DB25 conformance POSITIVE goldens (bootstrap seed).
+# Format: alternating lines — a SQL line beginning '-- ' then its canonical S-expr.
+# Frozen from the reference converter (tools/ast_to_sexpr). Regenerate with 'make goldens' (TODO).
+# These are well-formed cases whose current tree is correct; they anchor the canonical format.
+-- SELECT id, name FROM users WHERE id = 1
+(SelectStmt (SelectList (ColumnRef "id") (ColumnRef "name")) (FromClause (TableRef "users")) (WhereClause (BinaryExpr "=" (ColumnRef "id") (IntegerLiteral "1"))))
+-- SELECT a + b * c FROM t
+(SelectStmt (SelectList (BinaryExpr "+" (ColumnRef "a") (BinaryExpr "*" (ColumnRef "b") (ColumnRef "c")))) (FromClause (TableRef "t")))
+-- SELECT 1 UNION SELECT 2 INTERSECT SELECT 3
+(UnionStmt "UNION" (SelectStmt (SelectList (IntegerLiteral "1"))) (IntersectStmt "INTERSECT" (SelectStmt (SelectList (IntegerLiteral "2"))) (SelectStmt (SelectList (IntegerLiteral "3")))))
+-- SELECT COUNT(*) AS n FROM users GROUP BY city HAVING COUNT(*) > 1
+(SelectStmt (SelectList (FunctionCall "COUNT" :schema "n" (Star))) (FromClause (TableRef "users")) (GroupByClause (ColumnRef "city")) (HavingClause (BinaryExpr ">" (FunctionCall "COUNT" (Star)) (IntegerLiteral "1"))))
+-- SELECT name FROM users WHERE age BETWEEN 18 AND 65 ORDER BY name LIMIT 10
+(SelectStmt (SelectList (ColumnRef "name")) (FromClause (TableRef "users")) (WhereClause (BetweenExpr "BETWEEN" (ColumnRef "age") (IntegerLiteral "18") (IntegerLiteral "65"))) (OrderByClause (ColumnRef "name")) (LimitClause (IntegerLiteral "10")))

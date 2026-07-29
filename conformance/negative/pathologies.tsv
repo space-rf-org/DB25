@@ -1,0 +1,18 @@
+# DB25 conformance NEGATIVE corpus (bootstrap) — lifted from db25-sql-parser issue #71.
+# Every row is MALFORMED SQL whose required outcome is REJECT (a precise diagnostic).
+# Today the existing parser ACCEPTs these with a silently truncated AST (see current_behavior).
+# columns: id\tdiag_class\tsql\tcurrent_behavior   (expect = REJECT for every row)
+# TODO: pin exact diagnostic position (L:C) per row once the strict contract lands.
+id	diag_class	sql	current_behavior
+N01	missing-expression	SELECT * FROM t WHERE a =	WHERE degrades to bare ColumnRef a; predicate vanishes
+N02	incomplete-between	SELECT * FROM t WHERE x BETWEEN 1	BETWEEN dropped; predicate vanishes
+N03	missing-operand	SELECT * FROM t WHERE a AND NOT	UnaryExpr NOT with 0 children
+N04	missing-join-condition	SELECT * FROM a JOIN b ON	JoinClause keeps b, ON predicate dropped
+N05	missing-join-keyword	SELECT * FROM a LEFT b	join accepted without JOIN keyword
+N06	incomplete-set-op	SELECT 1 UNION	bare SELECT 1; UNION consumed and vanishes (trailing=0)
+N07	missing-insert-data	INSERT INTO t (a, b)	target-only InsertStmt, no data node
+N08	empty-function-args	SELECT f(,)	FunctionCall f with 0 children
+N09	trailing-comma	SELECT a,	ColumnRef a; trailing comma dropped (trailing=0)
+N10	unterminated-comment	SELECT 1 /* oops	SELECT 1; remainder of input swallowed
+N11	unterminated-string	SELECT 'oops	StringLiteral swallows rest of input
+N12	missing-expression	UPDATE t SET a = WHERE id = 1	grabs WHERE as identifier RHS; real WHERE clause dropped

@@ -1,0 +1,16 @@
+# DB25 conformance FEATURE-GAP corpus (bootstrap) — the accept-but-wrong rows of issue #71.
+# These are VALID SQL (or should be) that the parser today silently truncates or mis-parses.
+# They belong in the POSITIVE corpus; their correct expected canonical AST is a TODO because the
+# current reference parser cannot yet produce it. Kept separate from negative/pathologies.tsv.
+# columns: id\tclass\tsql\tcurrent_behavior\texpected
+id	class	sql	current_behavior	expected
+F01	schema-qualified-drop	DROP TABLE s.t	target=s, .t dropped (wrong object)	ACCEPT: drop of schema-qualified s.t
+F02	multi-object-drop	DROP TABLE a, b, c	only a; ', b, c' dropped	ACCEPT: 3 targets  (or clean REJECT if unsupported)
+F03	view-column-list	CREATE VIEW v(a, b) AS SELECT x, y FROM t	column list (a,b) dropped	ACCEPT: view with column-alias list
+F04	index-column-options	CREATE INDEX i ON t (a DESC, b)	keeps only a; DESC and b dropped	ACCEPT: ordered index cols a DESC, b
+F05	returning-expression	DELETE FROM t WHERE id = 1 RETURNING id + 1 AS x	RETURNING truncated at '+'	ACCEPT: RETURNING expr with alias
+F06	window-clause	SELECT x FROM t WINDOW w AS (ORDER BY x)	WINDOW clause dropped	ACCEPT: named WINDOW clause
+F07	grouping-set-tail	SELECT * FROM t GROUP BY ROLLUP(a), b	drops ', b' after ROLLUP	ACCEPT: ROLLUP(a) plus b
+F08	cast-precedence	SELECT -a::int FROM t	parses as (-a)::int	ACCEPT: -(a::int)  (:: tighter than unary minus)
+F09	caret-precedence	SELECT a ^ b * c	parses as a^(b*c)	DECIDE: dialect — MySQL (a^b)*c vs PG a^(b*c); pin then ACCEPT
+F10	agg-order-by	SELECT array_agg(x ORDER BY y) FROM t	spurious 'Unclosed parenthesis' REJECT	ACCEPT: aggregate with ORDER BY arg

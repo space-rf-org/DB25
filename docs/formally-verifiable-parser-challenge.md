@@ -240,18 +240,21 @@ violations.
 
 ## 7. Proposed layout (bootstrap)
 
-Nothing below is created yet except this doc; listed so the pieces have names.
+Bootstrapped now (this commit):
 
 ```
-DB25/docs/formally-verifiable-parser-challenge.md   <- this file (bootstrap)
+DB25/docs/formally-verifiable-parser-challenge.md   <- this file
 DB25/docs/formal-methods-proposal.md                <- existing companion
+DB25/conformance/                 <- the shared oracle (bootstrapped)
+  README.md          canonical S-expr format spec + how to run          [DONE]
+  tools/ast_to_sexpr.cpp   reference canonical serializer               [DONE, builds]
+  positive/goldens.sexpr   5 verified sql -> canonical AST goldens      [seed]
+  positive/feature-gaps.tsv  accept-but-wrong rows of #71               [seed]
+  negative/pathologies.tsv   12 malformed sql -> REJECT (lifted #71)    [seed]
 # TODO (later):
-DB25/conformance/                 <- the shared oracle (proposed home)
   grammar/           normative machine-readable grammar (EBNF/PEG)
-  positive/          sql -> canonical AST goldens
-  negative/          malformed sql -> expected diagnostic
   totality/          property/fuzz harness asserting "no third state"
-  README.md          canonical-AST format spec + how to run
+  (CMake wiring, run_corpus driver, make goldens, result-equivalence)
 DB25/challenge/                   <- challenge rules, submission template, CI
 ```
 
