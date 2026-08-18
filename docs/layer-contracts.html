@@ -1,0 +1,511 @@
+<title>DB25 Layer Contracts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#f4f6f8; --surface:#ffffff; --surface-2:#eef1f4;
+    --ink:#16202b; --muted:#56636f; --faint:#8895a1;
+    --hairline:#dde3e8; --hairline-2:#c9d2da;
+    --accent:#0e7c74; --accent-ink:#0a5c56; --accent-soft:#dbecea;
+    --good:#2c7a57; --warn:#a2671a; --crit:#b0433c;
+    --good-soft:#dcefe5; --warn-soft:#f3e6d2; --crit-soft:#f4dedc;
+    --shadow:0 1px 2px rgba(20,32,43,.05),0 4px 16px rgba(20,32,43,.05);
+    --radius:10px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#0c1216; --surface:#121b21; --surface-2:#18242b;
+      --ink:#e7edf1; --muted:#9aa7b1; --faint:#6b7883;
+      --hairline:#243139; --hairline-2:#324450;
+      --accent:#3fb8ad; --accent-ink:#5fd0c5; --accent-soft:#0f302d;
+      --good:#4bb183; --warn:#d29a4c; --crit:#e07a72;
+      --good-soft:#122a22; --warn-soft:#2c2417; --crit-soft:#2e1a18;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0c1216; --surface:#121b21; --surface-2:#18242b;
+    --ink:#e7edf1; --muted:#9aa7b1; --faint:#6b7883;
+    --hairline:#243139; --hairline-2:#324450;
+    --accent:#3fb8ad; --accent-ink:#5fd0c5; --accent-soft:#0f302d;
+    --good:#4bb183; --warn:#d29a4c; --crit:#e07a72;
+    --good-soft:#122a22; --warn-soft:#2c2417; --crit-soft:#2e1a18;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 20px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:"IBM Plex Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:17px; line-height:1.62; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding:0 clamp(20px,4vw,56px)}
+  .col{max-width:68ch}
+  a{color:var(--accent-ink); text-decoration-thickness:1px; text-underline-offset:2px}
+  code,pre,.mono{font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+  h1,h2,h3{text-wrap:balance; line-height:1.15; letter-spacing:-.01em}
+  p{margin:0 0 1em}
+
+  /* ---- masthead ---- */
+  header.mast{
+    border-bottom:1px solid var(--hairline);
+    background:
+      radial-gradient(120% 140% at 85% -20%, var(--accent-soft) 0%, transparent 55%),
+      var(--surface);
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono"; font-size:12.5px; font-weight:500;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--accent-ink);
+  }
+  .mast h1{
+    font-size:clamp(2rem,4.6vw,3.15rem); font-weight:700; margin:.34em 0 .3em;
+  }
+  .mast .lede{font-size:clamp(1.05rem,1.9vw,1.28rem); color:var(--muted); max-width:60ch; margin:0}
+  .mast .wrap{padding-top:clamp(40px,6vw,72px); padding-bottom:clamp(28px,4vw,40px)}
+
+  .metastrip{
+    display:flex; flex-wrap:wrap; gap:8px 10px; margin-top:22px;
+    font-family:"IBM Plex Mono"; font-size:12.5px;
+  }
+  .metastrip span{
+    padding:5px 10px; border:1px solid var(--hairline-2); border-radius:999px;
+    color:var(--muted); background:var(--surface);
+  }
+  .metastrip b{color:var(--ink); font-weight:600}
+
+  /* ---- pipeline chain ---- */
+  .chainwrap{overflow-x:auto; padding:26px 0 4px}
+  .chain{display:flex; align-items:stretch; gap:0; min-width:max-content}
+  .stage{
+    display:flex; flex-direction:column; gap:2px; padding:12px 16px;
+    border:1px solid var(--hairline-2); background:var(--surface);
+    border-radius:var(--radius); min-width:132px; box-shadow:var(--shadow);
+  }
+  .stage .tag{font-family:"IBM Plex Mono"; font-size:11px; letter-spacing:.1em; color:var(--faint); text-transform:uppercase}
+  .stage .art{font-family:"IBM Plex Mono"; font-weight:600; font-size:14px; color:var(--ink)}
+  .stage .en{font-size:12.5px; color:var(--muted)}
+  .stage.future{border-style:dashed; background:transparent; box-shadow:none}
+  .stage.future .art{color:var(--muted)}
+  .arrow{display:flex; align-items:center; padding:0 6px; color:var(--accent); font-weight:700}
+
+  /* ---- sections ---- */
+  section{padding:clamp(30px,5vw,52px) 0; border-bottom:1px solid var(--hairline)}
+  .kicker{
+    font-family:"IBM Plex Mono"; font-size:12.5px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--muted); margin:0 0 .5em;
+  }
+  h2{font-size:clamp(1.5rem,3vw,2rem); font-weight:700; margin:0 0 .5em}
+  h2 .idx{color:var(--accent); font-family:"IBM Plex Mono"; font-weight:600; margin-right:.4em}
+  .section-lede{color:var(--muted); font-size:1.05rem; max-width:64ch; margin:0 0 1.4em}
+  h3{font-size:1.18rem; font-weight:600; margin:1.8em 0 .5em}
+
+  /* ---- layer card ---- */
+  .layer{
+    background:var(--surface); border:1px solid var(--hairline);
+    border-radius:var(--radius); box-shadow:var(--shadow);
+    margin:22px 0; overflow:hidden;
+  }
+  .layer > .head{
+    display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 14px;
+    padding:18px 22px; border-bottom:1px solid var(--hairline);
+    background:var(--surface-2);
+  }
+  .layer .stagechip{
+    font-family:"IBM Plex Mono"; font-weight:600; font-size:12px;
+    color:#fff; background:var(--accent); padding:3px 9px; border-radius:6px;
+    letter-spacing:.04em;
+  }
+  .layer h3.lname{margin:0; font-size:1.3rem; font-weight:700}
+  .layer .repo{font-family:"IBM Plex Mono"; font-size:12.5px; color:var(--muted); margin-left:auto}
+  .layer .body{padding:6px 22px 22px}
+
+  .field{display:grid; grid-template-columns:132px 1fr; gap:6px 20px; padding:14px 0; border-bottom:1px solid var(--hairline)}
+  .field:last-child{border-bottom:0}
+  .field .k{
+    font-family:"IBM Plex Mono"; font-size:12px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--faint); padding-top:2px;
+  }
+  .field .v{margin:0}
+  .field .v p{margin:0 0 .5em}
+  .field .v p:last-child{margin:0}
+  @media (max-width:620px){ .field{grid-template-columns:1fr; gap:3px} }
+
+  ol.inv{margin:.2em 0 0; padding-left:1.3em; display:flex; flex-direction:column; gap:.5em}
+  ol.inv li{padding-left:.2em}
+  ol.inv li::marker{font-family:"IBM Plex Mono"; color:var(--accent); font-weight:600}
+  .inv b{font-weight:600}
+
+  pre{
+    background:var(--surface-2); border:1px solid var(--hairline);
+    border-radius:8px; padding:14px 16px; overflow-x:auto; margin:.4em 0;
+    font-size:13.5px; line-height:1.5;
+  }
+  pre .c{color:var(--faint)}
+  pre .kw{color:var(--accent-ink)}
+  :not(pre) > code{
+    background:var(--surface-2); border:1px solid var(--hairline);
+    padding:.08em .38em; border-radius:5px; font-size:.88em;
+  }
+
+  .pill{display:inline-block; font-family:"IBM Plex Mono"; font-size:11.5px; font-weight:500;
+    padding:2px 8px; border-radius:999px; letter-spacing:.03em; white-space:nowrap}
+  .pill.good{color:var(--good); background:var(--good-soft)}
+  .pill.warn{color:var(--warn); background:var(--warn-soft)}
+  .pill.crit{color:var(--crit); background:var(--crit-soft)}
+  .pill.acc{color:var(--accent-ink); background:var(--accent-soft)}
+
+  table{border-collapse:collapse; width:100%; font-size:14.5px; margin:.4em 0}
+  .tablewrap{overflow-x:auto}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--hairline); vertical-align:top}
+  th{font-family:"IBM Plex Mono"; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  td.mono,th.mono{font-family:"IBM Plex Mono"; font-size:13px}
+  tbody tr:last-child td{border-bottom:0}
+
+  .callout{
+    border:1px solid var(--hairline); border-left:3px solid var(--accent);
+    background:var(--surface); border-radius:8px; padding:16px 20px; margin:20px 0;
+  }
+  .callout .kicker{margin-bottom:.35em}
+
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:18px 0}
+  @media (max-width:760px){ .two{grid-template-columns:1fr} }
+  .mini{background:var(--surface); border:1px solid var(--hairline); border-radius:var(--radius); padding:18px 20px; box-shadow:var(--shadow)}
+  .mini h4{margin:0 0 .4em; font-size:1.02rem; font-weight:600}
+  .mini p{margin:0; color:var(--muted); font-size:.96rem}
+
+  ul.clean{margin:.3em 0; padding-left:1.2em; display:flex; flex-direction:column; gap:.45em}
+  ul.clean li{padding-left:.15em}
+
+  .steps{display:flex; flex-direction:column; gap:12px; margin:18px 0; counter-reset:s}
+  .step{display:grid; grid-template-columns:auto 1fr; gap:16px; align-items:start;
+    background:var(--surface); border:1px solid var(--hairline); border-radius:var(--radius);
+    padding:16px 20px; box-shadow:var(--shadow)}
+  .step .n{counter-increment:s; font-family:"IBM Plex Mono"; font-weight:600; color:#fff;
+    background:var(--accent); width:30px; height:30px; border-radius:8px; display:grid; place-items:center; font-size:14px}
+  .step .n::before{content:counter(s)}
+  .step h4{margin:0 0 .25em; font-size:1.05rem}
+  .step p{margin:0; color:var(--muted); font-size:.96rem}
+  .step .cost{font-family:"IBM Plex Mono"; font-size:12px; color:var(--accent-ink); margin-top:.35em; display:inline-block}
+
+  footer{padding:34px 0 60px; color:var(--faint); font-size:13.5px; font-family:"IBM Plex Mono"}
+  footer .wrap{display:flex; flex-wrap:wrap; gap:6px 18px; justify-content:space-between}
+
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <div class="eyebrow">DB25 · SQL frontend · architecture spec</div>
+    <h1>Layer Contracts &amp; Scientific Expectations</h1>
+    <p class="lede">One declarative I/O contract per stage — input domain, output artifact, and the
+      falsifiable claims each layer must satisfy. The readable half of the guardrails, cross-linked to the
+      executable half that enforces it.</p>
+    <div class="metastrip">
+      <span>status <b>draft / RFC</b></span>
+      <span>scope <b>tokenizer → optimizer</b></span>
+      <span>runtime IR <b>in-memory typed structs</b></span>
+      <span>fixture / wire format <b>s-expression</b></span>
+      <span>discipline <b>-fno-exceptions · falsifiable</b></span>
+    </div>
+
+    <div class="chainwrap" aria-label="artifact pipeline">
+      <div class="chain">
+        <div class="stage"><span class="tag">T0</span><span class="art">SQL</span><span class="en">source text</span></div>
+        <div class="arrow">→</div>
+        <div class="stage"><span class="tag">T1</span><span class="art">tokens</span><span class="en">token stream</span></div>
+        <div class="arrow">→</div>
+        <div class="stage"><span class="tag">T2</span><span class="art">AST</span><span class="en">arena tree</span></div>
+        <div class="arrow">→</div>
+        <div class="stage"><span class="tag">T3</span><span class="art">resolved AST</span><span class="en">+ types · diags</span></div>
+        <div class="arrow">→</div>
+        <div class="stage"><span class="tag">T4</span><span class="art">logical plan</span><span class="en">LogicalOp tree</span></div>
+        <div class="arrow">→</div>
+        <div class="stage"><span class="tag">T5</span><span class="art">optimized plan</span><span class="en">rewritten LogicalOp</span></div>
+        <div class="arrow">→</div>
+        <div class="stage future"><span class="tag">T6</span><span class="art">physical plan</span><span class="en">not built yet</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap col">
+    <p class="kicker">How to read this document</p>
+    <p>A contract here is not documentation for its own sake. It is the <b>golden-fixture schema</b> that
+      drives a single, generic, data-driven test harness: for one input SQL, the expected artifact at every
+      stage boundary. Two things read this spec — a human, to reason about what a layer promises; and the
+      harness, to assert that the layer keeps its promise.</p>
+    <p>Every <b>Expectation</b> below is written as a falsifiable claim: a concrete input that would make it
+      false. That is deliberate — DB25's testing ethos is Popperian. A claim no test can break is not a
+      contract, it is a wish. Each layer's <b>Enforcement</b> row names the executable guardrail that would
+      catch a violation today, or marks the gap where no guardrail exists yet.</p>
+    <div class="callout">
+      <p class="kicker">The two halves</p>
+      <p style="margin:0"><b>Declarative</b> (this doc): readable in one place, good for reasoning and
+        onboarding — but inert. <b>Executable</b> (grammar + corpus + property/metamorphic/conformance
+        suites, gated by the mutant catalog): always enforced, never stale — but implicit. The strongest
+        setup is both, with each clause pointing at the guardrail that enforces it. DB25 has the executable
+        half thoroughly and only fragments of the declarative half; closing that gap is the purpose of this
+        document.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">The contracts</p>
+    <h2>Per-layer input → output</h2>
+    <p class="section-lede">Each stage is a pure transform over the artifact to its left. A stage fixes only
+      its own internals and reports cross-boundary issues as contract findings — it never silently absorbs an
+      upstream bug. Stage index encodes pipeline order; the order carries meaning.</p>
+
+    <!-- Tokenizer -->
+    <div class="layer">
+      <div class="head">
+        <span class="stagechip">T0→T1</span>
+        <h3 class="lname">Tokenizer</h3>
+        <span class="repo">db25-sql-parser · external/tokenizer</span>
+      </div>
+      <div class="body">
+        <div class="field"><div class="k">Responsibility</div><div class="v"><p>Lex raw SQL text into a flat, positioned token stream. No grammar, no nesting.</p></div></div>
+        <div class="field"><div class="k">Input</div><div class="v"><p><code>std::string_view</code> — arbitrary UTF-8 SQL source, well-formed or not.</p></div></div>
+        <div class="field"><div class="k">Output</div><div class="v">
+          <p>A token vector; each token carries kind, source span <span class="mono">[start,end)</span>, and canonical text.</p>
+<pre><span class="c">; s-expr fixture shape</span>
+(tokens
+  (kw      "SELECT" 0 6)
+  (ident   "a"      7 8)
+  (op      "::"     8 10)
+  (kw      "int"    10 13))</pre>
+        </div></div>
+        <div class="field"><div class="k">Expectations</div><div class="v">
+          <ol class="inv">
+            <li><b>Total.</b> Every byte of input is covered by exactly one token or an explicit error token; spans are non-overlapping and monotonic.</li>
+            <li><b>Lossless.</b> Concatenating token texts + skipped-trivia reconstructs the source (round-trip identity).</li>
+            <li><b>No classification of meaning.</b> <code>rollup</code> is an identifier here; whether it is a keyword is the parser's call, not the lexer's.</li>
+          </ol>
+        </div></div>
+        <div class="field"><div class="k">Non-goals</div><div class="v"><p>Balancing, precedence, or validity. A garbage stream still tokenizes.</p></div></div>
+        <div class="field"><div class="k">Enforcement</div><div class="v"><p><span class="pill good">have</span> tokenizer unit suite + span round-trip. <span class="pill warn">gap</span> no s-expr golden for the token stream yet.</p></div></div>
+      </div>
+    </div>
+
+    <!-- Parser -->
+    <div class="layer">
+      <div class="head">
+        <span class="stagechip">T1→T2</span>
+        <h3 class="lname">Parser</h3>
+        <span class="repo">db25-sql-parser</span>
+      </div>
+      <div class="body">
+        <div class="field"><div class="k">Responsibility</div><div class="v"><p>Build a faithful, untyped AST in an arena. Deliberately <b>permissive</b>: parser-accepts ≠ stack-accepts.</p></div></div>
+        <div class="field"><div class="k">Input</div><div class="v"><p>Token stream (T1).</p></div></div>
+        <div class="field"><div class="k">Output</div><div class="v">
+          <p>Arena-allocated AST. Every node carries a <code>NodeType</code>, ordered children, and its source span. Precedence and associativity are resolved <b>here and only here</b>.</p>
+<pre><span class="c">; -a::int  — :: binds TIGHTER than unary minus</span>
+(unary "-"
+  (cast (col "a") (type "int")))</pre>
+        </div></div>
+        <div class="field"><div class="k">Expectations</div><div class="v">
+          <ol class="inv">
+            <li><b>Grammar-faithful.</b> Accepted input is exactly the EBNF surface (<code>DB25_SQL_GRAMMAR.ebnf</code> + <code>ebnf_supported.sql</code>); the AST shape is stable and pinned.</li>
+            <li><b>Precedence-correct.</b> Postfix <code>::</code>, <code>[]</code>, <code>COLLATE</code> bind tighter than unary <code>±</code>; no operand is silently dropped. <span class="pill crit">open: audit F1</span></li>
+            <li><b>Total &amp; bounded.</b> Any input either yields an AST or a diagnostic with a span — never a crash, never unbounded recursion (DepthGuard).</li>
+            <li><b>No lowering, no typing.</b> The parser never resolves names or types; it preserves what was written, including forms the stack will later reject.</li>
+          </ol>
+        </div></div>
+        <div class="field"><div class="k">Non-goals</div><div class="v"><p>Catalog resolution, type inference, semantic legality. Those belong to T3.</p></div></div>
+        <div class="field"><div class="k">Enforcement</div><div class="v"><p><span class="pill good">have</span> parser unit suites pin AST shapes; EBNF corpus. <span class="pill warn">gap</span> precedence table not exhaustively fixtured — F1 slipped through.</p></div></div>
+      </div>
+    </div>
+
+    <!-- Analyzer -->
+    <div class="layer">
+      <div class="head">
+        <span class="stagechip">T2→T3</span>
+        <h3 class="lname">Analyzer</h3>
+        <span class="repo">db25-semantic-analyzer</span>
+      </div>
+      <div class="body">
+        <div class="field"><div class="k">Responsibility</div><div class="v"><p>Resolve names against the catalog and <b>annotate the AST in place</b> — types, nullability, resolved table/column ids — while emitting diagnostics. The output is the same tree, now resolved.</p></div></div>
+        <div class="field"><div class="k">Input</div><div class="v"><p>AST (T2) + a catalog snapshot.</p></div></div>
+        <div class="field"><div class="k">Output</div><div class="v">
+          <p>A <b>resolved AST</b> (annotations layered onto T2, not a new tree) plus an ordered diagnostic list. Naming note: this is the "resolved / annotated AST," not a separate "analyzed-AST".</p>
+<pre><span class="c">; SELECT name + name FROM users   (name is TEXT)</span>
+(binop "+"
+  (col "name" :type text :null true :tid 1 :cid 2)
+  (col "name" :type text :null true :tid 1 :cid 2)
+  :type <span class="kw">unknown</span>            <span class="c">; NOT text</span>
+  :diag (type-mismatch))    <span class="c">; open: audit F2</span></pre>
+        </div></div>
+        <div class="field"><div class="k">Expectations</div><div class="v">
+          <ol class="inv">
+            <li><b>Sound typing.</b> Arithmetic on a non-numeric, non-temporal pair is a <code>TypeMismatch</code>, not a bogus type. <span class="pill crit">open: audit F2</span></li>
+            <li><b>Reference-faithful promotion.</b> Numeric promotion matches the reference lattice (<code>int &lt; bigint &lt; decimal &lt; double</code>; <code>numeric+real → double</code>). <span class="pill warn">open: audit F4</span></li>
+            <li><b>Consumes the parser's shape fully.</b> Every node kind the parser can emit is handled — incl. <code>GroupingElement</code> for ROLLUP/CUBE. <span class="pill crit">open: audit F3</span></li>
+            <li><b>Deterministic diagnostics.</b> Same input → same diagnostics, same order, same severities; no duplicates.</li>
+            <li><b>Documented divergences are intentional &amp; tested.</b> e.g. constant <code>1/0</code> is a soft <span class="pill warn">warning</span>, preserved — not a hard error (differs from PG by design).</li>
+          </ol>
+        </div></div>
+        <div class="field"><div class="k">Non-goals</div><div class="v"><p>Plan shape, join lowering, rewrite. It annotates; it does not restructure.</p></div></div>
+        <div class="field"><div class="k">Enforcement</div><div class="v"><p><span class="pill good">have</span> <code>corpus.tsv</code> per-statement parse/analyze golden; <code>test_analyzer</code>. <span class="pill warn">gap</span> arithmetic-soundness &amp; grouping-element cases unpinned — F2/F3/F4.</p></div></div>
+      </div>
+    </div>
+
+    <!-- Binder -->
+    <div class="layer">
+      <div class="head">
+        <span class="stagechip">T3→T4</span>
+        <h3 class="lname">Binder / Planner</h3>
+        <span class="repo">db25-logical-plan</span>
+      </div>
+      <div class="body">
+        <div class="field"><div class="k">Responsibility</div><div class="v"><p>Lower the resolved AST into a logical algebra tree (<code>LogicalOp</code>): scans, joins, filters, projections, aggregates, set-ops, recursive CTEs. Resolve column references to positional slots.</p></div></div>
+        <div class="field"><div class="k">Input</div><div class="v"><p>Resolved AST (T3). Binds defensively — produces a plan even when the analyzer reported errors.</p></div></div>
+        <div class="field"><div class="k">Output</div><div class="v">
+          <p>A <code>LogicalOp</code> tree with a well-defined output schema at every node.</p>
+<pre>(project [ (colref 0) (colref 1) ]
+  (filter (gt (colref 0) (lit 100))
+    (scan users)))</pre>
+        </div></div>
+        <div class="field"><div class="k">Expectations</div><div class="v">
+          <ol class="inv">
+            <li><b>IR well-formed.</b> Every <code>ColumnRef.input_index</code> is in range for its operator's input frame; no dangling <code>OuterRef</code> (scope/depth accounting holds).</li>
+            <li><b>Width consistency.</b> Per operator: Project = expr count; ON-join = left++right; Semi/Anti = left width; Aggregate = keys + aggregates; set-op branches share width.</li>
+            <li><b>Faithful to T3 types.</b> A node's output type/nullability equals what the analyzer resolved; no lossy re-typing (e.g. no <code>&gt;INT64_MAX decimal → double</code>).</li>
+            <li><b>Every supported feature lowers.</b> A construct that parses and analyzes must appear as a LogicalOp — it may not silently vanish between stages.</li>
+          </ol>
+        </div></div>
+        <div class="field"><div class="k">Non-goals</div><div class="v"><p>Rewrite / cost / physical choice. The binder produces a <i>correct</i> plan, not a <i>good</i> one.</p></div></div>
+        <div class="field"><div class="k">Enforcement</div><div class="v"><p><span class="pill good">have</span> <code>test_binder</code>, <code>test_expr_lower</code>, property-suite IR invariants, conformance stage-propagation. <span class="pill warn">gap</span> no s-expr plan golden per fixture.</p></div></div>
+      </div>
+    </div>
+
+    <!-- Optimizer -->
+    <div class="layer">
+      <div class="head">
+        <span class="stagechip">T4→T5</span>
+        <h3 class="lname">Optimizer</h3>
+        <span class="repo">db25-logical-plan</span>
+      </div>
+      <div class="body">
+        <div class="field"><div class="k">Responsibility</div><div class="v"><p>Rewrite the logical plan into an equivalent, better logical plan: predicate pushdown, column pruning, subquery decorrelation, and friends.</p></div></div>
+        <div class="field"><div class="k">Input</div><div class="v"><p>Logical plan (T4).</p></div></div>
+        <div class="field"><div class="k">Output</div><div class="v"><p>A rewritten <code>LogicalOp</code> tree — same output schema, same result multiset, ideally cheaper.</p></div></div>
+        <div class="field"><div class="k">Expectations</div><div class="v">
+          <ol class="inv">
+            <li><b>Semantics-preserving.</b> <code>bag_equal(eval(bound), eval(optimized))</code> wherever the reference evaluator supports both — the result multiset never changes.</li>
+            <li><b>Shape-preserving.</b> The root output schema (column count, per-column type &amp; nullability) is identical before and after.</li>
+            <li><b>Idempotent.</b> <code>optimize(optimize(x)) == optimize(x)</code>; a second pass changes nothing.</li>
+            <li><b>Invariant-preserving.</b> Every IR well-formedness rule from T4 still holds after every rewrite.</li>
+          </ol>
+        </div></div>
+        <div class="field"><div class="k">Non-goals</div><div class="v"><p>Physical operators, cost models, execution. No such stage exists yet.</p></div></div>
+        <div class="field"><div class="k">Enforcement</div><div class="v"><p><span class="pill good">have</span> property suite (equivalence, idempotence, shape) + metamorphic + decorrelation oracle, all under the mutant gate. Strongest-covered layer.</p></div></div>
+      </div>
+    </div>
+
+    <!-- Physical (future) -->
+    <div class="layer">
+      <div class="head">
+        <span class="stagechip">T5→T6</span>
+        <h3 class="lname" style="color:var(--muted)">Physical plan / Executor</h3>
+        <span class="repo">forward-declared</span>
+      </div>
+      <div class="body">
+        <div class="field"><div class="k">Status</div><div class="v"><p><span class="pill acc">not built</span> No physical planner and no executor exist today. This row is a placeholder so the fixture schema reserves a column and the s-expr format is designed with the eventual boundary in mind.</p></div></div>
+        <div class="field"><div class="k">Why it matters now</div><div class="v"><p>When execution becomes <b>remote</b>, the physical plan (or fragments) must cross a process/network line — a real serialization boundary. That is the one place s-expr stops being redundant and becomes the natural plan/control-plane wire + observability format (tuple data stays columnar/binary).</p></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">The harness the contracts feed</p>
+    <h2><span class="idx">§</span>Staged-artifact test framework</h2>
+    <p class="section-lede">One generic engine, one fixture corpus, two modes. The contract above defines what each
+      fixture column must contain; the harness asserts each stage produces it.</p>
+
+    <h3>Fixture schema</h3>
+    <p>Each row is one SQL statement plus its expected artifact at every boundary, serialized as canonical s-expr:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>column</th><th>artifact</th><th>produced by</th><th class="mono">form</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">sql</td><td>source text</td><td>—</td><td class="mono">string</td></tr>
+          <tr><td class="mono">tokens</td><td>token stream</td><td>tokenizer</td><td class="mono">s-expr</td></tr>
+          <tr><td class="mono">ast</td><td>untyped AST</td><td>parser</td><td class="mono">s-expr</td></tr>
+          <tr><td class="mono">resolved</td><td>resolved AST + diags</td><td>analyzer</td><td class="mono">s-expr</td></tr>
+          <tr><td class="mono">logical</td><td>LogicalOp tree</td><td>binder</td><td class="mono">s-expr</td></tr>
+          <tr><td class="mono">optimized</td><td>rewritten plan</td><td>optimizer</td><td class="mono">s-expr</td></tr>
+          <tr><td class="mono">result</td><td>result bag</td><td>reference eval</td><td class="mono">rows</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Two modes over the same fixtures</h3>
+    <div class="two">
+      <div class="mini">
+        <h4>End-to-end</h4>
+        <p>Run the whole pipeline; assert every intermediate s-expr equals its golden and the final bag is
+          correct. Pinpoints the <i>first</i> diverging stage — correctness by evidence at each seam, not just
+          final rows.</p>
+      </div>
+      <div class="mini">
+        <h4>Per-module (isolation)</h4>
+        <p>Feed a stage its input artifact directly (needs s-expr <b>readers</b>) and assert its output. Isolates
+          which stage is wrong, and lets you inject ASTs/plans the SQL parser might never produce.</p>
+      </div>
+    </div>
+    <div class="callout">
+      <p class="kicker">Why s-expr — and its limits</p>
+      <p style="margin:0 0 .5em">One format serves three jobs: golden fixture, debug dump, and (later) the
+        remote plan wire format. It is homoiconic, diff-able, git-friendly, and trivial to parse in any worker
+        language.</p>
+      <p style="margin:0"><b>Scope it deliberately.</b> s-expr is the <i>test/serialization</i> boundary and the
+        future <i>control-plane</i> format — <b>not</b> the runtime interchange (in-memory typed structs stay;
+        serialize-then-reparse on the hot path is pure cost) and <b>not</b> the data plane (tuples ship
+        columnar/binary). Writers are cheap (~1 artifact each, reuse <code>dump_plan</code>); readers roughly
+        double the effort but unlock per-module mode.</p>
+    </div>
+
+    <h3>Falsifiability &amp; the differential oracle</h3>
+    <ul class="clean">
+      <li><b>Mutant gate.</b> Every golden must fail against ≥1 entry in the mutant catalog. A fixture that
+        survives all mutants is vacuous and is itself rejected — a green suite therefore means something.</li>
+      <li><b>External oracle, scoped.</b> Tally accept/reject + type/nullability against <b>libpg_query</b>
+        (and later DuckDB) as a boundary oracle — high signal for exactly the F2/F3-class bugs. <b>Do not</b>
+        diff ASTs tree-to-tree: node vocabularies differ, mapping is brittle, and intentional divergences
+        (e.g. <code>1/0</code>) become noise. Divergences live in a curated allow-list, as the corpus already does.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <p class="kicker">Sequencing</p>
+    <h2><span class="idx">§</span>What we build, in order</h2>
+    <p class="section-lede">Documentation and schema first; writers + end-to-end mode next (fast, high value);
+      readers + per-module mode second; oracle last. No production code changes.</p>
+    <div class="steps">
+      <div class="step"><div class="n"></div><div><h4>Ratify the contracts</h4><p>This document, reviewed per layer — the declarative spec and the canonical s-expr shape for each artifact (field order, how types/nullability/ids/spans render).</p><span class="cost">docs only</span></div></div>
+      <div class="step"><div class="n"></div><div><h4>Writers + end-to-end harness</h4><p>One <code>to_sexpr()</code> per artifact (reuse existing dumps); seed goldens via <code>--update</code>, then human-review each. Wire into the mutant gate.</p><span class="cost">~1 week engineering (later)</span></div></div>
+      <div class="step"><div class="n"></div><div><h4>Readers + per-module mode</h4><p>s-expr → arena AST / plan, enabling stage isolation and hand-crafted/fuzzed artifact injection.</p><span class="cost">~1 week engineering (later)</span></div></div>
+      <div class="step"><div class="n"></div><div><h4>Differential oracle</h4><p>Link libpg_query for accept-reject + type agreement over the corpus, with a curated divergence allow-list. DuckDB optional, later.</p><span class="cost">moderate (later)</span></div></div>
+    </div>
+    <div class="callout">
+      <p class="kicker">Immediate correctness debt (separate track)</p>
+      <p style="margin:0">The last audit surfaced four in-stage bugs the contracts above would pin: <span class="pill crit">F1</span> parser unary/postfix precedence, <span class="pill crit">F2</span> analyzer arithmetic soundness, <span class="pill crit">F3</span> analyzer ROLLUP/CUBE grouping, <span class="pill warn">F4</span> numeric+real promotion. Fixing these is code work, deferred until you give the go-ahead.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>DB25 — Layer Contracts &amp; Scientific Expectations · draft/RFC</span>
+    <span>declarative half of the guardrails</span>
+  </div>
+</footer>
