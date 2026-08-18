@@ -299,7 +299,7 @@ pg_case	ok	query	accept	clean	SELECT '6' AS "One", CASE WHEN 1 > 2 THEN 3 WHEN 4
 pg_case	ok	query	accept	clean	SELECT '7' AS "None", CASE WHEN random() < 0 THEN 1 END AS "NULL on no matches"
 pg_case	ok	query	accept	clean	SELECT CASE WHEN 1=0 THEN 1/0 WHEN 1=1 THEN 1 ELSE 2/0 END
 pg_case	ok	query	accept	clean	SELECT CASE 1 WHEN 0 THEN 1/0 WHEN 1 THEN 1 ELSE 2/0 END
-pg_case	ok	query	accept	diag	SELECT CASE WHEN i > 100 THEN 1/0 ELSE 0 END FROM case_tbl
+pg_case	ok	query	accept	clean	SELECT CASE WHEN i > 100 THEN 1/0 ELSE 0 END FROM case_tbl
 pg_case	ok	query	accept	clean	SELECT CASE 'a' WHEN 'a' THEN 1 ELSE 2 END
 pg_case	ok	query	accept	clean	SELECT CASE WHEN i >= 3 THEN i END AS ">= 3 or Null" FROM CASE_TBL
 pg_case	ok	query	accept	clean	SELECT CASE WHEN i >= 3 THEN (i + i) ELSE i END AS "Simplest Math" FROM CASE_TBL
