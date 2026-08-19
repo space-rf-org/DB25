@@ -7,18 +7,23 @@
 // regression is localized to the module that produced it rather than only
 // showing up as a wrong final result.
 //
-// Phase A covers the plan layers (logical, optimized). The token / AST /
-// resolved-AST sections follow once their writers land; unknown sections in a
-// fixture are compared verbatim if present and ignored otherwise, so the file
-// format is forward-compatible.
+// Phase A pins all five stage artifacts: tokens, ast, resolved, logical,
+// optimized. A fixture may pin any subset - a section that is absent is simply
+// not compared, so the format stays forward-compatible.
 //
 // Fixture file format (one statement per file, sections in pipeline order):
 //   -- sql
 //   SELECT ...
+//   -- tokens
+//   (tokens (kw "SELECT" 0 6) ...)
+//   -- ast
+//   (SelectStmt ...)
+//   -- resolved
+//   (SelectStmt ... :type ... :null ...)
 //   -- logical
-//   (project ...)
+//   (Project ...)
 //   -- optimized
-//   (project ...)
+//   (Project ...)
 //
 // Usage:
 //   staged_runner <dir>            verify every *.fixture in <dir> (default)
@@ -126,6 +131,7 @@ std::string serialize_fixture(const Fixture& f) {
 // the pre- and post-optimization trees are independent (optimize() consumes the
 // plan it is given).
 struct StageArtifacts {
+    std::string tokens;
     std::string ast;
     std::string resolved;
     std::string logical;
@@ -133,10 +139,13 @@ struct StageArtifacts {
 };
 
 StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::string& sql) {
+    // T1: the token stream (independent of parse success).
+    const std::string tokens = staged::tokens_to_sexpr(sql);
+
     parser::Parser p;
     auto res = p.parse(sql);
     if (!res.has_value()) {
-        return {"(parse-error)", "(parse-error)", "(parse-error)", "(parse-error)"};
+        return {tokens, "(parse-error)", "(parse-error)", "(parse-error)", "(parse-error)"};
     }
 
     // T2: untyped AST, straight off the parser.
@@ -165,7 +174,7 @@ StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::strin
     } else {
         optimized = "(bind-error \"" + bound2.error + "\")";
     }
-    return {trim(ast), trim(resolved), trim(logical), trim(optimized)};
+    return {trim(tokens), trim(ast), trim(resolved), trim(logical), trim(optimized)};
 }
 
 }  // namespace
@@ -194,7 +203,7 @@ int main(int argc, char** argv) {
     long total = 0, mismatches = 0, updated = 0;
     // The stages compared, in pipeline order - so a mismatch reports the FIRST
     // stage that diverged.
-    const std::vector<std::string> ordered_stages = {"ast", "resolved", "logical", "optimized"};
+    const std::vector<std::string> ordered_stages = {"tokens", "ast", "resolved", "logical", "optimized"};
 
     for (const auto& path : files) {
         std::ifstream is(path);
@@ -210,7 +219,7 @@ int main(int argc, char** argv) {
         ++total;
         const StageArtifacts got = run_stages(cat, *sql);
         std::map<std::string, std::string> produced = {
-            {"ast", got.ast}, {"resolved", got.resolved},
+            {"tokens", got.tokens}, {"ast", got.ast}, {"resolved", got.resolved},
             {"logical", got.logical}, {"optimized", got.optimized}};
 
         if (update) {

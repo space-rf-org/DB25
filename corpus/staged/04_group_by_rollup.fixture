@@ -31,3 +31,22 @@ SELECT dept, SUM(salary) FROM emp GROUP BY ROLLUP(dept)
     (GroupingElement :text ROLLUP
       (ColumnRef :text dept :type Text :null t :tid 3 :cid 2))))
 
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident dept 7 11)
+  (punct "," 11 12)
+  (ident SUM 13 16)
+  (punct "(" 16 17)
+  (ident salary 17 23)
+  (punct ")" 23 24)
+  (kw FROM 25 29)
+  (ident emp 30 33)
+  (kw GROUP 34 39)
+  (kw BY 40 42)
+  (kw ROLLUP 43 49)
+  (punct "(" 49 50)
+  (ident dept 50 54)
+  (punct ")" 54 55)
+  (eof 55 55))
+
