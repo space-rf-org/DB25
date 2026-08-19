@@ -1,0 +1,17 @@
+-- sql
+SELECT u.name, o.total FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id = 42
+
+-- logical
+(Project :exprs ((colref 1 :type VarChar :null t) (colref 4 :type Double :null t)) :out ((name VarChar :null t) (total Double :null t))
+  (Filter :pred (binop "=" (colref 0 :type Integer :null f) (lit 42 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias u) (name VarChar :null t :alias u) (id Integer :null f :alias o) (user_id Integer :null t :alias o) (total Double :null t :alias o))
+    (Join :kind inner :pred (binop "=" (colref 3 :type Integer :null t) (colref 0 :type Integer :null f) :type Boolean :null t) :out ((id Integer :null f :alias u) (name VarChar :null t :alias u) (id Integer :null f :alias o) (user_id Integer :null t :alias o) (total Double :null t :alias o))
+      (Scan :rel users :alias u :out ((id Integer :null f :alias u) (name VarChar :null t :alias u)))
+      (Scan :rel orders :alias o :out ((id Integer :null f :alias o) (user_id Integer :null t :alias o) (total Double :null t :alias o))))))
+
+-- optimized
+(Project :exprs ((colref 1 :type VarChar :null t) (colref 3 :type Double :null t)) :out ((name VarChar :null t) (total Double :null t))
+  (Join :kind inner :pred (binop "=" (colref 2 :type Integer :null t) (colref 0 :type Integer :null f) :type Boolean :null t) :out ((id Integer :null f :alias u) (name VarChar :null t :alias u) (user_id Integer :null t :alias o) (total Double :null t :alias o))
+    (Filter :pred (binop "=" (colref 0 :type Integer :null f) (lit 42 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias u) (name VarChar :null t :alias u))
+      (Scan :rel users :alias u :out ((id Integer :null f :alias u) (name VarChar :null t :alias u))))
+    (Scan :rel orders :alias o :out ((user_id Integer :null t :alias o) (total Double :null t :alias o)))))
+

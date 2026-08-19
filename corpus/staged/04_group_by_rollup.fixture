@@ -1,0 +1,9 @@
+-- sql
+SELECT dept, SUM(salary) FROM emp GROUP BY ROLLUP(dept)
+
+-- logical
+(bind-error "expression form 'GroupingElement' is not yet lowerable")
+
+-- optimized
+(bind-error "expression form 'GroupingElement' is not yet lowerable")
+

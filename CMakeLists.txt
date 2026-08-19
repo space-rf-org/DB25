@@ -112,6 +112,28 @@ add_test(NAME corpus_runner
          COMMAND corpus_runner ${CMAKE_CURRENT_SOURCE_DIR}/corpus/corpus.tsv)
 
 # ---------------------------------------------------------------------------
+# staged_runner: the staged-artifact s-expr harness (Phase A: plan layers). For
+# each fixture in corpus/staged/, drives parse -> analyze -> bind -> optimize and
+# pins the canonical s-expr of each stage artifact against the committed golden,
+# reporting the FIRST diverging stage on a mismatch (per-module localization).
+# See docs/layer-contracts.html. Shares the analyzer TUs with corpus_report.
+# Built WITH exceptions (unlike the -fno-exceptions frontend) only because it
+# uses std::filesystem to walk the fixture directory; the linked frontend TUs
+# stay -fno-exceptions.
+# ---------------------------------------------------------------------------
+add_executable(staged_runner
+    integration/staged_runner.cpp
+    integration/staged_sexpr.cpp
+    ${ANALYZER_SRC_DIR}/ddl.cpp
+    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
+    ${ANALYZER_SRC_DIR}/check_eval.cpp
+    ${ANALYZER_SRC_DIR}/transaction.cpp)
+target_link_libraries(staged_runner PRIVATE db25logicalplan)
+target_compile_options(staged_runner PRIVATE -Wall -Wextra)
+add_test(NAME staged_runner
+         COMMAND staged_runner ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
+
+# ---------------------------------------------------------------------------
 # corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown
 # report of the artifact each frontend stage produces per statement (AST,
 # diagnostics, catalog effect, logical + optimized plan) - see corpus/REPORT.md.
