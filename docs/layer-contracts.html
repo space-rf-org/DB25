@@ -424,6 +424,138 @@
 
 <section>
   <div class="wrap">
+    <p class="kicker">Worked example · the canonical fixture</p>
+    <h2><span class="idx">§</span>One query, every artifact</h2>
+    <p class="section-lede">A single statement carried through all six boundaries, with the s-expression
+      equivalent at each. This is the reference the fixture schema and the s-expr grammar are drawn from.</p>
+
+    <div class="callout">
+      <p class="kicker">Fidelity rule — no vacuous renderings</p>
+      <p style="margin:0">Each s-expr is a <b>faithful projection</b> of the native artifact, never a toy
+        rendering. It carries everything the artifact holds — <code>NodeType</code> + source spans for the
+        AST; resolved <code>tid/cid</code>, type, and nullability for the resolved AST; positional slot
+        indices + per-node output schema for plans — so it round-trips back to an equivalent artifact.
+        Adopting s-expr as the fixture/wire form does <b>not</b> degrade the in-memory artifacts: the arena
+        AST keeps its full typed richness; s-expr is a <i>view over</i> it, not a replacement.</p>
+    </div>
+
+    <p style="margin:1.4em 0 .4em; font-weight:600">Catalog</p>
+<pre>(catalog
+  (table users  :tid 1 (col id :cid 1 int :null f) (col name :cid 2 varchar :null t))
+  (table orders :tid 2 (col id :cid 1 int :null f) (col user_id :cid 2 int :null t)
+                       (col total :cid 3 double :null t)))</pre>
+
+    <div class="layer">
+      <div class="head"><span class="stagechip">T0</span><h3 class="lname">SQL</h3><span class="repo">source text</span></div>
+      <div class="body"><pre>SELECT u.name, o.total FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id = 42</pre></div>
+    </div>
+
+    <div class="layer">
+      <div class="head"><span class="stagechip">T1</span><h3 class="lname">tokens</h3><span class="repo">tokenizer</span></div>
+      <div class="body">
+        <p style="margin:6px 0 0; color:var(--muted); font-size:.96rem">Every byte covered; kind + canonical text + span <code>[start end)</code>. <code>u</code>/<code>name</code> are <i>idents</i> — the lexer classifies no meaning.</p>
+<pre>(tokens
+  (kw    "SELECT"   0  6) (ident "u"    7  8) (punct "." 8 9) (ident "name" 9 13)
+  (punct ","       13 14) (ident "o"   15 16) (punct "." 16 17) (ident "total" 17 22)
+  (kw    "FROM"    23 27) (ident "users" 28 33) (ident "u" 34 35)
+  (kw    "JOIN"    36 40) (ident "orders" 41 47) (ident "o" 48 49)
+  (kw    "ON"      50 52) (ident "o" 53 54)(punct "." 54 55)(ident "user_id" 55 62)
+  (op    "="       63 64) (ident "u" 65 66)(punct "." 66 67)(ident "id" 67 69)
+  (kw    "WHERE"   70 75) (ident "u" 76 77)(punct "." 77 78)(ident "id" 78 80)
+  (op    "="       81 82) (num  "42" 83 85)
+  (eof             85 85))</pre>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="head"><span class="stagechip">T2</span><h3 class="lname">AST</h3><span class="repo">parser · untyped</span></div>
+      <div class="body">
+        <p style="margin:6px 0 0; color:var(--muted); font-size:.96rem"><code>NodeType</code>-tagged, children ordered, every node keeps <code>:span</code>. Qualifiers, alias bindings, join kind, literal value preserved — but <b>nothing resolved</b>: no <code>:type</code>, no <code>:tid</code>.</p>
+<pre>(select-stmt :span (0 85)
+  (select-list :span (7 22)
+    (column-ref :span (7 13)  :qualifier "u" :name "name")
+    (column-ref :span (15 22) :qualifier "o" :name "total"))
+  (from :span (23 69)
+    (join :span (28 69) :kind inner
+      (table-ref :span (28 35) :name "users"  :alias "u")
+      (table-ref :span (41 49) :name "orders" :alias "o")
+      (on :span (50 69)
+        (binary :span (53 69) :op "="
+          (column-ref :span (53 62) :qualifier "o" :name "user_id")
+          (column-ref :span (65 69) :qualifier "u" :name "id")))))
+  (where :span (70 85)
+    (binary :span (76 85) :op "="
+      (column-ref :span (76 80) :qualifier "u" :name "id")
+      (int-lit    :span (83 85) :value 42))))</pre>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="head"><span class="stagechip">T3</span><h3 class="lname">resolved AST</h3><span class="repo">analyzer · annotated in place</span></div>
+      <div class="body">
+        <p style="margin:6px 0 0; color:var(--muted); font-size:.96rem">The <b>identical tree</b> — same nodes, same spans — with attributes <i>layered on</i>: <code>:tid/:cid</code>, <code>:type</code>, <code>:null</code>, plus the stmt <code>:out</code> schema and <code>:diags</code>. s-expr <i>adds</i> keywords; it never collapses structure into a bare type.</p>
+<pre>(select-stmt :span (0 85)
+  :out ((name text :null t) (total double :null t)) :diags ()
+  (select-list :span (7 22)
+    (column-ref :span (7 13)  :qualifier "u" :name "name"  :tid 1 :cid 2 :type text   :null t)
+    (column-ref :span (15 22) :qualifier "o" :name "total" :tid 2 :cid 3 :type double :null t))
+  (from :span (23 69)
+    (join :span (28 69) :kind inner
+      (table-ref :span (28 35) :name "users"  :alias "u" :tid 1)
+      (table-ref :span (41 49) :name "orders" :alias "o" :tid 2)
+      (on :span (50 69)
+        (binary :span (53 69) :op "=" :type bool :null t     <span class="c">; nullable: user_id is nullable</span>
+          (column-ref :span (53 62) :qualifier "o" :name "user_id" :tid 2 :cid 2 :type int :null t)
+          (column-ref :span (65 69) :qualifier "u" :name "id"      :tid 1 :cid 1 :type int :null f)))))
+  (where :span (70 85)
+    (binary :span (76 85) :op "=" :type bool :null f
+      (column-ref :span (76 80) :qualifier "u" :name "id" :tid 1 :cid 1 :type int :null f)
+      (int-lit    :span (83 85) :value 42 :type int :null f))))</pre>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="head"><span class="stagechip">T4</span><h3 class="lname">logical plan</h3><span class="repo">binder</span></div>
+      <div class="body">
+        <p style="margin:6px 0 0; color:var(--muted); font-size:.96rem">Algebra, not the AST. Column refs become positional <code>colref&nbsp;N</code> into each operator's input frame; every node carries its <code>:out</code> schema. WHERE → <code>filter</code>; ON → the join <code>:pred</code>. Join frame <code>[0&nbsp;u.id, 1&nbsp;u.name, 2&nbsp;o.id, 3&nbsp;o.user_id, 4&nbsp;o.total]</code>.</p>
+<pre>(project :out ((name text :null t) (total double :null t))
+  :exprs ((colref 1) (colref 4))
+  (filter :pred (= (colref 0) (int 42))
+    :out ((u.id int :null f)(u.name text :null t)(o.id int :null f)(o.user_id int :null t)(o.total double :null t))
+    (join :kind inner :pred (= (colref 3) (colref 0))
+      :out ((u.id int :null f)(u.name text :null t)(o.id int :null f)(o.user_id int :null t)(o.total double :null t))
+      (scan :rel users  :tid 1 :out ((id int :null f) (name text :null t)))
+      (scan :rel orders :tid 2 :out ((id int :null f) (user_id int :null t) (total double :null t))))))</pre>
+      </div>
+    </div>
+
+    <div class="layer">
+      <div class="head"><span class="stagechip">T5</span><h3 class="lname">optimized plan</h3><span class="repo">optimizer</span></div>
+      <div class="body">
+        <p style="margin:6px 0 0; color:var(--muted); font-size:.96rem">Two rewrites visible in the diff: <b>predicate pushdown</b> (<code>u.id=42</code> sinks into the <code>users</code> scan, top filter removed) and <b>column pruning</b> (<code>orders.id</code> dropped). Frames re-index: <code>[0&nbsp;u.id, 1&nbsp;u.name, 2&nbsp;o.user_id, 3&nbsp;o.total]</code>.</p>
+<pre>(project :out ((name text :null t) (total double :null t))
+  :exprs ((colref 1) (colref 3))
+  (join :kind inner :pred (= (colref 2) (colref 0))
+    :out ((u.id int :null f)(u.name text :null t)(o.user_id int :null t)(o.total double :null t))
+    (scan :rel users  :tid 1 :pred (= (colref 0) (int 42))     <span class="c">; &larr; pushed down</span>
+          :out ((id int :null f) (name text :null t)))
+    (scan :rel orders :tid 2                                    <span class="c">; &larr; id pruned</span>
+          :out ((user_id int :null t) (total double :null t)))))</pre>
+      </div>
+    </div>
+
+    <h3>What the six columns assert — for free</h3>
+    <ul class="clean">
+      <li>root <code>:out</code> is byte-identical across T3 → T4 → T5 → <b>shape-preservation</b> holds.</li>
+      <li><code>optimize</code> a second time reproduces T5 verbatim → <b>idempotence</b>.</li>
+      <li>every <code>colref N</code> is in range for its node's <code>:out</code> width → <b>IR well-formedness</b>.</li>
+      <li><code>bag_equal(eval(T4), eval(T5))</code> → <b>semantics-preservation</b>.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <p class="kicker">The harness the contracts feed</p>
     <h2><span class="idx">§</span>Staged-artifact test framework</h2>
     <p class="section-lede">One generic engine, one fixture corpus, two modes. The contract above defines what each
