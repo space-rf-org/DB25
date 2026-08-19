@@ -47,9 +47,17 @@ jobs:
           float external/db25-logical-plan/external/analyzer
 
       - name: Install compiler
+        # ubuntu-24.04 already ships g++-13 and g++-14; only refresh apt and
+        # install when the compiler is genuinely missing. The blanket
+        # `apt-get update` was slow and, on a flaky mirror, could hang until the
+        # job was canceled.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ${{ matrix.cxx }}
+          if command -v ${{ matrix.cxx }} >/dev/null 2>&1; then
+            echo "${{ matrix.cxx }} already present: $(${{ matrix.cxx }} --version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y ${{ matrix.cxx }}
+          fi
 
       - name: Configure
         run: >
@@ -93,9 +101,15 @@ jobs:
           float external/db25-logical-plan/external/analyzer
 
       - name: Install compiler
+        # Only install if missing (ubuntu-24.04 already ships g++-14); avoids a
+        # slow, cancellation-prone apt refresh on every run.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y g++-14
+          if command -v g++-14 >/dev/null 2>&1; then
+            echo "g++-14 already present: $(g++-14 --version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y g++-14
+          fi
 
       - name: Configure (ASan/UBSan)
         run: >
