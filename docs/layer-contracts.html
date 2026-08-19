@@ -283,7 +283,9 @@
         <div class="field"><div class="k">Expectations</div><div class="v">
           <ol class="inv">
             <li><b>Total.</b> Every byte of input is covered by exactly one token or an explicit error token; spans are non-overlapping and monotonic.</li>
-            <li><b>Lossless.</b> Concatenating token texts + skipped-trivia reconstructs the source (round-trip identity).</li>
+            <li><b>Trivia vs data.</b> Runs of whitespace, newlines, and comments <i>between</i> tokens collapse to a single insignificant gap — kept only for the round-trip below, never emitted as a token. Whitespace <i>inside</i> a string literal or quoted identifier (<code>'a&nbsp;&nbsp;b'</code>, <code>"col&nbsp;&nbsp;name"</code>) is <b>data</b> and is preserved verbatim. That line is where "extra space" stops being ignorable.</li>
+            <li><b>True offsets.</b> Spans are real byte offsets into the actual input, so diagnostics point at the user's own text; reformatting shifts every span by design. The live path is never whitespace-normalized — canonicalization is a fixture concern (see §framework), not the lexer's.</li>
+            <li><b>Lossless.</b> Concatenating token texts + preserved trivia reconstructs the source exactly (round-trip identity).</li>
             <li><b>No classification of meaning.</b> <code>rollup</code> is an identifier here; whether it is a keyword is the parser's call, not the lexer's.</li>
           </ol>
         </div></div>
@@ -576,6 +578,28 @@
           <tr><td class="mono">result</td><td>result bag</td><td>reference eval</td><td class="mono">rows</td></tr>
         </tbody>
       </table>
+    </div>
+
+    <h3>Whitespace &amp; span policy</h3>
+    <p>Extra spaces and newlines are semantically irrelevant but move byte spans, so fixtures decouple from
+      them deliberately — a reformat must never churn a golden:</p>
+    <ul class="clean">
+      <li><b>Canonical fixture input.</b> Each fixture's <code>sql</code> is stored in one canonical
+        whitespace form (single inter-token space / pretty-printed). Goldens are then deterministic; changing
+        a fixture's formatting is a conscious edit, not incidental drift.</li>
+      <li><b>Span-sensitivity is layered.</b> Only <b>T1 (tokens)</b> pins spans — it <i>is</i> the lexing
+        test, together with the lossless round-trip (<code>texts + trivia == source</code>). <b>T2–T5</b>
+        compare structure + resolved attributes with <code>:span</code> normalized or stripped, because the
+        AST and plan meaning is whitespace-invariant; pinning spans there would only manufacture churn.</li>
+      <li><b>Literals stay exact.</b> Canonicalization touches only trivia between tokens — never the bytes
+        inside a string literal or quoted identifier.</li>
+    </ul>
+    <div class="callout">
+      <p class="kicker">Metamorphic guardrail — whitespace invariance</p>
+      <p style="margin:0">For arbitrary whitespace reformatting <code>R</code>,
+        <code>strip_spans(parse(sql)) == strip_spans(parse(R(sql)))</code> — a falsifiable proof that extra
+        spaces and newlines never change the AST. Diagnostics, meanwhile, still resolve against the real
+        offsets of whichever text was submitted.</p>
     </div>
 
     <h3>Two modes over the same fixtures</h3>
