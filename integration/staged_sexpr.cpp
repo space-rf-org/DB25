@@ -1,9 +1,11 @@
 // Canonical s-expr serialization of the logical-plan artifacts. See the header.
 #include "staged_sexpr.hpp"
 
+#include "db25/ast/ast_node.hpp"
 #include "db25/ast/node_types.hpp"
 #include "db25/plan/expr_ir.hpp"
 #include "db25/plan/logical_plan.hpp"
+#include "db25/semantic/analyzer.hpp"
 
 #include <string>
 #include <variant>
@@ -400,11 +402,89 @@ void render_node(const LogicalNode* n, int depth, std::string& out) {
     out.push_back(')');
 }
 
+// ---- AST + resolved-AST rendering ------------------------------------------
+
+void render_ast_flags(db25::ast::NodeFlags f, std::string& out) {
+    const auto has = [&](db25::ast::NodeFlags b) {
+        return (static_cast<std::uint8_t>(f) & static_cast<std::uint8_t>(b)) != 0;
+    };
+    if (has(db25::ast::NodeFlags::Distinct)) out.append(" :distinct");
+    if (has(db25::ast::NodeFlags::All)) out.append(" :all");
+    if (has(db25::ast::NodeFlags::IsRecursive)) out.append(" :recursive");
+    if (has(db25::ast::NodeFlags::IsLateral)) out.append(" :lateral");
+    if (has(db25::ast::NodeFlags::IsSubquery)) out.append(" :subquery");
+    if (has(db25::ast::NodeFlags::IsCorrelated)) out.append(" :correlated");
+}
+
+// One AST node. When `an` is non-null the analyzer's in-place annotations are
+// layered on (this is the ONLY difference between the T2 and T3 renderings -
+// the tree structure, spans, text and flags are identical, exactly as the
+// analyzer annotates the parser's tree in place rather than building a new one).
+void render_ast(const db25::ast::ASTNode* n, const db25::semantic::Analyzer* an,
+                int depth, std::string& out) {
+    indent(out, depth);
+    if (n == nullptr) { out.append("(null)"); return; }
+
+    out.push_back('(');
+    out.append(db25::ast::node_type_to_string(n->node_type));
+    // Source spans are intentionally omitted from the T2/T3 renderings: per the
+    // whitespace/span policy (docs/layer-contracts.html) spans are the T1 token
+    // layer's business, and the AST/resolved comparisons are span-stripped so a
+    // whitespace reformat never churns these goldens. (The parser also does not
+    // populate per-node spans today, so rendering them would be all-zero noise.)
+    if (!n->primary_text.empty()) {
+        out.append(" :text ");
+        out.append(ident(std::string(n->primary_text)));
+    }
+    if (!n->schema_name.empty()) {
+        out.append(" :qual ");
+        out.append(ident(std::string(n->schema_name)));
+    }
+    render_ast_flags(n->flags, out);
+
+    if (an != nullptr) {
+        const db25::ast::DataType t = an->type_of(n);
+        if (t != db25::ast::DataType::Unknown) {
+            out.append(" :type ");
+            out.append(datatype(t));
+            out.append(" :null ");
+            out.append(null2(static_cast<std::uint8_t>(an->nullability_of(n))));
+        }
+        if (n->context.analysis.table_id != 0) {
+            out.append(" :tid ");
+            out.append(std::to_string(n->context.analysis.table_id));
+        }
+        if (n->context.analysis.column_id != 0) {
+            out.append(" :cid ");
+            out.append(std::to_string(n->context.analysis.column_id));
+        }
+    }
+
+    for (const db25::ast::ASTNode* c = n->first_child; c != nullptr; c = c->next_sibling) {
+        out.push_back('\n');
+        render_ast(c, an, depth + 1, out);
+    }
+    out.push_back(')');
+}
+
 }  // namespace
 
 std::string plan_to_sexpr(const LogicalNode* root) {
     std::string out;
     render_node(root, 0, out);
+    return out;
+}
+
+std::string ast_to_sexpr(const db25::ast::ASTNode* root) {
+    std::string out;
+    render_ast(root, nullptr, 0, out);
+    return out;
+}
+
+std::string resolved_ast_to_sexpr(const db25::ast::ASTNode* root,
+                                  const db25::semantic::Analyzer& analyzer) {
+    std::string out;
+    render_ast(root, &analyzer, 0, out);
     return out;
 }
 

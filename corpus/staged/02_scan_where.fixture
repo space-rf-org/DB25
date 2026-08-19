@@ -11,3 +11,27 @@ SELECT id, name FROM users WHERE id = 1
   (Filter :pred (binop "=" (colref 0 :type Integer :null f) (lit 1 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias users) (name VarChar :null t :alias users))
     (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users)))))
 
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id)
+    (ColumnRef :text name))
+  (FromClause
+    (TableRef :text users))
+  (WhereClause
+    (BinaryExpr :text "="
+      (ColumnRef :text id)
+      (IntegerLiteral :text 1))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id :type Integer :null f :tid 1 :cid 1)
+    (ColumnRef :text name :type VarChar :null t :tid 1 :cid 2))
+  (FromClause
+    (TableRef :text users))
+  (WhereClause
+    (BinaryExpr :text "=" :type Boolean :null f
+      (ColumnRef :text id :type Integer :null f :tid 1 :cid 1)
+      (IntegerLiteral :text 1 :type Integer :null f))))
+

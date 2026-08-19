@@ -7,3 +7,27 @@ SELECT dept, SUM(salary) FROM emp GROUP BY ROLLUP(dept)
 -- optimized
 (bind-error "expression form 'GroupingElement' is not yet lowerable")
 
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept)
+    (FunctionCall :text SUM
+      (Identifier :text salary)))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (GroupingElement :text ROLLUP
+      (ColumnRef :text dept))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+    (FunctionCall :text SUM :type Double :null t
+      (Identifier :text salary :type Double :null t :tid 3 :cid 4)))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (GroupingElement :text ROLLUP
+      (ColumnRef :text dept :type Text :null t :tid 3 :cid 2))))
+

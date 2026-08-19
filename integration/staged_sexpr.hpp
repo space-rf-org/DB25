@@ -19,7 +19,27 @@ struct LogicalNode;
 struct Expr;
 }  // namespace db25::plan
 
+namespace db25::ast {
+struct ASTNode;
+}  // namespace db25::ast
+
+namespace db25::semantic {
+class Analyzer;
+}  // namespace db25::semantic
+
 namespace db25::staged {
+
+// Serialize the parser's AST (T2, untyped) to canonical s-expr: node type,
+// source span, captured text / qualifier, and structural flags. Nothing is
+// resolved - no types, no catalog ids.
+[[nodiscard]] std::string ast_to_sexpr(const db25::ast::ASTNode* root);
+
+// Serialize the resolved AST (T3): the SAME tree, with the analyzer's in-place
+// annotations layered on - per-node resolved type + nullability and resolved
+// table / column ids where the analyzer set them.
+[[nodiscard]] std::string resolved_ast_to_sexpr(const db25::ast::ASTNode* root,
+                                                const db25::semantic::Analyzer& analyzer);
+
 
 // Serialize a logical (or optimized) plan tree to canonical s-expr. Multi-line,
 // indented by plan depth; expressions render inline. Deterministic: the same

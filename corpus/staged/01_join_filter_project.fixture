@@ -15,3 +15,37 @@ SELECT u.name, o.total FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id
       (Scan :rel users :alias u :out ((id Integer :null f :alias u) (name VarChar :null t :alias u))))
     (Scan :rel orders :alias o :out ((user_id Integer :null t :alias o) (total Double :null t :alias o)))))
 
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.name")
+    (ColumnRef :text "o.total"))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text JOIN
+      (TableRef :text orders :qual o)
+      (BinaryExpr :text "="
+        (ColumnRef :text "o.user_id")
+        (ColumnRef :text "u.id"))))
+  (WhereClause
+    (BinaryExpr :text "="
+      (ColumnRef :text "u.id")
+      (IntegerLiteral :text 42))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.name" :type VarChar :null t :tid 1 :cid 2)
+    (ColumnRef :text "o.total" :type Double :null t :tid 2 :cid 3))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text JOIN
+      (TableRef :text orders :qual o)
+      (BinaryExpr :text "=" :type Boolean :null t
+        (ColumnRef :text "o.user_id" :type Integer :null t :tid 2 :cid 2)
+        (ColumnRef :text "u.id" :type Integer :null f :tid 1 :cid 1))))
+  (WhereClause
+    (BinaryExpr :text "=" :type Boolean :null f
+      (ColumnRef :text "u.id" :type Integer :null f :tid 1 :cid 1)
+      (IntegerLiteral :text 42 :type Integer :null f))))
+

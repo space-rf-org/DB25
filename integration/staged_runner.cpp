@@ -125,18 +125,27 @@ std::string serialize_fixture(const Fixture& f) {
 // Produce the plan-stage s-expr artifacts for one SQL statement. Binds twice so
 // the pre- and post-optimization trees are independent (optimize() consumes the
 // plan it is given).
-struct PlanArtifacts {
+struct StageArtifacts {
+    std::string ast;
+    std::string resolved;
     std::string logical;
     std::string optimized;
 };
 
-PlanArtifacts run_plan_stages(const semantic::InMemoryCatalog& cat, const std::string& sql) {
+StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::string& sql) {
     parser::Parser p;
     auto res = p.parse(sql);
-    if (!res.has_value()) return {"(parse-error)", "(parse-error)"};
+    if (!res.has_value()) {
+        return {"(parse-error)", "(parse-error)", "(parse-error)", "(parse-error)"};
+    }
 
+    // T2: untyped AST, straight off the parser.
+    const std::string ast = staged::ast_to_sexpr(res.value());
+
+    // T3: the SAME tree, annotated in place by the analyzer.
     semantic::Analyzer analyzer(cat);
     analyzer.analyze(res.value());
+    const std::string resolved = staged::resolved_ast_to_sexpr(res.value(), analyzer);
 
     plan::Binder binder_a(analyzer, cat);
     plan::BindResult bound = binder_a.bind(res.value());
@@ -156,7 +165,7 @@ PlanArtifacts run_plan_stages(const semantic::InMemoryCatalog& cat, const std::s
     } else {
         optimized = "(bind-error \"" + bound2.error + "\")";
     }
-    return {trim(logical), trim(optimized)};
+    return {trim(ast), trim(resolved), trim(logical), trim(optimized)};
 }
 
 }  // namespace
@@ -185,7 +194,7 @@ int main(int argc, char** argv) {
     long total = 0, mismatches = 0, updated = 0;
     // The stages compared, in pipeline order - so a mismatch reports the FIRST
     // stage that diverged.
-    const std::vector<std::string> ordered_stages = {"logical", "optimized"};
+    const std::vector<std::string> ordered_stages = {"ast", "resolved", "logical", "optimized"};
 
     for (const auto& path : files) {
         std::ifstream is(path);
@@ -199,8 +208,9 @@ int main(int argc, char** argv) {
             continue;
         }
         ++total;
-        const PlanArtifacts got = run_plan_stages(cat, *sql);
+        const StageArtifacts got = run_stages(cat, *sql);
         std::map<std::string, std::string> produced = {
+            {"ast", got.ast}, {"resolved", got.resolved},
             {"logical", got.logical}, {"optimized", got.optimized}};
 
         if (update) {
