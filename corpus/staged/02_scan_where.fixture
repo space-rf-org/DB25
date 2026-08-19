@@ -35,3 +35,17 @@ SELECT id, name FROM users WHERE id = 1
       (ColumnRef :text id :type Integer :null f :tid 1 :cid 1)
       (IntegerLiteral :text 1 :type Integer :null f))))
 
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (punct "," 9 10)
+  (ident name 11 15)
+  (kw FROM 16 20)
+  (ident users 21 26)
+  (kw WHERE 27 32)
+  (ident id 33 35)
+  (op "=" 36 37)
+  (num 1 38 39)
+  (eof 39 39))
+

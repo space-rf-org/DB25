@@ -3,12 +3,15 @@
 
 #include "db25/ast/ast_node.hpp"
 #include "db25/ast/node_types.hpp"
+#include "db25/parser/tokenizer_adapter.hpp"
 #include "db25/plan/expr_ir.hpp"
 #include "db25/plan/logical_plan.hpp"
 #include "db25/semantic/analyzer.hpp"
 
 #include <string>
+#include <string_view>
 #include <variant>
+#include <vector>
 
 namespace db25::staged {
 namespace {
@@ -467,7 +470,67 @@ void render_ast(const db25::ast::ASTNode* n, const db25::semantic::Analyzer* an,
     out.push_back(')');
 }
 
+// ---- token rendering (T1) --------------------------------------------------
+
+const char* token_kind(db25::TokenType t) {
+    switch (t) {
+        case db25::TokenType::Keyword: return "kw";
+        case db25::TokenType::Identifier: return "ident";
+        case db25::TokenType::Number: return "num";
+        case db25::TokenType::String: return "str";
+        case db25::TokenType::Operator: return "op";
+        case db25::TokenType::Delimiter: return "punct";
+        case db25::TokenType::Whitespace: return "ws";
+        case db25::TokenType::Comment: return "comment";
+        case db25::TokenType::EndOfFile: return "eof";
+        case db25::TokenType::Unknown: return "unknown";
+    }
+    return "unknown";
+}
+
 }  // namespace
+
+std::string tokens_to_sexpr(std::string_view sql) {
+    db25::parser::tokenizer::Tokenizer tok{sql};
+    const std::vector<db25::Token>& toks = tok.get_tokens();
+
+    // The tokenizer's Token carries only (line, column), and its `value` views
+    // an internal buffer - not `sql` - so byte offsets are not directly
+    // available. Reconstruct them by an in-order forward search: each token's
+    // text is a verbatim substring of the source, and tokens are in source
+    // order, so scanning forward from the previous token's end lands on the
+    // correct occurrence for canonical (single-space) fixture SQL. This keeps
+    // T1 the span-authoritative layer without depending on tokenizer internals.
+    std::string out = "(tokens";
+    std::size_t cursor = 0;
+    for (const db25::Token& t : toks) {
+        // Trivia is collapsed: kept for round-trip, never a token (see header).
+        if (t.type == db25::TokenType::Whitespace || t.type == db25::TokenType::Comment) {
+            continue;
+        }
+        std::size_t start = cursor;
+        if (t.type != db25::TokenType::EndOfFile && !t.value.empty()) {
+            const std::size_t pos = sql.find(t.value, cursor);
+            start = (pos == std::string_view::npos) ? cursor : pos;
+            cursor = start + t.value.size();
+        } else {
+            start = sql.size();  // EOF sits at end-of-source
+        }
+        out.append("\n  (");
+        out.append(token_kind(t.type));
+        if (t.type != db25::TokenType::EndOfFile) {
+            out.push_back(' ');
+            out.append(ident(std::string(t.value)));
+        }
+        out.push_back(' ');
+        out.append(std::to_string(start));
+        out.push_back(' ');
+        out.append(std::to_string(start + t.value.size()));
+        out.push_back(')');
+    }
+    out.push_back(')');
+    return out;
+}
 
 std::string plan_to_sexpr(const LogicalNode* root) {
     std::string out;
