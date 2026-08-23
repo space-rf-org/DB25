@@ -143,6 +143,11 @@ add_test(NAME staged_gate
 # s-expr is lossless w.r.t. the rendered fields and the reader stays in sync.
 add_test(NAME staged_roundtrip
          COMMAND staged_runner --roundtrip ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
+# Per-module injection (Phase B): read the LOGICAL golden back into a plan and
+# optimize it in isolation (no binder); optimize(read(logical)) must equal the
+# OPTIMIZED golden. Tests the optimizer alone on a committed input.
+add_test(NAME staged_inject
+         COMMAND staged_runner --inject ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
 
 # ---------------------------------------------------------------------------
 # corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown
