@@ -39,6 +39,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <sstream>
 #include <string>
@@ -177,18 +178,83 @@ StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::strin
     return {trim(tokens), trim(ast), trim(resolved), trim(logical), trim(optimized)};
 }
 
+// --- Falsifiability gate (plan layers) --------------------------------------
+//
+// A structural golden is only worth committing if a corruption of the artifact
+// it pins would actually change it - otherwise the check is vacuous. The gate
+// applies a small catalog of plan mutations (mirroring the harness's own plan
+// mutants - a dropped predicate, a corrupted output schema) to the produced
+// plan and asserts the golden no longer matches. A real-plan golden that no
+// applicable mutation can budge is vacuous and fails the gate.
+
+// M-drop-predicate: null the first predicate in the tree (cf. harness M5/M7).
+bool drop_first_predicate(plan::LogicalNode* n) {
+    if (n == nullptr) return false;
+    if (n->predicate) { n->predicate.reset(); return true; }
+    for (auto& c : n->children) {
+        if (drop_first_predicate(c.get())) return true;
+    }
+    return false;
+}
+
+// M-corrupt-schema: append a spurious column to the root output (cf. harness M6).
+void corrupt_root_schema(plan::LogicalNode* n) {
+    if (n == nullptr) return;
+    plan::ColumnSchema c;
+    c.name = "__mutant__";
+    c.type = ast::DataType::Integer;
+    c.nullable = true;
+    n->output.push_back(std::move(c));
+}
+
+struct GateResult {
+    bool gateable = false;  // the golden pins a real plan (not a bind/parse error)
+    bool stale = false;     // produced plan no longer matches the committed golden
+    int applied = 0;        // mutations that were applicable to this plan
+    int caught = 0;         // applicable mutations that changed the s-expr
+};
+
+bool is_real_plan(const std::string& golden) {
+    return !golden.empty() && golden.front() == '(' &&
+           golden.rfind("(bind-error", 0) != 0 && golden.rfind("(parse-error", 0) != 0;
+}
+
+// `make` rebinds a FRESH owned plan each call (mutations are destructive).
+GateResult gate_plan(const std::string& golden,
+                     const std::function<plan::LogicalNodePtr()>& make) {
+    GateResult r;
+    if (!is_real_plan(golden)) return r;
+    r.gateable = true;
+
+    if (auto base = make(); base && trim(staged::plan_to_sexpr(base.get())) != golden) {
+        r.stale = true;  // fixture is out of date; regenerate with --update
+    }
+    if (auto p = make(); p && drop_first_predicate(p.get())) {
+        ++r.applied;
+        if (trim(staged::plan_to_sexpr(p.get())) != golden) ++r.caught;
+    }
+    if (auto p = make(); p) {
+        corrupt_root_schema(p.get());
+        ++r.applied;
+        if (trim(staged::plan_to_sexpr(p.get())) != golden) ++r.caught;
+    }
+    return r;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     bool update = false;
+    bool gate = false;
     std::string dir;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--update") update = true;
+        else if (a == "--gate") gate = true;
         else dir = a;
     }
     if (dir.empty()) {
-        std::printf("staged_runner: usage: staged_runner [--update] <fixture-dir>\n");
+        std::printf("staged_runner: usage: staged_runner [--update|--gate] <fixture-dir>\n");
         return 2;
     }
 
@@ -199,6 +265,62 @@ int main(int argc, char** argv) {
         if (e.is_regular_file() && e.path().extension() == ".fixture") files.push_back(e.path());
     }
     std::sort(files.begin(), files.end());
+
+    // --gate: falsifiability check. Every real-plan golden must be caught
+    // (changed) by at least one plan mutation; a golden nothing can budge is
+    // vacuous. Also flags stale goldens (produced plan != committed golden).
+    if (gate) {
+        long gated = 0, vacuous = 0, stale = 0;
+        for (const auto& path : files) {
+            std::ifstream is(path);
+            std::stringstream ss;
+            ss << is.rdbuf();
+            Fixture f = parse_fixture(ss.str());
+            const std::string* sql = f.find("sql");
+            if (sql == nullptr) continue;
+
+            parser::Parser p;
+            auto res = p.parse(*sql);
+            if (!res.has_value()) continue;  // no plan to gate
+            semantic::Analyzer an(cat);
+            an.analyze(res.value());
+            const auto bind_once = [&]() -> plan::LogicalNodePtr {
+                plan::Binder b(an, cat);
+                plan::BindResult br = b.bind(res.value());
+                return br.ok ? std::move(br.root) : plan::LogicalNodePtr{};
+            };
+            const auto opt_once = [&]() -> plan::LogicalNodePtr {
+                plan::LogicalNodePtr r = bind_once();
+                return r ? plan::optimize(std::move(r)) : plan::LogicalNodePtr{};
+            };
+
+            const std::string name = path.filename().string();
+            const std::pair<const char*, GateResult> checks[] = {
+                {"logical", gate_plan(f.find("logical") ? *f.find("logical") : "", bind_once)},
+                {"optimized", gate_plan(f.find("optimized") ? *f.find("optimized") : "", opt_once)},
+            };
+            for (const auto& [label, gr] : checks) {
+                if (!gr.gateable) continue;
+                ++gated;
+                if (gr.stale) {
+                    ++stale;
+                    std::printf("  STALE %s [%s]: produced plan != golden (run --update)\n",
+                                name.c_str(), label);
+                }
+                if (gr.caught == 0) {
+                    ++vacuous;
+                    std::printf("  VACUOUS %s [%s]: no plan mutation changes this golden\n",
+                                name.c_str(), label);
+                } else {
+                    std::printf("  ok %s [%s]: caught by %d/%d mutation(s)\n",
+                                name.c_str(), label, gr.caught, gr.applied);
+                }
+            }
+        }
+        std::printf("staged_runner --gate: %ld plan goldens, %ld vacuous, %ld stale\n",
+                    gated, vacuous, stale);
+        return (vacuous == 0 && stale == 0) ? 0 : 1;
+    }
 
     long total = 0, mismatches = 0, updated = 0;
     // The stages compared, in pipeline order - so a mismatch reports the FIRST
