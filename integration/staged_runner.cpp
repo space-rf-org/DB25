@@ -29,6 +29,7 @@
 //   staged_runner <dir>            verify every *.fixture in <dir> (default)
 //   staged_runner --update <dir>   (re)generate the golden sections in place
 #include "staged_sexpr.hpp"
+#include "staged_sexpr_read.hpp"
 
 #include "db25/parser/parser.hpp"
 #include "db25/plan/binder.hpp"
@@ -246,11 +247,13 @@ GateResult gate_plan(const std::string& golden,
 int main(int argc, char** argv) {
     bool update = false;
     bool gate = false;
+    bool roundtrip = false;
     std::string dir;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--update") update = true;
         else if (a == "--gate") gate = true;
+        else if (a == "--roundtrip") roundtrip = true;
         else dir = a;
     }
     if (dir.empty()) {
@@ -320,6 +323,42 @@ int main(int argc, char** argv) {
         std::printf("staged_runner --gate: %ld plan goldens, %ld vacuous, %ld stale\n",
                     gated, vacuous, stale);
         return (vacuous == 0 && stale == 0) ? 0 : 1;
+    }
+
+    // --roundtrip: Phase B losslessness check. Read each real-plan golden back
+    // into a LogicalNode and re-serialize; write(read(golden)) must equal the
+    // golden, proving the plan s-expr is a lossless encoding of the rendered
+    // fields (and exercising the reader that per-module injection builds on).
+    if (roundtrip) {
+        long checked = 0, notlossless = 0, reader_errs = 0;
+        for (const auto& path : files) {
+            std::ifstream is(path);
+            std::stringstream ss;
+            ss << is.rdbuf();
+            Fixture f = parse_fixture(ss.str());
+            const std::string name = path.filename().string();
+            for (const char* label : {"logical", "optimized"}) {
+                const std::string* golden = f.find(label);
+                if (golden == nullptr || !is_real_plan(*golden)) continue;
+                std::string err;
+                plan::LogicalNodePtr p = staged::plan_from_sexpr(*golden, err);
+                if (!p) {
+                    ++reader_errs;
+                    std::printf("  READER-ERROR %s [%s]: %s\n", name.c_str(), label, err.c_str());
+                    continue;
+                }
+                ++checked;
+                const std::string rt = trim(staged::plan_to_sexpr(p.get()));
+                if (rt != *golden) {
+                    ++notlossless;
+                    std::printf("  NOT-LOSSLESS %s [%s]:\n    --- golden ---\n%s\n    --- read->write ---\n%s\n",
+                                name.c_str(), label, golden->c_str(), rt.c_str());
+                }
+            }
+        }
+        std::printf("staged_runner --roundtrip: %ld plan goldens, %ld not-lossless, %ld reader-errors\n",
+                    checked, notlossless, reader_errs);
+        return (notlossless == 0 && reader_errs == 0) ? 0 : 1;
     }
 
     long total = 0, mismatches = 0, updated = 0;

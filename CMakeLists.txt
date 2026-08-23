@@ -124,6 +124,7 @@ add_test(NAME corpus_runner
 add_executable(staged_runner
     integration/staged_runner.cpp
     integration/staged_sexpr.cpp
+    integration/staged_sexpr_read.cpp
     ${ANALYZER_SRC_DIR}/ddl.cpp
     ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
     ${ANALYZER_SRC_DIR}/check_eval.cpp
@@ -137,6 +138,11 @@ add_test(NAME staged_runner
 # or stale golden fails this test.
 add_test(NAME staged_gate
          COMMAND staged_runner --gate ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
+# Round-trip (Phase B): read each plan golden back into a LogicalNode and
+# re-serialize; write(read(golden)) must equal the golden, proving the plan
+# s-expr is lossless w.r.t. the rendered fields and the reader stays in sync.
+add_test(NAME staged_roundtrip
+         COMMAND staged_runner --roundtrip ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
 
 # ---------------------------------------------------------------------------
 # corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown
