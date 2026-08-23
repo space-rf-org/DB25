@@ -13,6 +13,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
 namespace db25::plan {
 struct LogicalNode;
@@ -28,6 +29,13 @@ class Analyzer;
 }  // namespace db25::semantic
 
 namespace db25::staged {
+
+// Serialize the token stream (T1) to canonical s-expr: one atom per token,
+// (kind "text" start end) with byte-offset spans. Trivia (whitespace / comment)
+// is collapsed - kept only for lossless round-trip, never emitted as a token -
+// per the whitespace/span policy in docs/layer-contracts.html. This is the
+// span-authoritative layer.
+[[nodiscard]] std::string tokens_to_sexpr(std::string_view sql);
 
 // Serialize the parser's AST (T2, untyped) to canonical s-expr: node type,
 // source span, captured text / qualifier, and structural flags. Nothing is
