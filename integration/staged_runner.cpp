@@ -248,12 +248,14 @@ int main(int argc, char** argv) {
     bool update = false;
     bool gate = false;
     bool roundtrip = false;
+    bool inject = false;
     std::string dir;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
         if (a == "--update") update = true;
         else if (a == "--gate") gate = true;
         else if (a == "--roundtrip") roundtrip = true;
+        else if (a == "--inject") inject = true;
         else dir = a;
     }
     if (dir.empty()) {
@@ -359,6 +361,41 @@ int main(int argc, char** argv) {
         std::printf("staged_runner --roundtrip: %ld plan goldens, %ld not-lossless, %ld reader-errors\n",
                     checked, notlossless, reader_errs);
         return (notlossless == 0 && reader_errs == 0) ? 0 : 1;
+    }
+
+    // --inject: per-module optimizer isolation. Read the LOGICAL golden back
+    // into a plan (no binder involved), optimize it, and pin the result against
+    // the OPTIMIZED golden - testing the optimizer alone on a committed input.
+    if (inject) {
+        long checked = 0, mism = 0, errs = 0;
+        for (const auto& path : files) {
+            std::ifstream is(path);
+            std::stringstream ss;
+            ss << is.rdbuf();
+            Fixture f = parse_fixture(ss.str());
+            const std::string name = path.filename().string();
+            const std::string* log = f.find("logical");
+            const std::string* opt = f.find("optimized");
+            if (log == nullptr || opt == nullptr || !is_real_plan(*log) || !is_real_plan(*opt)) {
+                continue;
+            }
+            std::string err;
+            plan::LogicalNodePtr p = staged::plan_from_sexpr(*log, err);
+            if (!p) { ++errs; std::printf("  READER-ERROR %s: %s\n", name.c_str(), err.c_str()); continue; }
+            ++checked;
+            plan::LogicalNodePtr optimized = plan::optimize(std::move(p));
+            const std::string got = trim(staged::plan_to_sexpr(optimized.get()));
+            if (got != *opt) {
+                ++mism;
+                std::printf("  INJECT-MISMATCH %s:\n    --- optimized golden ---\n%s\n    --- optimize(read(logical)) ---\n%s\n",
+                            name.c_str(), opt->c_str(), got.c_str());
+            } else {
+                std::printf("  ok %s: optimize(read(logical)) == optimized golden\n", name.c_str());
+            }
+        }
+        std::printf("staged_runner --inject: %ld goldens, %ld mismatches, %ld reader-errors\n",
+                    checked, mism, errs);
+        return (mism == 0 && errs == 0) ? 0 : 1;
     }
 
     long total = 0, mismatches = 0, updated = 0;
