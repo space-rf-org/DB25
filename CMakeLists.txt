@@ -132,6 +132,11 @@ target_link_libraries(staged_runner PRIVATE db25logicalplan)
 target_compile_options(staged_runner PRIVATE -Wall -Wextra)
 add_test(NAME staged_runner
          COMMAND staged_runner ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
+# Falsifiability gate: every committed plan golden must be caught (changed) by
+# at least one plan mutation, and must still match the produced plan. A vacuous
+# or stale golden fails this test.
+add_test(NAME staged_gate
+         COMMAND staged_runner --gate ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
 
 # ---------------------------------------------------------------------------
 # corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown
