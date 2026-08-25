@@ -33,11 +33,11 @@ regress into silence.
 | G2 | binder | Quantified comparison `ALL`/`ANY`/`SOME` lowering | DEFERRED | `bind-error "quantified comparison … not yet supported"` · `26` |
 | G3 | binder | CTAS / DDL statement lowering | DEFERRED | `bind-error "statement kind not yet lowered"` · `31` |
 | G4 | binder | Qualified star (`u.*`) over a join | DEFERRED | not-yet-lowered arity guard (honest reject) |
-| G5 | harness | Phase-B s-expr **reader** coverage | DEFERRED | `-- phaseb` skip-and-count ×11; verify+gate still cover e2e |
+| G5 | harness | Phase-B s-expr **reader** coverage | DEFERRED | `-- phaseb` skip-and-count ×12; verify+gate still cover e2e |
 | G6 | harness | Full-fidelity plan **injection** (node-id serialization) | DEFERRED | positional colrefs; no self-join injection fixture yet |
-| G7 | analyzer | `INTERVAL 'x'` literal types as `Unknown` | **CLOSE** | pinned `Unknown` in `29_interval` |
-| G8 | parser | `EXTRACT(part FROM <typed literal>)` fails to parse | **CLOSE** | `parse-error` on legal SQL |
-| G9 | analyzer | `CURRENT_DATE` unresolved (treated as a column) | **CLOSE** | `bind-error "unresolved column 'CURRENT_DATE'"` · `30` |
+| ~~G7~~ | analyzer | `INTERVAL 'x'` literal typed `Unknown` | ✅ CLOSED | now `Interval` — analyzer #98 · `29_interval` |
+| ~~G8~~ | parser | `EXTRACT(part FROM <typed literal>)` / `DATE '…'` value dropped | ✅ CLOSED | parser #83 |
+| ~~G9~~ | analyzer | `CURRENT_DATE` unresolved (treated as a column) | ✅ CLOSED | niladic function — parser #83 · `30_extract` |
 | G10 | pipeline | `1/0` preserved, not folded/rejected | DEFERRED (intentional) | soft `DivisionByZero` warning; documented PG divergence |
 
 Fixtures are under `corpus/staged/`.
@@ -123,29 +123,22 @@ Fixtures are under `corpus/staged/`.
 
 ---
 
-## Close-now queue (must close before phase exit)
+## Close-now queue
 
-These reject or mis-type **legal** SQL, so they violate the safety invariant for
-deferral and must be fixed. They are the concrete input to steps #4–#5.
+**Empty — all cleared.** The temporal set (G7, G8, G9) closed via parser #83 and
+analyzer #98:
 
-### G7 — `INTERVAL 'x'` literal types as `Unknown`
-- **Symptom:** `SELECT INTERVAL '1 day'` → the literal is typed `Unknown` (should
-  be `Interval`), pinned in `29_interval`. An `Unknown`-typed interval can
-  mis-reconcile in set-ops / `CASE` / arithmetic.
-- **Owner:** analyzer (type inference for `IntervalLiteral`).
+- **G7** — `INTERVAL` / `DATE` / `TIME` / `TIMESTAMP` literals now type as their
+  concrete temporal type (were `Unknown`); pinned in `29_interval`.
+- **G8** — `EXTRACT` accepts a full-expression operand, and `DATE` / `TIME` /
+  `TIMESTAMP '…'` typed literals now parse (previously `DATE '…'` parsed but
+  **silently dropped the value string** — a latent data-loss bug this surfaced).
+- **G9** — `CURRENT_DATE` / `CURRENT_TIME` / `CURRENT_TIMESTAMP` now parse as
+  niladic functions and resolve to their temporal type; `30_extract` binds to a
+  real plan (was a `bind-error`).
 
-### G8 — `EXTRACT(part FROM <typed literal>)` fails to parse
-- **Symptom:** `EXTRACT(YEAR FROM DATE '2020-01-01')` and `EXTRACT(DAY FROM
-  INTERVAL '3 days')` return a parse error, while `EXTRACT(part FROM <column>)` and
-  `EXTRACT(part FROM CURRENT_DATE)` parse. A legal statement is rejected.
-- **Owner:** parser (EXTRACT operand: accept a typed-literal `DATE`/`INTERVAL`).
-
-### G9 — `CURRENT_DATE` unresolved
-- **Symptom:** `CURRENT_DATE` (and by extension the other niladic datetime
-  functions) is treated as an unresolved column → `bind-error "unresolved column
-  reference 'CURRENT_DATE'"`, pinned in `30_extract`.
-- **Owner:** analyzer (recognize `CURRENT_DATE`/`CURRENT_TIME`/`CURRENT_TIMESTAMP`
-  as niladic functions returning the temporal type).
+New silently-wrong gaps found by `frontend-audit` land here first, classified,
+before any fix.
 
 ---
 
