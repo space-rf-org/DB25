@@ -1,0 +1,54 @@
+-- sql
+SELECT u.id, o.id FROM users u CROSS JOIN orders o
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident u 7 8)
+  (op "." 8 9)
+  (ident id 9 11)
+  (punct "," 11 12)
+  (ident o 13 14)
+  (op "." 14 15)
+  (ident id 15 17)
+  (kw FROM 18 22)
+  (ident users 23 28)
+  (ident u 29 30)
+  (kw CROSS 31 36)
+  (kw JOIN 37 41)
+  (ident orders 42 48)
+  (ident o 49 50)
+  (eof 50 50))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.id")
+    (ColumnRef :text "o.id"))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text "CROSS JOIN"
+      (TableRef :text orders :qual o))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.id" :type Integer :null f :tid 1 :cid 1)
+    (ColumnRef :text "o.id" :type Integer :null f :tid 2 :cid 1))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text "CROSS JOIN"
+      (TableRef :text orders :qual o))))
+
+-- logical
+(Project :exprs ((colref 0 :type Integer :null f) (colref 2 :type Integer :null f)) :out ((id Integer :null f) (id Integer :null f))
+  (Join :kind cross :out ((id Integer :null f :alias u) (name VarChar :null t :alias u) (id Integer :null f :alias o) (user_id Integer :null t :alias o) (total Double :null t :alias o))
+    (Scan :rel users :alias u :out ((id Integer :null f :alias u) (name VarChar :null t :alias u)))
+    (Scan :rel orders :alias o :out ((id Integer :null f :alias o) (user_id Integer :null t :alias o) (total Double :null t :alias o)))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Integer :null f) (colref 1 :type Integer :null f)) :out ((id Integer :null f) (id Integer :null f))
+  (Join :kind cross :out ((id Integer :null f :alias u) (id Integer :null f :alias o))
+    (Scan :rel users :alias u :out ((id Integer :null f :alias u)))
+    (Scan :rel orders :alias o :out ((id Integer :null f :alias o)))))
+

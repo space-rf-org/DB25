@@ -1,0 +1,33 @@
+-- sql
+SELECT INTERVAL '1 day'
+
+-- phaseb
+reader-todo: interval-literal (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (kw INTERVAL 7 15)
+  (str "'1 day'" 16 23)
+  (eof 23 23))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (IntervalLiteral :text "'1 day'"
+      (StringLiteral :text "'1 day'"))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (IntervalLiteral :text "'1 day'"
+      (StringLiteral :text "'1 day'" :type Text :null f))))
+
+-- logical
+(Project :exprs ((lit "1 day" :type Unknown :null ?)) :out (("'1 day'" Unknown :null t))
+  (Values :rows 1 :out ()))
+
+-- optimized
+(Project :exprs ((lit "1 day" :type Unknown :null ?)) :out (("'1 day'" Unknown :null t))
+  (Values :rows 1 :out ()))
+

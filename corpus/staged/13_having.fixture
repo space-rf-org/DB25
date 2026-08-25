@@ -1,0 +1,70 @@
+-- sql
+SELECT dept, SUM(salary) FROM emp GROUP BY dept HAVING SUM(salary) > 100
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident dept 7 11)
+  (punct "," 11 12)
+  (ident SUM 13 16)
+  (punct "(" 16 17)
+  (ident salary 17 23)
+  (punct ")" 23 24)
+  (kw FROM 25 29)
+  (ident emp 30 33)
+  (kw GROUP 34 39)
+  (kw BY 40 42)
+  (ident dept 43 47)
+  (kw HAVING 48 54)
+  (ident SUM 55 58)
+  (punct "(" 58 59)
+  (ident salary 59 65)
+  (punct ")" 65 66)
+  (op ">" 67 68)
+  (num 100 69 72)
+  (eof 72 72))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept)
+    (FunctionCall :text SUM
+      (Identifier :text salary)))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (ColumnRef :text dept))
+  (HavingClause
+    (BinaryExpr :text ">"
+      (FunctionCall :text SUM
+        (Identifier :text salary))
+      (IntegerLiteral :text 100))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+    (FunctionCall :text SUM :type Double :null t
+      (Identifier :text salary :type Double :null t :tid 3 :cid 4)))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (ColumnRef :text dept :type Text :null t :tid 3 :cid 2))
+  (HavingClause
+    (BinaryExpr :text ">" :type Boolean :null t
+      (FunctionCall :text SUM :type Double :null t
+        (Identifier :text salary :type Double :null t :tid 3 :cid 4))
+      (IntegerLiteral :text 100 :type Integer :null f))))
+
+-- logical
+(Project :exprs ((colref 0 :type Text :null t) (colref 1 :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
+  (Filter :pred (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((dept Text :null t) (SUM Double :null t))
+    (Aggregate :keys ((colref 1 :type Text :null t)) :aggs ((agg SUM (colref 3 :type Double :null t) :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
+      (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Text :null t) (colref 1 :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
+  (Filter :pred (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((dept Text :null t) (SUM Double :null t))
+    (Aggregate :keys ((colref 0 :type Text :null t)) :aggs ((agg SUM (colref 1 :type Double :null t) :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
+      (Scan :rel emp :out ((dept Text :null t :alias emp) (salary Double :null t :alias emp))))))
+

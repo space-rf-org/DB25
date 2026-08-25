@@ -1,0 +1,50 @@
+-- sql
+SELECT id FROM emp WHERE dept LIKE 'eng%'
+
+-- phaseb
+reader-todo: like-predicate (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (kw FROM 10 14)
+  (ident emp 15 18)
+  (kw WHERE 19 24)
+  (ident dept 25 29)
+  (kw LIKE 30 34)
+  (str "'eng%'" 35 41)
+  (eof 41 41))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id))
+  (FromClause
+    (TableRef :text emp))
+  (WhereClause
+    (LikeExpr :text LIKE
+      (ColumnRef :text dept)
+      (StringLiteral :text "'eng%'"))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id :type Integer :null f :tid 3 :cid 1))
+  (FromClause
+    (TableRef :text emp))
+  (WhereClause
+    (LikeExpr :text LIKE :type Boolean :null t
+      (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+      (StringLiteral :text "'eng%'" :type Text :null f))))
+
+-- logical
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+  (Filter :pred (like (colref 1 :type Text :null t) (lit "eng%" :type Text :null f) :type Boolean :null t) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+  (Filter :pred (like (colref 1 :type Text :null t) (lit "eng%" :type Text :null f) :type Boolean :null t) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp)))))
+

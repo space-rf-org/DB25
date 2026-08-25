@@ -1,0 +1,59 @@
+-- sql
+SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (kw FROM 10 14)
+  (ident emp 15 18)
+  (kw WHERE 19 24)
+  (ident salary 25 31)
+  (op ">" 32 33)
+  (kw ALL 34 37)
+  (punct "(" 38 39)
+  (kw SELECT 39 45)
+  (ident salary 46 52)
+  (kw FROM 53 57)
+  (ident emp 58 61)
+  (punct ")" 61 62)
+  (eof 62 62))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id))
+  (FromClause
+    (TableRef :text emp))
+  (WhereClause
+    (BinaryExpr :text "> ALL"
+      (ColumnRef :text salary)
+      (Subquery
+        (SelectStmt
+          (SelectList
+            (ColumnRef :text salary))
+          (FromClause
+            (TableRef :text emp)))))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id :type Integer :null f :tid 3 :cid 1))
+  (FromClause
+    (TableRef :text emp))
+  (WhereClause
+    (BinaryExpr :text "> ALL" :type Boolean :null t
+      (ColumnRef :text salary :type Double :null t :tid 3 :cid 4)
+      (Subquery :type Double :null t
+        (SelectStmt
+          (SelectList
+            (ColumnRef :text salary :type Double :null t :tid 3 :cid 4))
+          (FromClause
+            (TableRef :text emp)))))))
+
+-- logical
+(bind-error "quantified comparison (ALL / ANY / SOME) is not yet supported: '> ALL'")
+
+-- optimized
+(bind-error "quantified comparison (ALL / ANY / SOME) is not yet supported: '> ALL'")
+

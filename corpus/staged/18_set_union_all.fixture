@@ -1,0 +1,60 @@
+-- sql
+SELECT id FROM users UNION ALL SELECT user_id FROM orders
+
+-- phaseb
+reader-todo: set-op (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (kw FROM 10 14)
+  (ident users 15 20)
+  (kw UNION 21 26)
+  (kw ALL 27 30)
+  (kw SELECT 31 37)
+  (ident user_id 38 45)
+  (kw FROM 46 50)
+  (ident orders 51 57)
+  (eof 57 57))
+
+-- ast
+(UnionStmt :text UNION :all
+  (SelectStmt
+    (SelectList
+      (ColumnRef :text id))
+    (FromClause
+      (TableRef :text users)))
+  (SelectStmt
+    (SelectList
+      (ColumnRef :text user_id))
+    (FromClause
+      (TableRef :text orders))))
+
+-- resolved
+(UnionStmt :text UNION :all
+  (SelectStmt
+    (SelectList
+      (ColumnRef :text id :type Integer :null f :tid 1 :cid 1))
+    (FromClause
+      (TableRef :text users)))
+  (SelectStmt
+    (SelectList
+      (ColumnRef :text user_id :type Integer :null t :tid 2 :cid 2))
+    (FromClause
+      (TableRef :text orders))))
+
+-- logical
+(SetOp :op union-all :out ((id Integer :null t))
+  (Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+    (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users))))
+  (Project :exprs ((colref 1 :type Integer :null t)) :out ((user_id Integer :null t))
+    (Scan :rel orders :out ((id Integer :null f :alias orders) (user_id Integer :null t :alias orders) (total Double :null t :alias orders)))))
+
+-- optimized
+(SetOp :op union-all :out ((id Integer :null t))
+  (Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+    (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users))))
+  (Project :exprs ((colref 1 :type Integer :null t)) :out ((user_id Integer :null t))
+    (Scan :rel orders :out ((id Integer :null f :alias orders) (user_id Integer :null t :alias orders) (total Double :null t :alias orders)))))
+

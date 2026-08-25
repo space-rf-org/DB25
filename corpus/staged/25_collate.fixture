@@ -1,0 +1,37 @@
+-- sql
+SELECT dept COLLATE "C" FROM emp
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident dept 7 11)
+  (kw COLLATE 12 19)
+  (ident C 21 22)
+  (kw FROM 24 28)
+  (ident emp 29 32)
+  (eof 32 32))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (CollateClause :text COLLATE :qual C
+      (ColumnRef :text dept)))
+  (FromClause
+    (TableRef :text emp)))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (CollateClause :text COLLATE :qual C :type Text :null t
+      (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)))
+  (FromClause
+    (TableRef :text emp)))
+
+-- logical
+(Project :exprs ((func COLLATE (colref 1 :type Text :null t) (lit C :type Text :null f) :type Text :null t)) :out ((C Text :null t))
+  (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))))
+
+-- optimized
+(Project :exprs ((func COLLATE (colref 0 :type Text :null t) (lit C :type Text :null f) :type Text :null t)) :out ((C Text :null t))
+  (Scan :rel emp :out ((dept Text :null t :alias emp))))
+

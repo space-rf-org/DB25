@@ -1,0 +1,107 @@
+-- sql
+WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10) SELECT n FROM t
+
+-- phaseb
+reader-todo: recursive-cte (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw WITH 0 4)
+  (kw RECURSIVE 5 14)
+  (ident t 15 16)
+  (punct "(" 16 17)
+  (ident n 17 18)
+  (punct ")" 18 19)
+  (kw AS 20 22)
+  (punct "(" 23 24)
+  (kw SELECT 24 30)
+  (num 1 31 32)
+  (kw UNION 33 38)
+  (kw ALL 39 42)
+  (kw SELECT 43 49)
+  (ident n 50 51)
+  (op "+" 52 53)
+  (num 1 54 55)
+  (kw FROM 56 60)
+  (ident t 61 62)
+  (kw WHERE 63 68)
+  (ident n 69 70)
+  (op "<" 71 72)
+  (num 10 73 75)
+  (punct ")" 75 76)
+  (kw SELECT 77 83)
+  (ident n 84 85)
+  (kw FROM 86 90)
+  (ident t 91 92)
+  (eof 92 92))
+
+-- ast
+(SelectStmt
+  (CTEClause :recursive
+    (CTEDefinition :text t
+      (ColumnList
+        (Identifier :text n))
+      (UnionStmt :text UNION :all
+        (SelectStmt
+          (SelectList
+            (IntegerLiteral :text 1)))
+        (SelectStmt
+          (SelectList
+            (BinaryExpr :text "+"
+              (ColumnRef :text n)
+              (IntegerLiteral :text 1)))
+          (FromClause
+            (TableRef :text t))
+          (WhereClause
+            (BinaryExpr :text "<"
+              (ColumnRef :text n)
+              (IntegerLiteral :text 10)))))))
+  (SelectList
+    (ColumnRef :text n))
+  (FromClause
+    (TableRef :text t)))
+
+-- resolved
+(SelectStmt
+  (CTEClause :recursive
+    (CTEDefinition :text t
+      (ColumnList
+        (Identifier :text n))
+      (UnionStmt :text UNION :all
+        (SelectStmt
+          (SelectList
+            (IntegerLiteral :text 1 :type Integer :null f)))
+        (SelectStmt
+          (SelectList
+            (BinaryExpr :text "+" :type Integer :null f
+              (ColumnRef :text n :type Integer :null f)
+              (IntegerLiteral :text 1 :type Integer :null f)))
+          (FromClause
+            (TableRef :text t))
+          (WhereClause
+            (BinaryExpr :text "<" :type Boolean :null f
+              (ColumnRef :text n :type Integer :null f)
+              (IntegerLiteral :text 10 :type Integer :null f)))))))
+  (SelectList
+    (ColumnRef :text n :type Integer :null f))
+  (FromClause
+    (TableRef :text t)))
+
+-- logical
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((n Integer :null f))
+  (RecursiveCTE :name t :op union-all :out ((n Integer :null f :alias t))
+    (Project :exprs ((lit 1 :type Integer :null f)) :out ((1 Integer :null f))
+      (Values :rows 1 :out ()))
+    (Project :exprs ((binop "+" (colref 0 :type Integer :null f) (lit 1 :type Integer :null f) :type Integer :null f)) :out (("+" Integer :null f))
+      (Filter :pred (binop "<" (colref 0 :type Integer :null f) (lit 10 :type Integer :null f) :type Boolean :null f) :out ((n Integer :null f :alias t))
+        (WorkingTableScan :rel t :out ((n Integer :null f :alias t)))))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((n Integer :null f))
+  (RecursiveCTE :name t :op union-all :out ((n Integer :null f :alias t))
+    (Project :exprs ((lit 1 :type Integer :null f)) :out ((1 Integer :null f))
+      (Values :rows 1 :out ()))
+    (Project :exprs ((binop "+" (colref 0 :type Integer :null f) (lit 1 :type Integer :null f) :type Integer :null f)) :out (("+" Integer :null f))
+      (Filter :pred (binop "<" (colref 0 :type Integer :null f) (lit 10 :type Integer :null f) :type Boolean :null f) :out ((n Integer :null f :alias t))
+        (WorkingTableScan :rel t :out ((n Integer :null f :alias t)))))))
+

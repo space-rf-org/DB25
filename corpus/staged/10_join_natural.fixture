@@ -1,0 +1,44 @@
+-- sql
+SELECT id FROM users NATURAL JOIN orders
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (kw FROM 10 14)
+  (ident users 15 20)
+  (kw NATURAL 21 28)
+  (kw JOIN 29 33)
+  (ident orders 34 40)
+  (eof 40 40))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id))
+  (FromClause
+    (TableRef :text users)
+    (JoinClause :text "NATURAL JOIN"
+      (TableRef :text orders))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id :type Integer :null f :tid 1 :cid 1))
+  (FromClause
+    (TableRef :text users)
+    (JoinClause :text "NATURAL JOIN"
+      (TableRef :text orders))))
+
+-- logical
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+  (Join :kind inner :pred (binop "=" (colref 0 :type Integer :null f) (colref 2 :type Integer :null f) :type Boolean :null ?) :out ((id Integer :null f :alias users) (name VarChar :null t :alias users) (id Integer :null f :alias orders :hidden) (user_id Integer :null t :alias orders) (total Double :null t :alias orders))
+    (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users)))
+    (Scan :rel orders :out ((id Integer :null f :alias orders) (user_id Integer :null t :alias orders) (total Double :null t :alias orders)))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+  (Join :kind inner :pred (binop "=" (colref 0 :type Integer :null f) (colref 1 :type Integer :null f) :type Boolean :null ?) :out ((id Integer :null f :alias users) (id Integer :null f :alias orders :hidden))
+    (Scan :rel users :out ((id Integer :null f :alias users)))
+    (Scan :rel orders :out ((id Integer :null f :alias orders)))))
+
