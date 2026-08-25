@@ -1,6 +1,9 @@
 -- sql
 SELECT EXTRACT(YEAR FROM CURRENT_DATE)
 
+-- phaseb
+reader-todo: extract/temporal-func (Phase-B s-expr reader does not cover this yet)
+
 -- tokens
 (tokens
   (kw SELECT 0 6)
@@ -17,18 +20,20 @@ SELECT EXTRACT(YEAR FROM CURRENT_DATE)
   (SelectList
     (FunctionCall :text EXTRACT
       (Identifier :text YEAR)
-      (ColumnRef :text CURRENT_DATE))))
+      (FunctionCall :text CURRENT_DATE))))
 
 -- resolved
 (SelectStmt
   (SelectList
-    (FunctionCall :text EXTRACT :type Double :null ?
+    (FunctionCall :text EXTRACT :type Double :null f
       (Identifier :text YEAR)
-      (ColumnRef :text CURRENT_DATE))))
+      (FunctionCall :text CURRENT_DATE :type Date :null f))))
 
 -- logical
-(bind-error "unresolved column reference 'CURRENT_DATE'")
+(Project :exprs ((func EXTRACT (lit YEAR :type Text :null f) (func CURRENT_DATE :type Date :null f) :type Double :null f)) :out ((EXTRACT Double :null f))
+  (Values :rows 1 :out ()))
 
 -- optimized
-(bind-error "unresolved column reference 'CURRENT_DATE'")
+(Project :exprs ((func EXTRACT (lit YEAR :type Text :null f) (func CURRENT_DATE :type Date :null f) :type Double :null f)) :out ((EXTRACT Double :null f))
+  (Values :rows 1 :out ()))
 

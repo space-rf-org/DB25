@@ -20,14 +20,14 @@ reader-todo: interval-literal (Phase-B s-expr reader does not cover this yet)
 -- resolved
 (SelectStmt
   (SelectList
-    (IntervalLiteral :text "'1 day'"
-      (StringLiteral :text "'1 day'" :type Text :null f))))
+    (IntervalLiteral :text "'1 day'" :type Interval :null f
+      (StringLiteral :text "'1 day'"))))
 
 -- logical
-(Project :exprs ((lit "1 day" :type Unknown :null ?)) :out (("'1 day'" Unknown :null t))
+(Project :exprs ((lit "1 day" :type Interval :null f)) :out (("'1 day'" Interval :null f))
   (Values :rows 1 :out ()))
 
 -- optimized
-(Project :exprs ((lit "1 day" :type Unknown :null ?)) :out (("'1 day'" Unknown :null t))
+(Project :exprs ((lit "1 day" :type Interval :null f)) :out (("'1 day'" Interval :null f))
   (Values :rows 1 :out ()))
 

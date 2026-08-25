@@ -4617,7 +4617,7 @@
       "features": [
         "extract"
       ],
-      "status": "e2e pinned; bind deferred (known gap)",
+      "status": "full pipeline pinned (s-expr)",
       "source": "staged/30_extract.fixture",
       "tier": "staged",
       "pins": [
@@ -4703,7 +4703,7 @@
     {
       "repo": "parser",
       "file": "test_advanced_types.cpp",
-      "sites": 30
+      "sites": 36
     },
     {
       "repo": "parser",
@@ -4838,7 +4838,7 @@
     {
       "repo": "analyzer",
       "file": "test_analyzer.cpp",
-      "sites": 232
+      "sites": 233
     },
     {
       "repo": "analyzer",
@@ -5203,10 +5203,10 @@
     "by_status": {
       "DDL applied": 17,
       "analyzed clean": 308,
-      "full pipeline pinned (s-expr)": 25,
-      "e2e pinned; bind deferred (known gap)": 6
+      "full pipeline pinned (s-expr)": 26,
+      "e2e pinned; bind deferred (known gap)": 5
     },
-    "test_sites": 404,
+    "test_sites": 411,
     "test_files": 43
   }
 }
