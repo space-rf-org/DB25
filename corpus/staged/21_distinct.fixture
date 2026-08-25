@@ -1,0 +1,36 @@
+-- sql
+SELECT DISTINCT dept FROM emp
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (kw DISTINCT 7 15)
+  (ident dept 16 20)
+  (kw FROM 21 25)
+  (ident emp 26 29)
+  (eof 29 29))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept))
+  (FromClause
+    (TableRef :text emp)))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept :type Text :null t :tid 3 :cid 2))
+  (FromClause
+    (TableRef :text emp)))
+
+-- logical
+(Distinct :out ((dept Text :null t))
+  (Project :exprs ((colref 1 :type Text :null t)) :out ((dept Text :null t))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+
+-- optimized
+(Distinct :out ((dept Text :null t))
+  (Project :exprs ((colref 0 :type Text :null t)) :out ((dept Text :null t))
+    (Scan :rel emp :out ((dept Text :null t :alias emp)))))
+

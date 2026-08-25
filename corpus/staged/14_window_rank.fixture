@@ -1,0 +1,63 @@
+-- sql
+SELECT id, RANK() OVER (PARTITION BY dept ORDER BY salary) FROM emp
+
+-- phaseb
+reader-todo: window (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (punct "," 9 10)
+  (ident RANK 11 15)
+  (punct "(" 15 16)
+  (punct ")" 16 17)
+  (kw OVER 18 22)
+  (punct "(" 23 24)
+  (kw PARTITION 24 33)
+  (kw BY 34 36)
+  (ident dept 37 41)
+  (kw ORDER 42 47)
+  (kw BY 48 50)
+  (ident salary 51 57)
+  (punct ")" 57 58)
+  (kw FROM 59 63)
+  (ident emp 64 67)
+  (eof 67 67))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id)
+    (FunctionCall :text RANK
+      (WindowSpec
+        (PartitionByClause
+          (ColumnRef :text dept))
+        (OrderByClause
+          (ColumnRef :text salary)))))
+  (FromClause
+    (TableRef :text emp)))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id :type Integer :null f :tid 3 :cid 1)
+    (FunctionCall :text RANK :type BigInt :null f
+      (WindowSpec
+        (PartitionByClause
+          (ColumnRef :text dept :type Text :null t :tid 3 :cid 2))
+        (OrderByClause
+          (ColumnRef :text salary :type Double :null t :tid 3 :cid 4)))))
+  (FromClause
+    (TableRef :text emp)))
+
+-- logical
+(Project :exprs ((colref 0 :type Integer :null f) (colref 4 :type BigInt :null f)) :out ((id Integer :null f) (RANK BigInt :null f))
+  (Window :windows ((winfunc RANK :over (:partition ((colref 1 :type Text :null t)) :order ((key (colref 3 :type Double :null t) asc))) :type BigInt :null f)) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp) (RANK BigInt :null f))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Integer :null f) (colref 4 :type BigInt :null f)) :out ((id Integer :null f) (RANK BigInt :null f))
+  (Window :windows ((winfunc RANK :over (:partition ((colref 1 :type Text :null t)) :order ((key (colref 3 :type Double :null t) asc))) :type BigInt :null f)) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp) (RANK BigInt :null f))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+

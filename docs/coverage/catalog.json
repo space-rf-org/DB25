@@ -4137,6 +4137,516 @@
         "logical",
         "optimized"
       ]
+    },
+    {
+      "sql": "SELECT u.id, o.total FROM users u LEFT JOIN orders o ON u.id = o.user_id",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "join-left"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/05_join_left.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT u.id, o.total FROM users u RIGHT JOIN orders o ON u.id = o.user_id",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "join-right"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/06_join_right.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT u.id, o.total FROM users u FULL JOIN orders o ON u.id = o.user_id",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "join-full"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/07_join_full.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT u.id, o.id FROM users u CROSS JOIN orders o",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "join-cross"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/08_join_cross.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM users JOIN orders USING (id)",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "join-inner",
+        "join-using"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/09_join_using.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM users NATURAL JOIN orders",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "join-inner",
+        "join-natural"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/10_join_natural.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT dept, region, SUM(salary) FROM emp GROUP BY CUBE(dept, region)",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "group-by",
+        "cube",
+        "aggregate"
+      ],
+      "status": "e2e pinned; bind deferred (known gap)",
+      "source": "staged/11_group_by_cube.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT dept, region, COUNT(*) FROM emp GROUP BY GROUPING SETS ((dept), (region))",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "group-by",
+        "grouping-sets",
+        "aggregate"
+      ],
+      "status": "e2e pinned; bind deferred (known gap)",
+      "source": "staged/12_grouping_sets.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT dept, SUM(salary) FROM emp GROUP BY dept HAVING SUM(salary) > 100",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "group-by",
+        "having",
+        "aggregate"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/13_having.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id, RANK() OVER (PARTITION BY dept ORDER BY salary) FROM emp",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "order-by",
+        "window"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/14_window_rank.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id, SUM(salary) OVER (PARTITION BY dept) FROM emp",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "window",
+        "aggregate"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/15_window_agg.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT dept, COUNT(*) FILTER (WHERE salary > 100) FROM emp GROUP BY dept",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "where",
+        "group-by",
+        "window-filter",
+        "aggregate"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/16_window_filter.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM users UNION SELECT user_id FROM orders",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "set-union"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/17_set_union.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM users UNION ALL SELECT user_id FROM orders",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "set-union"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/18_set_union_all.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM users INTERSECT SELECT user_id FROM orders",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "set-intersect"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/19_set_intersect.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM users EXCEPT SELECT user_id FROM orders",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "set-except"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/20_set_except.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT DISTINCT dept FROM emp",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "distinct"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/21_distinct.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM emp ORDER BY id LIMIT 10 OFFSET 5",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "order-by",
+        "limit-offset"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/22_limit_offset.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10) SELECT n FROM t",
+      "kind": "DQL",
+      "stmt": "WITH",
+      "features": [
+        "cte-recursive",
+        "cte",
+        "where",
+        "set-union",
+        "subquery-scalar"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/23_cte_recursive.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM emp WHERE dept LIKE 'eng%'",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "where",
+        "like"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/24_like.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT dept COLLATE \"C\" FROM emp",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "collate"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/25_collate.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "where",
+        "quantified-cmp",
+        "subquery-scalar"
+      ],
+      "status": "e2e pinned; bind deferred (known gap)",
+      "source": "staged/26_quantified_all.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT CAST(dept AS text[]) FROM emp",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "cast",
+        "array"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/27_cast_array.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT COALESCE(dept, 'none') FROM emp",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "coalesce-nullif"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/28_coalesce.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT INTERVAL '1 day'",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "interval"
+      ],
+      "status": "full pipeline pinned (s-expr)",
+      "source": "staged/29_interval.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "SELECT EXTRACT(YEAR FROM CURRENT_DATE)",
+      "kind": "DQL",
+      "stmt": "SELECT",
+      "features": [
+        "extract"
+      ],
+      "status": "e2e pinned; bind deferred (known gap)",
+      "source": "staged/30_extract.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
+    },
+    {
+      "sql": "CREATE TABLE audit_log (id INTEGER NOT NULL, ref INTEGER REFERENCES users(id), amount INTEGER CHECK (amount > 0))",
+      "kind": "DDL",
+      "stmt": "CREATE TABLE",
+      "features": [
+        "c-not-null",
+        "c-foreign-key",
+        "c-check"
+      ],
+      "status": "e2e pinned; bind deferred (known gap)",
+      "source": "staged/31_ddl_constraints.fixture",
+      "tier": "staged",
+      "pins": [
+        "tokens",
+        "ast",
+        "resolved",
+        "logical",
+        "optimized"
+      ]
     }
   ],
   "test_index": [
@@ -4360,13 +4870,13 @@
     {
       "feature": "cte-recursive",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "cte",
       "corpus": 1,
-      "staged": 0,
+      "staged": 1,
       "state": "ci-pinned"
     },
     {
@@ -4378,55 +4888,55 @@
     {
       "feature": "join-inner",
       "corpus": 0,
-      "staged": 1,
+      "staged": 3,
       "state": "e2e-only"
     },
     {
       "feature": "join-left",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "join-right",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "join-full",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "join-cross",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "join-using",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "join-natural",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "where",
       "corpus": 103,
-      "staged": 2,
+      "staged": 6,
       "state": "ci-pinned"
     },
     {
       "feature": "group-by",
       "corpus": 0,
-      "staged": 2,
+      "staged": 6,
       "state": "e2e-only"
     },
     {
@@ -4438,68 +4948,68 @@
     {
       "feature": "cube",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "grouping-sets",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "having",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "order-by",
       "corpus": 119,
-      "staged": 0,
+      "staged": 2,
       "state": "ci-pinned"
     },
     {
       "feature": "limit-offset",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "distinct",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "window",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 2,
+      "state": "e2e-only"
     },
     {
       "feature": "window-filter",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "set-union",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 3,
+      "state": "e2e-only"
     },
     {
       "feature": "set-intersect",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "set-except",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "subquery-exists",
@@ -4516,13 +5026,13 @@
     {
       "feature": "quantified-cmp",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "subquery-scalar",
       "corpus": 144,
-      "staged": 0,
+      "staged": 2,
       "state": "ci-pinned"
     },
     {
@@ -4534,20 +5044,20 @@
     {
       "feature": "cast",
       "corpus": 4,
-      "staged": 0,
+      "staged": 1,
       "state": "ci-pinned"
     },
     {
       "feature": "collate",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "like",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "between",
@@ -4564,38 +5074,38 @@
     {
       "feature": "array",
       "corpus": 3,
-      "staged": 0,
+      "staged": 1,
       "state": "ci-pinned"
     },
     {
       "feature": "interval",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "extract",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "aggregate",
       "corpus": 62,
-      "staged": 2,
+      "staged": 7,
       "state": "ci-pinned"
     },
     {
       "feature": "coalesce-nullif",
       "corpus": 7,
-      "staged": 0,
+      "staged": 1,
       "state": "ci-pinned"
     },
     {
       "feature": "c-not-null",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "c-primary-key",
@@ -4606,14 +5116,14 @@
     {
       "feature": "c-foreign-key",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "c-check",
       "corpus": 0,
-      "staged": 0,
-      "state": "not-in-corpus"
+      "staged": 1,
+      "state": "e2e-only"
     },
     {
       "feature": "c-default",
@@ -4629,46 +5139,72 @@
     }
   ],
   "summary": {
-    "total": 329,
+    "total": 356,
     "by_kind": {
-      "DDL": 17,
+      "DDL": 18,
       "DML": 58,
-      "DQL": 254
+      "DQL": 280
     },
     "by_stmt": {
-      "CREATE TABLE": 15,
+      "CREATE TABLE": 16,
       "INSERT": 55,
-      "SELECT": 254,
+      "SELECT": 279,
       "UPDATE": 3,
-      "DROP": 2
+      "DROP": 2,
+      "WITH": 1
     },
     "by_feature": {
-      "subquery-scalar": 144,
-      "order-by": 119,
-      "where": 105,
+      "subquery-scalar": 146,
+      "order-by": 121,
+      "where": 109,
       "in-list": 103,
       "case": 91,
       "subquery-in": 74,
-      "aggregate": 64,
+      "aggregate": 69,
       "values": 48,
       "between": 41,
       "subquery-exists": 22,
-      "coalesce-nullif": 7,
+      "coalesce-nullif": 8,
+      "group-by": 6,
       "c-unique": 5,
-      "cast": 4,
+      "cast": 5,
+      "array": 4,
       "c-default": 3,
-      "array": 3,
+      "join-inner": 3,
+      "set-union": 3,
       "c-primary-key": 2,
-      "group-by": 2,
-      "cte": 1,
-      "join-inner": 1,
-      "rollup": 1
+      "cte": 2,
+      "window": 2,
+      "rollup": 1,
+      "join-left": 1,
+      "join-right": 1,
+      "join-full": 1,
+      "join-cross": 1,
+      "join-using": 1,
+      "join-natural": 1,
+      "cube": 1,
+      "grouping-sets": 1,
+      "having": 1,
+      "window-filter": 1,
+      "set-intersect": 1,
+      "set-except": 1,
+      "distinct": 1,
+      "limit-offset": 1,
+      "cte-recursive": 1,
+      "like": 1,
+      "collate": 1,
+      "quantified-cmp": 1,
+      "interval": 1,
+      "extract": 1,
+      "c-not-null": 1,
+      "c-foreign-key": 1,
+      "c-check": 1
     },
     "by_status": {
       "DDL applied": 17,
       "analyzed clean": 308,
-      "full pipeline pinned (s-expr)": 3,
-      "e2e pinned; bind deferred (known gap)": 1
+      "full pipeline pinned (s-expr)": 25,
+      "e2e pinned; bind deferred (known gap)": 6
     },
     "test_sites": 404,
     "test_files": 43

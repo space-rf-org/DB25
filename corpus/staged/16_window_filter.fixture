@@ -1,0 +1,69 @@
+-- sql
+SELECT dept, COUNT(*) FILTER (WHERE salary > 100) FROM emp GROUP BY dept
+
+-- phaseb
+reader-todo: window (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident dept 7 11)
+  (punct "," 11 12)
+  (ident COUNT 13 18)
+  (punct "(" 18 19)
+  (op "*" 19 20)
+  (punct ")" 20 21)
+  (kw FILTER 22 28)
+  (punct "(" 29 30)
+  (kw WHERE 30 35)
+  (ident salary 36 42)
+  (op ">" 43 44)
+  (num 100 45 48)
+  (punct ")" 48 49)
+  (kw FROM 50 54)
+  (ident emp 55 58)
+  (kw GROUP 59 64)
+  (kw BY 65 67)
+  (ident dept 68 72)
+  (eof 72 72))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept)
+    (FunctionCall :text COUNT
+      (Star)
+      (WhereClause :text FILTER
+        (BinaryExpr :text ">"
+          (ColumnRef :text salary)
+          (IntegerLiteral :text 100)))))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (ColumnRef :text dept)))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+    (FunctionCall :text COUNT :type BigInt :null f
+      (Star)
+      (WhereClause :text FILTER
+        (BinaryExpr :text ">" :type Boolean :null t
+          (ColumnRef :text salary :type Double :null t :tid 3 :cid 4)
+          (IntegerLiteral :text 100 :type Integer :null f)))))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)))
+
+-- logical
+(Project :exprs ((colref 0 :type Text :null t) (colref 1 :type BigInt :null f)) :out ((dept Text :null t) (COUNT BigInt :null f))
+  (Aggregate :keys ((colref 1 :type Text :null t)) :aggs ((agg COUNT :filter (binop ">" (colref 3 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :type BigInt :null f)) :out ((dept Text :null t) (COUNT BigInt :null f))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Text :null t) (colref 1 :type BigInt :null f)) :out ((dept Text :null t) (COUNT BigInt :null f))
+  (Aggregate :keys ((colref 0 :type Text :null t)) :aggs ((agg COUNT :filter (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :type BigInt :null f)) :out ((dept Text :null t) (COUNT BigInt :null f))
+    (Scan :rel emp :out ((dept Text :null t :alias emp) (salary Double :null t :alias emp)))))
+

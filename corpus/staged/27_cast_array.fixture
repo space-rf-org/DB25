@@ -1,0 +1,47 @@
+-- sql
+SELECT CAST(dept AS text[]) FROM emp
+
+-- phaseb
+reader-todo: cast (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (kw CAST 7 11)
+  (punct "(" 11 12)
+  (ident dept 12 16)
+  (kw AS 17 19)
+  (kw text 20 24)
+  (punct "[" 24 25)
+  (punct "]" 25 26)
+  (punct ")" 26 27)
+  (kw FROM 28 32)
+  (ident emp 33 36)
+  (eof 36 36))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (CastExpr :text CAST
+      (ColumnRef :text dept)
+      (Identifier :text "text[]" :correlated)))
+  (FromClause
+    (TableRef :text emp)))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (CastExpr :text CAST
+      (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+      (Identifier :text "text[]" :correlated)))
+  (FromClause
+    (TableRef :text emp)))
+
+-- logical
+(Project :exprs ((cast  (colref 1 :type Text :null t) :to Unknown :type Unknown :null t)) :out ((CAST Unknown :null t))
+  (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))))
+
+-- optimized
+(Project :exprs ((cast  (colref 0 :type Text :null t) :to Unknown :type Unknown :null t)) :out ((CAST Unknown :null t))
+  (Scan :rel emp :out ((dept Text :null t :alias emp))))
+

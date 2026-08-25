@@ -1,0 +1,42 @@
+-- sql
+SELECT COALESCE(dept, 'none') FROM emp
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident COALESCE 7 15)
+  (punct "(" 15 16)
+  (ident dept 16 20)
+  (punct "," 20 21)
+  (str "'none'" 22 28)
+  (punct ")" 28 29)
+  (kw FROM 30 34)
+  (ident emp 35 38)
+  (eof 38 38))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (FunctionCall :text COALESCE
+      (Identifier :text dept)
+      (StringLiteral :text "'none'")))
+  (FromClause
+    (TableRef :text emp)))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (FunctionCall :text COALESCE :type Text :null f
+      (Identifier :text dept :type Text :null t :tid 3 :cid 2)
+      (StringLiteral :text "'none'" :type Text :null f)))
+  (FromClause
+    (TableRef :text emp)))
+
+-- logical
+(Project :exprs ((func COALESCE (colref 1 :type Text :null t) (lit none :type Text :null f) :type Text :null f)) :out ((COALESCE Text :null f))
+  (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))))
+
+-- optimized
+(Project :exprs ((func COALESCE (colref 0 :type Text :null t) (lit none :type Text :null f) :type Text :null f)) :out ((COALESCE Text :null f))
+  (Scan :rel emp :out ((dept Text :null t :alias emp))))
+

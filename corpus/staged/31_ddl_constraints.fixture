@@ -1,0 +1,71 @@
+-- sql
+CREATE TABLE audit_log (id INTEGER NOT NULL, ref INTEGER REFERENCES users(id), amount INTEGER CHECK (amount > 0))
+
+-- tokens
+(tokens
+  (kw CREATE 0 6)
+  (kw TABLE 7 12)
+  (ident audit_log 13 22)
+  (punct "(" 23 24)
+  (ident id 24 26)
+  (kw INTEGER 27 34)
+  (kw NOT 35 38)
+  (kw NULL 39 43)
+  (punct "," 43 44)
+  (ident ref 45 48)
+  (kw INTEGER 49 56)
+  (kw REFERENCES 57 67)
+  (ident users 68 73)
+  (punct "(" 73 74)
+  (ident id 74 76)
+  (punct ")" 76 77)
+  (punct "," 77 78)
+  (ident amount 79 85)
+  (kw INTEGER 86 93)
+  (kw CHECK 94 99)
+  (punct "(" 100 101)
+  (ident amount 101 107)
+  (op ">" 108 109)
+  (num 0 110 111)
+  (punct ")" 111 112)
+  (punct ")" 112 113)
+  (eof 113 113))
+
+-- ast
+(CreateTableStmt :text audit_log
+  (ColumnDefinition :text id
+    (DataTypeNode :text INTEGER)
+    (ColumnConstraint :text NOT_NULL))
+  (ColumnDefinition :text ref
+    (DataTypeNode :text INTEGER)
+    (ForeignKeyConstraint :text users
+      (Identifier :text id)))
+  (ColumnDefinition :text amount
+    (DataTypeNode :text INTEGER)
+    (CheckConstraint :text "amount > 0"
+      (BinaryExpr :text ">"
+        (Identifier :text amount)
+        (IntegerLiteral :text 0)))))
+
+-- resolved
+(CreateTableStmt :text audit_log
+  (ColumnDefinition :text id
+    (DataTypeNode :text INTEGER)
+    (ColumnConstraint :text NOT_NULL))
+  (ColumnDefinition :text ref
+    (DataTypeNode :text INTEGER)
+    (ForeignKeyConstraint :text users
+      (Identifier :text id)))
+  (ColumnDefinition :text amount
+    (DataTypeNode :text INTEGER)
+    (CheckConstraint :text "amount > 0"
+      (BinaryExpr :text ">"
+        (Identifier :text amount)
+        (IntegerLiteral :text 0)))))
+
+-- logical
+(bind-error "statement kind not yet lowered (TODO)")
+
+-- optimized
+(bind-error "statement kind not yet lowered (TODO)")
+

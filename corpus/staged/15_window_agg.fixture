@@ -1,0 +1,59 @@
+-- sql
+SELECT id, SUM(salary) OVER (PARTITION BY dept) FROM emp
+
+-- phaseb
+reader-todo: window (Phase-B s-expr reader does not cover this yet)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (punct "," 9 10)
+  (ident SUM 11 14)
+  (punct "(" 14 15)
+  (ident salary 15 21)
+  (punct ")" 21 22)
+  (kw OVER 23 27)
+  (punct "(" 28 29)
+  (kw PARTITION 29 38)
+  (kw BY 39 41)
+  (ident dept 42 46)
+  (punct ")" 46 47)
+  (kw FROM 48 52)
+  (ident emp 53 56)
+  (eof 56 56))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id)
+    (FunctionCall :text SUM
+      (Identifier :text salary)
+      (WindowSpec
+        (PartitionByClause
+          (ColumnRef :text dept)))))
+  (FromClause
+    (TableRef :text emp)))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id :type Integer :null f :tid 3 :cid 1)
+    (FunctionCall :text SUM :type Double :null t
+      (Identifier :text salary :type Double :null t :tid 3 :cid 4)
+      (WindowSpec
+        (PartitionByClause
+          (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)))))
+  (FromClause
+    (TableRef :text emp)))
+
+-- logical
+(Project :exprs ((colref 0 :type Integer :null f) (colref 4 :type Double :null t)) :out ((id Integer :null f) (SUM Double :null t))
+  (Window :windows ((winfunc SUM (colref 3 :type Double :null t) :over (:partition ((colref 1 :type Text :null t)) :order ()) :type Double :null t)) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp) (SUM Double :null t))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+
+-- optimized
+(Project :exprs ((colref 0 :type Integer :null f) (colref 4 :type Double :null t)) :out ((id Integer :null f) (SUM Double :null t))
+  (Window :windows ((winfunc SUM (colref 3 :type Double :null t) :over (:partition ((colref 1 :type Text :null t)) :order ()) :type Double :null t)) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp) (SUM Double :null t))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+

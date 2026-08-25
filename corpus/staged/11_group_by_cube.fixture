@@ -1,0 +1,60 @@
+-- sql
+SELECT dept, region, SUM(salary) FROM emp GROUP BY CUBE(dept, region)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident dept 7 11)
+  (punct "," 11 12)
+  (ident region 13 19)
+  (punct "," 19 20)
+  (ident SUM 21 24)
+  (punct "(" 24 25)
+  (ident salary 25 31)
+  (punct ")" 31 32)
+  (kw FROM 33 37)
+  (ident emp 38 41)
+  (kw GROUP 42 47)
+  (kw BY 48 50)
+  (kw CUBE 51 55)
+  (punct "(" 55 56)
+  (ident dept 56 60)
+  (punct "," 60 61)
+  (ident region 62 68)
+  (punct ")" 68 69)
+  (eof 69 69))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept)
+    (ColumnRef :text region)
+    (FunctionCall :text SUM
+      (Identifier :text salary)))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (GroupingElement :text CUBE
+      (ColumnRef :text dept)
+      (ColumnRef :text region))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+    (ColumnRef :text region :type Text :null t :tid 3 :cid 3)
+    (FunctionCall :text SUM :type Double :null t
+      (Identifier :text salary :type Double :null t :tid 3 :cid 4)))
+  (FromClause
+    (TableRef :text emp))
+  (GroupByClause
+    (GroupingElement :text CUBE
+      (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+      (ColumnRef :text region :type Text :null t :tid 3 :cid 3))))
+
+-- logical
+(bind-error "expression form 'GroupingElement' is not yet lowerable")
+
+-- optimized
+(bind-error "expression form 'GroupingElement' is not yet lowerable")
+

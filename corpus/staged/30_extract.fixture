@@ -1,0 +1,34 @@
+-- sql
+SELECT EXTRACT(YEAR FROM CURRENT_DATE)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (kw EXTRACT 7 14)
+  (punct "(" 14 15)
+  (ident YEAR 15 19)
+  (kw FROM 20 24)
+  (ident CURRENT_DATE 25 37)
+  (punct ")" 37 38)
+  (eof 38 38))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (FunctionCall :text EXTRACT
+      (Identifier :text YEAR)
+      (ColumnRef :text CURRENT_DATE))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (FunctionCall :text EXTRACT :type Double :null ?
+      (Identifier :text YEAR)
+      (ColumnRef :text CURRENT_DATE))))
+
+-- logical
+(bind-error "unresolved column reference 'CURRENT_DATE'")
+
+-- optimized
+(bind-error "unresolved column reference 'CURRENT_DATE'")
+
