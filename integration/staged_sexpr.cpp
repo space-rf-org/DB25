@@ -260,9 +260,18 @@ void render_expr(const Expr& e, std::string& out) {
             return;
         case ExprKind::Subquery:
             out.append("(subquery :kind ");
-            out.append(e.subquery_kind == db25::plan::SubqueryKind::Scalar
-                           ? "scalar"
-                           : (e.subquery_kind == db25::plan::SubqueryKind::In ? "in" : "exists"));
+            switch (e.subquery_kind) {
+                case db25::plan::SubqueryKind::Scalar: out.append("scalar"); break;
+                case db25::plan::SubqueryKind::In:     out.append("in"); break;
+                case db25::plan::SubqueryKind::Exists: out.append("exists"); break;
+                case db25::plan::SubqueryKind::Quantified:
+                    // Carry the comparison op and the ANY/ALL sense so the
+                    // artifact is lossless for `x <cmp> ANY|ALL (subquery)`.
+                    out.append("quantified :op ");
+                    out.append(ident(db25::ast::binary_op_to_string(e.bin_op)));
+                    out.append(e.quant_all() ? " :quant all" : " :quant any");
+                    break;
+            }
             if (e.correlated) out.append(" :correlated");
             if (e.negated()) out.append(" :negated");
             render_type_suffix(e, out);
