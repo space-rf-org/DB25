@@ -58,13 +58,13 @@ SELECT dept, SUM(salary) FROM emp GROUP BY dept HAVING SUM(salary) > 100
 
 -- logical
 (Project :exprs ((colref 0 :type Text :null t) (colref 1 :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
-  (Filter :pred (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((dept Text :null t) (SUM Double :null t))
-    (Aggregate :keys ((colref 1 :type Text :null t)) :aggs ((agg SUM (colref 3 :type Double :null t) :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
+  (Filter :pred (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((dept Text :null t :alias emp) (SUM Double :null t))
+    (Aggregate :keys ((colref 1 :type Text :null t)) :aggs ((agg SUM (colref 3 :type Double :null t) :type Double :null t)) :out ((dept Text :null t :alias emp) (SUM Double :null t))
       (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))))))
 
 -- optimized
 (Project :exprs ((colref 0 :type Text :null t) (colref 1 :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
-  (Filter :pred (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((dept Text :null t) (SUM Double :null t))
-    (Aggregate :keys ((colref 0 :type Text :null t)) :aggs ((agg SUM (colref 1 :type Double :null t) :type Double :null t)) :out ((dept Text :null t) (SUM Double :null t))
+  (Filter :pred (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((dept Text :null t :alias emp) (SUM Double :null t))
+    (Aggregate :keys ((colref 0 :type Text :null t)) :aggs ((agg SUM (colref 1 :type Double :null t) :type Double :null t)) :out ((dept Text :null t :alias emp) (SUM Double :null t))
       (Scan :rel emp :out ((dept Text :null t :alias emp) (salary Double :null t :alias emp))))))
 
