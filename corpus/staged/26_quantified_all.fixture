@@ -1,6 +1,9 @@
 -- sql
 SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
 
+-- phaseb
+reader-todo: subquery (Phase-B s-expr reader does not reconstruct subquery exprs yet)
+
 -- tokens
 (tokens
   (kw SELECT 0 6)
@@ -52,8 +55,12 @@ SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
             (TableRef :text emp)))))))
 
 -- logical
-(bind-error "quantified comparison (ALL / ANY / SOME) is not yet supported: '> ALL'")
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+  (Filter :pred (subquery :kind quantified :op ">" :quant all :type Boolean :null t) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
 
 -- optimized
-(bind-error "quantified comparison (ALL / ANY / SOME) is not yet supported: '> ALL'")
+(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
+  (Filter :pred (subquery :kind quantified :op ">" :quant all :type Boolean :null t) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))
+    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
 
