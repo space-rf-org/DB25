@@ -12,6 +12,7 @@
 // Run:    ./build/examples/db25_tour
 
 #include "harness/harness.hpp"
+#include "staged_sexpr.hpp"  // db25::staged::plan_to_sexpr - the canonical plan s-expr
 
 #include <cstdio>
 #include <string>
@@ -66,6 +67,13 @@ void walk(int level, std::string_view title, std::string_view sql) {
 
     print_block("Bound logical plan (parse->analyze->bind):", s.bound_dump);
     print_block("Optimized logical plan (after optimize()):", s.optimized_dump);
+
+    // The same optimized plan in the project's CANONICAL s-expression form - the
+    // exact text the staged-artifact harness (corpus/staged/*.fixture) pins and
+    // round-trips. Every node carries its op, positional expressions with their
+    // types/nullability, base-column provenance (:tid/:cid), and output schema.
+    print_block("Optimized plan as canonical s-expression:",
+                db25::staged::plan_to_sexpr(s.optimized));
 
     // Stage 6: evaluate the optimized plan over the shipped sample rows.
     std::printf("  Result over sample data:\n");

@@ -6,13 +6,17 @@
 # brings in binder + analyzer + parser + tokenizer). The whole stack is
 # -fno-exceptions, so the examples match.
 
+# db25_tour also renders the canonical plan s-expression via the staged-artifact
+# writer (integration/staged_sexpr.cpp), so it shares that translation unit.
 add_executable(db25_tour
     tour.cpp
-    ${CMAKE_SOURCE_DIR}/harness/harness.cpp)
+    ${CMAKE_SOURCE_DIR}/harness/harness.cpp
+    ${CMAKE_SOURCE_DIR}/integration/staged_sexpr.cpp)
 
 target_include_directories(db25_tour PRIVATE
     ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/harness)
+    ${CMAKE_SOURCE_DIR}/harness
+    ${CMAKE_SOURCE_DIR}/integration)
 
 target_link_libraries(db25_tour PRIVATE db25logicalplan)
 target_compile_options(db25_tour PRIVATE -fno-exceptions -Wall -Wextra)

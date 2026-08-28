@@ -12,8 +12,26 @@ Both programs reuse the umbrella harness translation unit
 
 | Program | Source | What it shows |
 |---------|--------|---------------|
-| `db25_tour` | [`tour.cpp`](tour.cpp) | Five queries of increasing difficulty (scan/project → filter → aggregate → join → correlated subquery), each with its bound plan, optimized plan, and evaluated result. |
+| `db25_tour` | [`tour.cpp`](tour.cpp) | Five queries of increasing difficulty (scan/project → filter → aggregate → join → correlated subquery), each with its bound plan, optimized plan, the optimized plan as a **canonical s-expression**, and the evaluated result. |
 | `db25_dialect_features` | [`dialect_features.cpp`](dialect_features.cpp) | The six SQL-dialect features (hex/binary/`.5`, delimited identifiers, `''` escape, CAST modifiers, `ARRAY[]`, `COLLATE`) individually, then all six combined in one statement with its bound plan. |
+
+## Seeing every stage as an s-expression, and the AST
+
+`db25_tour` prints the optimized plan's s-expression via
+[`db25::staged::plan_to_sexpr`](../integration/staged_sexpr.hpp). For **all five** layers
+(tokens → AST → resolved AST → logical → optimized) of a representative statement, read a
+committed staged fixture directly — each `-- <stage>` section is that stage's s-expr:
+
+```sh
+cat ../corpus/staged/03_group_by.fixture
+```
+
+For a **visual AST** (the node tree with guide lines) plus each stage's artifact as one
+self-contained HTML page, use the umbrella's report renderer:
+
+```sh
+../build/corpus_report --html ../corpus/showcase.sql > report.html   # open in a browser
+```
 
 ## Build & run
 
