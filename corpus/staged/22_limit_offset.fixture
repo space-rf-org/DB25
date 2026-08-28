@@ -1,9 +1,6 @@
 -- sql
 SELECT id FROM emp ORDER BY id LIMIT 10 OFFSET 5
 
--- phaseb
-reader-todo: limit (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)

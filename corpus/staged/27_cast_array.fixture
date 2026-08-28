@@ -1,9 +1,6 @@
 -- sql
 SELECT CAST(dept AS text[]) FROM emp
 
--- phaseb
-reader-todo: cast (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)

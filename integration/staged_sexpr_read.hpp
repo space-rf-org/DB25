@@ -8,8 +8,12 @@
 //   * per-module INJECTION: feed a stage a hand-crafted or fuzzed plan directly,
 //     independent of the binder that would normally produce it.
 //
-// Coverage is honest and partial: constructs the reader does not yet understand
-// produce a null result with a message in `error`, never a wrong tree.
+// Coverage spans every construct the staged corpus exercises (scan/filter/
+// project/join, aggregate, window + OVER, sort, limit, set-op, recursive-CTE,
+// values, and the full expression grammar incl. cast / like / between / isnull /
+// boolean-test / case / in-list / quantified-subquery). Any construct the reader
+// does not understand still produces a null result with a message in `error`,
+// never a wrong tree.
 #pragma once
 
 #include <memory>

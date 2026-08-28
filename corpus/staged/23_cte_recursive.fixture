@@ -1,9 +1,6 @@
 -- sql
 WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10) SELECT n FROM t
 
--- phaseb
-reader-todo: recursive-cte (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw WITH 0 4)

@@ -1,9 +1,6 @@
 -- sql
 SELECT EXTRACT(YEAR FROM CURRENT_DATE)
 
--- phaseb
-reader-todo: extract/temporal-func (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)

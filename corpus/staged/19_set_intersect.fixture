@@ -1,9 +1,6 @@
 -- sql
 SELECT id FROM users INTERSECT SELECT user_id FROM orders
 
--- phaseb
-reader-todo: set-op (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)

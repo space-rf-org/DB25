@@ -1,9 +1,6 @@
 -- sql
 SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
 
--- phaseb
-reader-todo: subquery (Phase-B s-expr reader does not reconstruct subquery exprs yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)
