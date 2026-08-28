@@ -62,8 +62,12 @@ SELECT dept, region, COUNT(*) FROM emp GROUP BY GROUPING SETS ((dept), (region))
         (ColumnRef :text region :type Text :null t :tid 3 :cid 3)))))
 
 -- logical
-(bind-error "expression form 'GroupingElement' is not yet lowerable")
+(Project :exprs ((colref 0 :tid 3 :cid 2 :type Text :null t) (colref 1 :tid 3 :cid 3 :type Text :null t) (colref 2 :type BigInt :null f)) :out ((dept Text :null t :tid 3 :cid 2) (region Text :null t :tid 3 :cid 3) (COUNT BigInt :null f))
+  (Aggregate :keys ((colref 1 :tid 3 :cid 2 :type Text :null t) (colref 2 :tid 3 :cid 3 :type Text :null t)) :aggs ((agg COUNT :type BigInt :null f)) :gsets ((0) (1)) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (COUNT BigInt :null f))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
 -- optimized
-(bind-error "expression form 'GroupingElement' is not yet lowerable")
+(Project :exprs ((colref 0 :tid 3 :cid 2 :type Text :null t) (colref 1 :tid 3 :cid 3 :type Text :null t) (colref 2 :type BigInt :null f)) :out ((dept Text :null t :tid 3 :cid 2) (region Text :null t :tid 3 :cid 3) (COUNT BigInt :null f))
+  (Aggregate :keys ((colref 0 :tid 3 :cid 2 :type Text :null t) (colref 1 :tid 3 :cid 3 :type Text :null t)) :aggs ((agg COUNT :type BigInt :null f)) :gsets ((0) (1)) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (COUNT BigInt :null f))
+    (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3)))))
 
