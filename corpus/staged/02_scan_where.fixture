@@ -2,14 +2,14 @@
 SELECT id, name FROM users WHERE id = 1
 
 -- logical
-(Project :exprs ((colref 0 :type Integer :null f) (colref 1 :type VarChar :null t)) :out ((id Integer :null f) (name VarChar :null t))
-  (Filter :pred (binop "=" (colref 0 :type Integer :null f) (lit 1 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias users) (name VarChar :null t :alias users))
-    (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users)))))
+(Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 1 :tid 1 :cid 2 :type VarChar :null t)) :out ((id Integer :null f :tid 1 :cid 1) (name VarChar :null t :tid 1 :cid 2))
+  (Filter :pred (binop "=" (colref 0 :tid 1 :cid 1 :type Integer :null f) (lit 1 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2))
+    (Scan :rel users :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2)))))
 
 -- optimized
-(Project :exprs ((colref 0 :type Integer :null f) (colref 1 :type VarChar :null t)) :out ((id Integer :null f) (name VarChar :null t))
-  (Filter :pred (binop "=" (colref 0 :type Integer :null f) (lit 1 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias users) (name VarChar :null t :alias users))
-    (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users)))))
+(Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 1 :tid 1 :cid 2 :type VarChar :null t)) :out ((id Integer :null f :tid 1 :cid 1) (name VarChar :null t :tid 1 :cid 2))
+  (Filter :pred (binop "=" (colref 0 :tid 1 :cid 1 :type Integer :null f) (lit 1 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2))
+    (Scan :rel users :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2)))))
 
 -- ast
 (SelectStmt

@@ -58,12 +58,12 @@ reader-todo: window (Phase-B s-expr reader does not cover this yet)
     (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)))
 
 -- logical
-(Project :exprs ((colref 0 :type Text :null t) (colref 1 :type BigInt :null f)) :out ((dept Text :null t) (COUNT BigInt :null f))
-  (Aggregate :keys ((colref 1 :type Text :null t)) :aggs ((agg COUNT :filter (binop ">" (colref 3 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :type BigInt :null f)) :out ((dept Text :null t :alias emp) (COUNT BigInt :null f))
-    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+(Project :exprs ((colref 0 :tid 3 :cid 2 :type Text :null t) (colref 1 :type BigInt :null f)) :out ((dept Text :null t :tid 3 :cid 2) (COUNT BigInt :null f))
+  (Aggregate :keys ((colref 1 :tid 3 :cid 2 :type Text :null t)) :aggs ((agg COUNT :filter (binop ">" (colref 3 :tid 3 :cid 4 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :type BigInt :null f)) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (COUNT BigInt :null f))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
 -- optimized
-(Project :exprs ((colref 0 :type Text :null t) (colref 1 :type BigInt :null f)) :out ((dept Text :null t) (COUNT BigInt :null f))
-  (Aggregate :keys ((colref 0 :type Text :null t)) :aggs ((agg COUNT :filter (binop ">" (colref 1 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :type BigInt :null f)) :out ((dept Text :null t :alias emp) (COUNT BigInt :null f))
-    (Scan :rel emp :out ((dept Text :null t :alias emp) (salary Double :null t :alias emp)))))
+(Project :exprs ((colref 0 :tid 3 :cid 2 :type Text :null t) (colref 1 :type BigInt :null f)) :out ((dept Text :null t :tid 3 :cid 2) (COUNT BigInt :null f))
+  (Aggregate :keys ((colref 0 :tid 3 :cid 2 :type Text :null t)) :aggs ((agg COUNT :filter (binop ">" (colref 1 :tid 3 :cid 4 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :type BigInt :null f)) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (COUNT BigInt :null f))
+    (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 

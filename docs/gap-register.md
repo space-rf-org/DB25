@@ -34,7 +34,7 @@ regress into silence.
 | G3 | binder | CTAS / DDL statement lowering | DEFERRED | `bind-error "statement kind not yet lowered"` · `31` |
 | G4 | binder | Qualified star (`u.*`) over a join | DEFERRED | not-yet-lowered arity guard (honest reject) |
 | G5 | harness | Phase-B s-expr **reader** coverage | DEFERRED | `-- phaseb` skip-and-count ×12; verify+gate still cover e2e |
-| G6 | harness | Full-fidelity plan **injection** (node-id serialization) | DEFERRED | positional colrefs; no self-join injection fixture yet |
+| ~~G6~~ | harness | Full-fidelity plan **injection** (node-id serialization) | ✅ CLOSED | provenance ids (`:tid`/`:cid`) serialized on schema + colref/outerref; self-join fixture `32_self_join` injects lossless |
 | ~~G7~~ | analyzer | `INTERVAL 'x'` literal typed `Unknown` | ✅ CLOSED | now `Interval` — analyzer #98 · `29_interval` |
 | ~~G8~~ | parser | `EXTRACT(part FROM <typed literal>)` / `DATE '…'` value dropped | ✅ CLOSED | parser #83 |
 | ~~G9~~ | analyzer | `CURRENT_DATE` unresolved (treated as a column) | ✅ CLOSED | niladic function — parser #83 · `30_extract` |
@@ -100,16 +100,20 @@ Fixtures are under `corpus/staged/`.
 - **Fix:** extend the reader to those node/expr kinds; remove each marker as it is
   covered (the runner then checks it strictly).
 
-### G6 — Full-fidelity plan injection (node-id serialization)
-- **What:** lossless injection of plans with **self-joins** needs node identities
-  serialized, not just positional column references.
-- **Current behavior:** injection fixtures use positional colrefs, which suffice
-  for the current fixture set (no self-join injection fixture). Originally tracked
-  as "Phase B task #2".
-- **Safe because:** no fixture asserts a self-join injection today, so nothing is
-  silently mis-checked.
-- **Fix:** serialize node ids in the plan s-expr writer + reader, then add a
-  self-join injection fixture.
+### ~~G6~~ — Full-fidelity plan injection (node-id serialization) — ✅ CLOSED
+- **What:** lossless injection of plans (self-joins included) needs the binder's
+  provenance identities serialized, not just positional column references.
+  Originally tracked as "Phase B task #2".
+- **Resolution:** the plan s-expr writer now renders the base-column provenance
+  the binder resolves — `(table_id, column_id)` — as `:tid` / `:cid` on every
+  schema column and on `colref` / `outerref` expressions (mirroring the
+  resolved-AST layer), and the reader restores them. A read-back plan is now
+  identical to the bound plan, not one with the ids dropped. Added
+  `32_self_join` (`emp a JOIN emp b …`): the two instances are disambiguated by
+  `input_index` + `:alias`, and it now round-trips lossless and injects
+  (`optimize(read(logical)) == optimized golden`).
+- **Verified:** `staged_runner --roundtrip` (0 not-lossless), `--inject` (0
+  mismatches, self-join included), `--gate` (0 vacuous / 0 stale).
 
 ### G10 — `1/0` preserved (intentional divergence)
 - **What:** a constant `1/0` is **not** folded or rejected at plan time.

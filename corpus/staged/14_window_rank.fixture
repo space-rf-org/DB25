@@ -52,12 +52,12 @@ reader-todo: window (Phase-B s-expr reader does not cover this yet)
     (TableRef :text emp)))
 
 -- logical
-(Project :exprs ((colref 0 :type Integer :null f) (colref 4 :type BigInt :null f)) :out ((id Integer :null f) (RANK BigInt :null f))
-  (Window :windows ((winfunc RANK :over (:partition ((colref 1 :type Text :null t)) :order ((key (colref 3 :type Double :null t) asc))) :type BigInt :null f)) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp) (RANK BigInt :null f))
-    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+(Project :exprs ((colref 0 :tid 3 :cid 1 :type Integer :null f) (colref 4 :type BigInt :null f)) :out ((id Integer :null f :tid 3 :cid 1) (RANK BigInt :null f))
+  (Window :windows ((winfunc RANK :over (:partition ((colref 1 :tid 3 :cid 2 :type Text :null t)) :order ((key (colref 3 :tid 3 :cid 4 :type Double :null t) asc))) :type BigInt :null f)) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4) (RANK BigInt :null f))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
 -- optimized
-(Project :exprs ((colref 0 :type Integer :null f) (colref 4 :type BigInt :null f)) :out ((id Integer :null f) (RANK BigInt :null f))
-  (Window :windows ((winfunc RANK :over (:partition ((colref 1 :type Text :null t)) :order ((key (colref 3 :type Double :null t) asc))) :type BigInt :null f)) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp) (RANK BigInt :null f))
-    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+(Project :exprs ((colref 0 :tid 3 :cid 1 :type Integer :null f) (colref 4 :type BigInt :null f)) :out ((id Integer :null f :tid 3 :cid 1) (RANK BigInt :null f))
+  (Window :windows ((winfunc RANK :over (:partition ((colref 1 :tid 3 :cid 2 :type Text :null t)) :order ((key (colref 3 :tid 3 :cid 4 :type Double :null t) asc))) :type BigInt :null f)) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4) (RANK BigInt :null f))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 

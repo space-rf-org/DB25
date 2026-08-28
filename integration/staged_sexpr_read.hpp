@@ -25,9 +25,11 @@ namespace db25::staged {
 
 // Parse canonical plan s-expr (as produced by plan_to_sexpr) into an owned
 // LogicalNode tree. Returns null and sets `error` on a parse failure or an
-// unsupported construct. NOTE: provenance ids the writer does not render
-// (ColumnSchema table_id/column_id, Expr ref_table_id/ref_column_id) are not
-// reconstructed - the round-trip is exact for the RENDERED fields.
+// unsupported construct. Provenance ids ARE reconstructed: the writer renders a
+// base column's (table_id, column_id) as :tid / :cid on schema columns and on
+// colref / outerref expressions, and the reader restores them - so a read-back
+// plan is FULL-fidelity (identical to the bound plan, not one with the ids
+// dropped). The round-trip is exact for every rendered field.
 [[nodiscard]] db25::plan::LogicalNodePtr plan_from_sexpr(std::string_view sexpr,
                                                          std::string& error);
 

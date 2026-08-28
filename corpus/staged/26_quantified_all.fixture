@@ -55,12 +55,12 @@ reader-todo: subquery (Phase-B s-expr reader does not reconstruct subquery exprs
             (TableRef :text emp)))))))
 
 -- logical
-(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
-  (Filter :pred (subquery :kind quantified :op ">" :quant all :type Boolean :null t) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))
-    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+(Project :exprs ((colref 0 :tid 3 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 3 :cid 1))
+  (Filter :pred (subquery :kind quantified :op ">" :quant all :type Boolean :null t) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
 -- optimized
-(Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
-  (Filter :pred (subquery :kind quantified :op ">" :quant all :type Boolean :null t) :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))
-    (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp)))))
+(Project :exprs ((colref 0 :tid 3 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 3 :cid 1))
+  (Filter :pred (subquery :kind quantified :op ">" :quant all :type Boolean :null t) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 

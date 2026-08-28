@@ -44,14 +44,14 @@ reader-todo: limit (Phase-B s-expr reader does not cover this yet)
     (IntegerLiteral :text 5)))
 
 -- logical
-(Limit :limit 10 :offset 5 :out ((id Integer :null f))
-  (Sort :keys ((key (colref 0 :type Integer :null f) asc)) :out ((id Integer :null f))
-    (Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
-      (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))))))
+(Limit :limit 10 :offset 5 :out ((id Integer :null f :tid 3 :cid 1))
+  (Sort :keys ((key (colref 0 :type Integer :null f) asc)) :out ((id Integer :null f :tid 3 :cid 1))
+    (Project :exprs ((colref 0 :tid 3 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 3 :cid 1))
+      (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4))))))
 
 -- optimized
-(Limit :limit 10 :offset 5 :out ((id Integer :null f))
-  (Sort :keys ((key (colref 0 :type Integer :null f) asc)) :out ((id Integer :null f))
-    (Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
-      (Scan :rel emp :out ((id Integer :null f :alias emp))))))
+(Limit :limit 10 :offset 5 :out ((id Integer :null f :tid 3 :cid 1))
+  (Sort :keys ((key (colref 0 :type Integer :null f) asc)) :out ((id Integer :null f :tid 3 :cid 1))
+    (Project :exprs ((colref 0 :tid 3 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 3 :cid 1))
+      (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1))))))
 
