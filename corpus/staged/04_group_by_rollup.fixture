@@ -2,10 +2,14 @@
 SELECT dept, SUM(salary) FROM emp GROUP BY ROLLUP(dept)
 
 -- logical
-(bind-error "expression form 'GroupingElement' is not yet lowerable")
+(Project :exprs ((colref 0 :tid 3 :cid 2 :type Text :null t) (colref 1 :type Double :null t)) :out ((dept Text :null t :tid 3 :cid 2) (SUM Double :null t))
+  (Aggregate :keys ((colref 1 :tid 3 :cid 2 :type Text :null t)) :aggs ((agg SUM (colref 3 :tid 3 :cid 4 :type Double :null t) :type Double :null t)) :gsets ((0) ()) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (SUM Double :null t))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
 -- optimized
-(bind-error "expression form 'GroupingElement' is not yet lowerable")
+(Project :exprs ((colref 0 :tid 3 :cid 2 :type Text :null t) (colref 1 :type Double :null t)) :out ((dept Text :null t :tid 3 :cid 2) (SUM Double :null t))
+  (Aggregate :keys ((colref 0 :tid 3 :cid 2 :type Text :null t)) :aggs ((agg SUM (colref 1 :tid 3 :cid 4 :type Double :null t) :type Double :null t)) :gsets ((0) ()) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (SUM Double :null t))
+    (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
 -- ast
 (SelectStmt

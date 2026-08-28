@@ -29,7 +29,7 @@ regress into silence.
 
 | ID | Area | Gap | Class | Honest behavior / pin |
 |----|------|-----|-------|-----------------------|
-| G1 | binder | ROLLUP / CUBE / GROUPING SETS lowering | DEFERRED | `bind-error "GroupingElement not lowerable"` · `04,11,12` |
+| ~~G1~~ | binder | ROLLUP / CUBE / GROUPING SETS lowering | ✅ CLOSED | first-class `Aggregate.grouping_sets`; `04,11,12` now bind + round-trip + inject |
 | G2 | binder | Quantified comparison `ALL`/`ANY`/`SOME` lowering | DEFERRED | `bind-error "quantified comparison … not yet supported"` · `26` |
 | G3 | binder | CTAS / DDL statement lowering | DEFERRED | `bind-error "statement kind not yet lowered"` · `31` |
 | G4 | binder | Qualified star (`u.*`) over a join | DEFERRED | not-yet-lowered arity guard (honest reject) |
@@ -46,18 +46,23 @@ Fixtures are under `corpus/staged/`.
 
 ## Deferred known-gaps
 
-### G1 — ROLLUP / CUBE / GROUPING SETS lowering
-- **What:** the binder does not expand a `GroupingElement` (the parser's node for
-  `ROLLUP()`/`CUBE()`/`GROUPING SETS()`) into its grouping sets.
-- **Current behavior:** `bind-error "expression form 'GroupingElement' is not yet
-  lowerable"`. The **analyzer is complete** here — grouping legality, and the
-  super-aggregate nullability of keys and of expressions reading a key (but not
-  window functions over a key), are all correct and unit-tested.
-- **Safe because:** the statement stops at bind with a clear message; nothing
-  downstream sees a mis-shaped plan. Pinned by `04_group_by_rollup`,
-  `11_group_by_cube`, `12_grouping_sets`.
-- **Fix (feature):** grouping-set expansion in the binder (one grouped input per
-  set, unioned), then lower the `GROUPING()` indicator.
+### ~~G1~~ — ROLLUP / CUBE / GROUPING SETS lowering — ✅ CLOSED
+- **What:** the binder rejected a `GroupingElement` (the parser's node for
+  `ROLLUP()`/`CUBE()`/`GROUPING SETS()`) group key.
+- **Resolution:** the binder now flattens the `GroupingElement` into the flat,
+  de-duplicated leaf grouping columns plus a first-class `Aggregate.grouping_sets`
+  payload (index-sets into `group_keys`; DuckDB / Calcite style) rather than
+  expanding to a UNION — so the Aggregate output stays the ordinary
+  `[keys…, aggregates…]` and all the existing projection / producer / HAVING logic
+  is unchanged. Every grouping key is nullable, matching the analyzer's
+  `projection_of`. `ROLLUP(a,b)` → `{{0,1},{0},{}}`, `CUBE(a,b)` → all 2ⁿ subsets,
+  `GROUPING SETS ((a),(b))` → the listed sets. The analyzer types the `GROUPING()`
+  indicator (BigInt, never NULL). The staged plan s-expr serializes `grouping_sets`
+  as `:gsets ((…) …)`, and `04_group_by_rollup` / `11_group_by_cube` /
+  `12_grouping_sets` now bind, round-trip, and inject.
+- **Delivered by:** analyzer `DB25-Semantic-Analyzer#151` (GROUPING typing),
+  binder db25-logical-plan#170 (`grouping_sets` payload + lowering), and this
+  harness/pin bump.
 
 ### G2 — Quantified comparison lowering (`x <cmp> ALL|ANY|SOME (subquery)`)
 - **Current behavior:** analyzer types it `Boolean` and validates single-column

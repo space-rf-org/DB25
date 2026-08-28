@@ -430,6 +430,17 @@ LogicalNodePtr node_from(const SNode& n, std::string& err) {
                 }
             }
             else if (kw == ":aggs") { for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->aggregates.push_back(std::move(e)); } }
+            else if (kw == ":gsets") {
+                // GROUPING SETS index lists: each item is a list of indices into
+                // :keys (an empty list is the grand-total set).
+                for (const SNode& set_node : val->items) {
+                    std::vector<std::uint32_t> s;
+                    for (const SNode& idx : set_node.items) {
+                        s.push_back(static_cast<std::uint32_t>(std::strtoul(idx.atom.c_str(), nullptr, 10)));
+                    }
+                    node->grouping_sets.push_back(std::move(s));
+                }
+            }
             else if (kw == ":windows") { for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->window_functions.push_back(std::move(e)); } }
             else if (kw == ":op") { if (!setop_from(val->atom, node->set_op)) { err = "node: bad set-op '" + val->atom + "'"; return nullptr; } }
             else if (kw == ":rows") {

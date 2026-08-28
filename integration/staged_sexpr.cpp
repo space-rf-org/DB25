@@ -398,6 +398,26 @@ void render_node(const LogicalNode* n, int depth, std::string& out) {
         case LogicalOp::Aggregate:
             render_expr_list(":keys", n->group_keys, out);
             render_expr_list(":aggs", n->aggregates, out);
+            // GROUPING SETS / ROLLUP / CUBE: the grouping-set index lists, each a
+            // parenthesized list of indices into :keys. Omitted for a plain
+            // GROUP BY (empty grouping_sets). `()` is the empty (grand-total) set.
+            if (!n->grouping_sets.empty()) {
+                out.append(" :gsets (");
+                bool first_set = true;
+                for (const auto& s : n->grouping_sets) {
+                    if (!first_set) out.push_back(' ');
+                    first_set = false;
+                    out.push_back('(');
+                    bool first_idx = true;
+                    for (std::uint32_t idx : s) {
+                        if (!first_idx) out.push_back(' ');
+                        first_idx = false;
+                        out.append(std::to_string(idx));
+                    }
+                    out.push_back(')');
+                }
+                out.push_back(')');
+            }
             break;
         case LogicalOp::Window:
             render_expr_list(":windows", n->window_functions, out);
