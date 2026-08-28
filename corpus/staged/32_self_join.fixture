@@ -1,0 +1,85 @@
+-- sql
+SELECT a.dept, b.salary FROM emp a JOIN emp b ON a.dept = b.dept WHERE a.id <> b.id
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident a 7 8)
+  (op "." 8 9)
+  (ident dept 9 13)
+  (punct "," 13 14)
+  (ident b 15 16)
+  (op "." 16 17)
+  (ident salary 17 23)
+  (kw FROM 24 28)
+  (ident emp 29 32)
+  (ident a 33 34)
+  (kw JOIN 35 39)
+  (ident emp 40 43)
+  (ident b 44 45)
+  (kw ON 46 48)
+  (ident a 49 50)
+  (op "." 50 51)
+  (ident dept 51 55)
+  (op "=" 56 57)
+  (ident b 58 59)
+  (op "." 59 60)
+  (ident dept 60 64)
+  (kw WHERE 65 70)
+  (ident a 71 72)
+  (op "." 72 73)
+  (ident id 73 75)
+  (op "<>" 76 78)
+  (ident b 79 80)
+  (op "." 80 81)
+  (ident id 81 83)
+  (eof 83 83))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "a.dept")
+    (ColumnRef :text "b.salary"))
+  (FromClause
+    (TableRef :text emp :qual a)
+    (JoinClause :text JOIN
+      (TableRef :text emp :qual b)
+      (BinaryExpr :text "="
+        (ColumnRef :text "a.dept")
+        (ColumnRef :text "b.dept"))))
+  (WhereClause
+    (BinaryExpr :text "<>"
+      (ColumnRef :text "a.id")
+      (ColumnRef :text "b.id"))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "a.dept" :type Text :null t :tid 3 :cid 2)
+    (ColumnRef :text "b.salary" :type Double :null t :tid 3 :cid 4))
+  (FromClause
+    (TableRef :text emp :qual a)
+    (JoinClause :text JOIN
+      (TableRef :text emp :qual b)
+      (BinaryExpr :text "=" :type Boolean :null t
+        (ColumnRef :text "a.dept" :type Text :null t :tid 3 :cid 2)
+        (ColumnRef :text "b.dept" :type Text :null t :tid 3 :cid 2))))
+  (WhereClause
+    (BinaryExpr :text "<>" :type Boolean :null f
+      (ColumnRef :text "a.id" :type Integer :null f :tid 3 :cid 1)
+      (ColumnRef :text "b.id" :type Integer :null f :tid 3 :cid 1))))
+
+-- logical
+(Project :exprs ((colref 1 :tid 3 :cid 2 :type Text :null t) (colref 7 :tid 3 :cid 4 :type Double :null t)) :out ((dept Text :null t :tid 3 :cid 2) (salary Double :null t :tid 3 :cid 4))
+  (Filter :pred (binop "!=" (colref 0 :tid 3 :cid 1 :type Integer :null f) (colref 4 :tid 3 :cid 1 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias a :tid 3 :cid 1) (dept Text :null t :alias a :tid 3 :cid 2) (region Text :null t :alias a :tid 3 :cid 3) (salary Double :null t :alias a :tid 3 :cid 4) (id Integer :null f :alias b :tid 3 :cid 1) (dept Text :null t :alias b :tid 3 :cid 2) (region Text :null t :alias b :tid 3 :cid 3) (salary Double :null t :alias b :tid 3 :cid 4))
+    (Join :kind inner :pred (binop "=" (colref 1 :tid 3 :cid 2 :type Text :null t) (colref 5 :tid 3 :cid 2 :type Text :null t) :type Boolean :null t) :out ((id Integer :null f :alias a :tid 3 :cid 1) (dept Text :null t :alias a :tid 3 :cid 2) (region Text :null t :alias a :tid 3 :cid 3) (salary Double :null t :alias a :tid 3 :cid 4) (id Integer :null f :alias b :tid 3 :cid 1) (dept Text :null t :alias b :tid 3 :cid 2) (region Text :null t :alias b :tid 3 :cid 3) (salary Double :null t :alias b :tid 3 :cid 4))
+      (Scan :rel emp :alias a :out ((id Integer :null f :alias a :tid 3 :cid 1) (dept Text :null t :alias a :tid 3 :cid 2) (region Text :null t :alias a :tid 3 :cid 3) (salary Double :null t :alias a :tid 3 :cid 4)))
+      (Scan :rel emp :alias b :out ((id Integer :null f :alias b :tid 3 :cid 1) (dept Text :null t :alias b :tid 3 :cid 2) (region Text :null t :alias b :tid 3 :cid 3) (salary Double :null t :alias b :tid 3 :cid 4))))))
+
+-- optimized
+(Project :exprs ((colref 1 :tid 3 :cid 2 :type Text :null t) (colref 4 :tid 3 :cid 4 :type Double :null t)) :out ((dept Text :null t :tid 3 :cid 2) (salary Double :null t :tid 3 :cid 4))
+  (Filter :pred (binop "!=" (colref 0 :tid 3 :cid 1 :type Integer :null f) (colref 2 :tid 3 :cid 1 :type Integer :null f) :type Boolean :null f) :out ((id Integer :null f :alias a :tid 3 :cid 1) (dept Text :null t :alias a :tid 3 :cid 2) (id Integer :null f :alias b :tid 3 :cid 1) (dept Text :null t :alias b :tid 3 :cid 2) (salary Double :null t :alias b :tid 3 :cid 4))
+    (Join :kind inner :pred (binop "=" (colref 1 :tid 3 :cid 2 :type Text :null t) (colref 3 :tid 3 :cid 2 :type Text :null t) :type Boolean :null t) :out ((id Integer :null f :alias a :tid 3 :cid 1) (dept Text :null t :alias a :tid 3 :cid 2) (id Integer :null f :alias b :tid 3 :cid 1) (dept Text :null t :alias b :tid 3 :cid 2) (salary Double :null t :alias b :tid 3 :cid 4))
+      (Scan :rel emp :alias a :out ((id Integer :null f :alias a :tid 3 :cid 1) (dept Text :null t :alias a :tid 3 :cid 2)))
+      (Scan :rel emp :alias b :out ((id Integer :null f :alias b :tid 3 :cid 1) (dept Text :null t :alias b :tid 3 :cid 2) (salary Double :null t :alias b :tid 3 :cid 4))))))
+

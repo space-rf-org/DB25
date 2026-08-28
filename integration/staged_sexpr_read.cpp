@@ -191,8 +191,15 @@ ExprPtr expr_from(const SNode& n, std::string& err) {
     if (kind == "colref" || kind == "outerref") {
         auto e = std::make_unique<Expr>(kind == "colref" ? ExprKind::ColumnRef : ExprKind::OuterRef);
         if (n.items.size() > 1) e->input_index = static_cast<std::uint32_t>(std::strtoul(n.items[1].atom.c_str(), nullptr, 10));
-        for (std::size_t k = 2; k + 1 < n.items.size(); ++k)
-            if (n.items[k].atom == ":depth") e->outer_depth = static_cast<std::uint32_t>(std::strtoul(n.items[k + 1].atom.c_str(), nullptr, 10));
+        for (std::size_t k = 2; k + 1 < n.items.size(); ++k) {
+            const std::string& kw = n.items[k].atom;
+            if (kw == ":depth") e->outer_depth = static_cast<std::uint32_t>(std::strtoul(n.items[k + 1].atom.c_str(), nullptr, 10));
+            // Column-reference provenance (see render_ref_prov): restore the
+            // (table_id, column_id) so a read-back colref is identical to the
+            // bound one, not one with the provenance dropped.
+            else if (kw == ":tid") e->ref_table_id = static_cast<std::uint32_t>(std::strtoul(n.items[k + 1].atom.c_str(), nullptr, 10));
+            else if (kw == ":cid") e->ref_column_id = static_cast<std::uint32_t>(std::strtoul(n.items[k + 1].atom.c_str(), nullptr, 10));
+        }
         apply_type_null(*e, n);
         return e;
     }
@@ -238,6 +245,10 @@ bool schema_from(const SNode& list, db25::plan::Schema& out, std::string& err) {
             const std::string& kw = col.items[k].atom;
             if (kw == ":null" && k + 1 < col.items.size()) c.nullable = (col.items[++k].atom == "t");
             else if (kw == ":alias" && k + 1 < col.items.size()) c.alias = col.items[++k].atom;
+            // Base-column provenance (see render_schema): restore the catalog
+            // (table_id, column_id) so a read-back schema matches the bound plan.
+            else if (kw == ":tid" && k + 1 < col.items.size()) c.table_id = static_cast<std::uint32_t>(std::strtoul(col.items[++k].atom.c_str(), nullptr, 10));
+            else if (kw == ":cid" && k + 1 < col.items.size()) c.column_id = static_cast<std::uint32_t>(std::strtoul(col.items[++k].atom.c_str(), nullptr, 10));
             else if (kw == ":hidden") c.hidden = true;
         }
         out.push_back(std::move(c));

@@ -112,6 +112,23 @@ void render_type_suffix(const Expr& e, std::string& out) {
     out.append(null2(e.nullability));
 }
 
+// Column-reference provenance: the (table_id, column_id) the binder resolved a
+// colref / outerref to (Expr::ref_table_id / ref_column_id). Rendered so the
+// plan artifact is FULL-fidelity - the same provenance the resolved-AST layer
+// carries as :tid / :cid - and so a read-back plan is identical to the bound
+// plan, not one with the ids dropped. Omitted when zero (a computed / id-less
+// reference), matching the omit-zero style of the other optional fields.
+void render_ref_prov(const Expr& e, std::string& out) {
+    if (e.ref_table_id != 0) {
+        out.append(" :tid ");
+        out.append(std::to_string(e.ref_table_id));
+    }
+    if (e.ref_column_id != 0) {
+        out.append(" :cid ");
+        out.append(std::to_string(e.ref_column_id));
+    }
+}
+
 void render_expr(const Expr& e, std::string& out) {
     switch (e.kind) {
         case ExprKind::Literal:
@@ -123,6 +140,7 @@ void render_expr(const Expr& e, std::string& out) {
         case ExprKind::ColumnRef:
             out.append("(colref ");
             out.append(std::to_string(e.input_index));
+            render_ref_prov(e, out);
             render_type_suffix(e, out);
             out.push_back(')');
             return;
@@ -131,6 +149,7 @@ void render_expr(const Expr& e, std::string& out) {
             out.append(std::to_string(e.input_index));
             out.append(" :depth ");
             out.append(std::to_string(e.outer_depth));
+            render_ref_prov(e, out);
             render_type_suffix(e, out);
             out.push_back(')');
             return;
@@ -310,6 +329,18 @@ void render_schema(const db25::plan::Schema& schema, std::string& out) {
         if (!c.alias.empty() && c.alias != c.name) {
             out.append(" :alias ");
             out.append(ident(c.alias));
+        }
+        // Base-column provenance (table_id, column_id): the catalog identity the
+        // binder resolved this output column to. Rendered for full plan fidelity
+        // - a base column carries its ids so a read-back schema matches the bound
+        // plan; a derived / computed column has none (omitted when zero).
+        if (c.table_id != 0) {
+            out.append(" :tid ");
+            out.append(std::to_string(c.table_id));
+        }
+        if (c.column_id != 0) {
+            out.append(" :cid ");
+            out.append(std::to_string(c.column_id));
         }
         if (c.hidden) out.append(" :hidden");
         out.push_back(')');

@@ -28,10 +28,10 @@ SELECT dept COLLATE "C" FROM emp
     (TableRef :text emp)))
 
 -- logical
-(Project :exprs ((func COLLATE (colref 1 :type Text :null t) (lit C :type Text :null f) :type Text :null t)) :out ((C Text :null t))
-  (Scan :rel emp :out ((id Integer :null f :alias emp) (dept Text :null t :alias emp) (region Text :null t :alias emp) (salary Double :null t :alias emp))))
+(Project :exprs ((func COLLATE (colref 1 :tid 3 :cid 2 :type Text :null t) (lit C :type Text :null f) :type Text :null t)) :out ((C Text :null t))
+  (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4))))
 
 -- optimized
-(Project :exprs ((func COLLATE (colref 0 :type Text :null t) (lit C :type Text :null f) :type Text :null t)) :out ((C Text :null t))
-  (Scan :rel emp :out ((dept Text :null t :alias emp))))
+(Project :exprs ((func COLLATE (colref 0 :tid 3 :cid 2 :type Text :null t) (lit C :type Text :null f) :type Text :null t)) :out ((C Text :null t))
+  (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2))))
 

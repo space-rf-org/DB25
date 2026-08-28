@@ -45,16 +45,16 @@ reader-todo: set-op (Phase-B s-expr reader does not cover this yet)
       (TableRef :text orders))))
 
 -- logical
-(SetOp :op union-all :out ((id Integer :null t))
-  (Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
-    (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users))))
-  (Project :exprs ((colref 1 :type Integer :null t)) :out ((user_id Integer :null t))
-    (Scan :rel orders :out ((id Integer :null f :alias orders) (user_id Integer :null t :alias orders) (total Double :null t :alias orders)))))
+(SetOp :op union-all :out ((id Integer :null t :tid 1 :cid 1))
+  (Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 1 :cid 1))
+    (Scan :rel users :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2))))
+  (Project :exprs ((colref 1 :tid 2 :cid 2 :type Integer :null t)) :out ((user_id Integer :null t :tid 2 :cid 2))
+    (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3)))))
 
 -- optimized
-(SetOp :op union-all :out ((id Integer :null t))
-  (Project :exprs ((colref 0 :type Integer :null f)) :out ((id Integer :null f))
-    (Scan :rel users :out ((id Integer :null f :alias users) (name VarChar :null t :alias users))))
-  (Project :exprs ((colref 1 :type Integer :null t)) :out ((user_id Integer :null t))
-    (Scan :rel orders :out ((id Integer :null f :alias orders) (user_id Integer :null t :alias orders) (total Double :null t :alias orders)))))
+(SetOp :op union-all :out ((id Integer :null t :tid 1 :cid 1))
+  (Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 1 :cid 1))
+    (Scan :rel users :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2))))
+  (Project :exprs ((colref 1 :tid 2 :cid 2 :type Integer :null t)) :out ((user_id Integer :null t :tid 2 :cid 2))
+    (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3)))))
 
