@@ -19,8 +19,10 @@ This repository holds the documents — the runnable **examples**, and the cross
 
 ## Getting started
 
-**Prerequisites:** a C++23 compiler (g++-13+ / clang-16+), CMake ≥ 3.20, and Ninja or
-Make. The whole stack is `-fno-exceptions`.
+**Prerequisites:** **GCC 14+** — the supported, CI-tested toolchain (the whole
+stack builds and tests against it, including under AddressSanitizer/UBSan), plus
+CMake ≥ 3.20 and Ninja or Make. The whole stack is `-fno-exceptions`. Other C++23
+compilers (Clang, Apple Clang) may work but are not exercised in CI.
 
 ```sh
 # 1. Clone with every stage (the stages are git submodules under external/).
