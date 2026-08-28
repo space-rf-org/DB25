@@ -1,9 +1,6 @@
 -- sql
 SELECT INTERVAL '1 day'
 
--- phaseb
-reader-todo: interval-literal (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)

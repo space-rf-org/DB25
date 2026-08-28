@@ -33,7 +33,7 @@ regress into silence.
 | G2 | binder | Quantified comparison `ALL`/`ANY`/`SOME` lowering | DEFERRED | `bind-error "quantified comparison … not yet supported"` · `26` |
 | G3 | binder | CTAS / DDL statement lowering | DEFERRED | `bind-error "statement kind not yet lowered"` · `31` |
 | G4 | binder | Qualified star (`u.*`) over a join | DEFERRED | not-yet-lowered arity guard (honest reject) |
-| G5 | harness | Phase-B s-expr **reader** coverage | DEFERRED | `-- phaseb` skip-and-count ×12; verify+gate still cover e2e |
+| ~~G5~~ | harness | Phase-B s-expr **reader** coverage | ✅ CLOSED | reader covers every corpus construct; 0 `-- phaseb` deferrals — roundtrip 56/0, inject 28/0 |
 | ~~G6~~ | harness | Full-fidelity plan **injection** (node-id serialization) | ✅ CLOSED | provenance ids (`:tid`/`:cid`) serialized on schema + colref/outerref; self-join fixture `32_self_join` injects lossless |
 | ~~G7~~ | analyzer | `INTERVAL 'x'` literal typed `Unknown` | ✅ CLOSED | now `Interval` — analyzer #98 · `29_interval` |
 | ~~G8~~ | parser | `EXTRACT(part FROM <typed literal>)` / `DATE '…'` value dropped | ✅ CLOSED | parser #83 |
@@ -85,20 +85,22 @@ Fixtures are under `corpus/staged/`.
 - **Fix (feature):** resolve the qualified star to its relation's columns during
   lowering.
 
-### G5 — Phase-B s-expr reader coverage
+### ~~G5~~ — Phase-B s-expr reader coverage — ✅ CLOSED
 - **What:** `plan_from_sexpr` (the reader that round-trip and per-module injection
-  build on) does not yet cover plans containing **window, set-op, limit,
-  recursive-CTE, LIKE, cast, or interval** nodes.
-- **Current behavior:** the 11 fixtures using those constructs carry a `-- phaseb`
-  marker; `staged_runner --roundtrip` / `--inject` **skip and count** them as
-  explicit deferrals (`… N deferred (phaseb)`) rather than failing. `--update`
-  preserves the marker.
-- **Safe because:** those constructs are still pinned **end-to-end** (`verify`) and
-  their plan goldens are **falsifiable** (`--gate`); only the *read-back*
-  (injection) path is deferred. The deferral is enumerable (`grep -l phaseb`), not
-  silent.
-- **Fix:** extend the reader to those node/expr kinds; remove each marker as it is
-  covered (the runner then checks it strictly).
+  build on) did not cover plans containing **window, set-op, limit, sort,
+  recursive-CTE, LIKE, BETWEEN, IS NULL, boolean-test, CASE, IN-list, cast,
+  quantified-subquery, interval, or EXTRACT** constructs.
+- **Resolution:** the reader now handles every one of those node payloads
+  (`:keys` for Sort, `:windows`, `:op` set-op, `:rows` Values) and expression
+  kinds (`winfunc` + OVER spec, `cast`, `like`, `between`, `isnull`, `booltest`,
+  `case`, `inlist`, `subquery` incl. quantified `:op`/`:quant`, `param`), mirroring
+  the writer's grammar, plus the aggregate `:filter`. Operand collection was made
+  valueless-flag-aware (`:distinct`/`:ci`/`:negated`/`:correlated`) so a bare flag
+  no longer swallows a following operand. All `-- phaseb` markers are removed.
+- **Verified:** `staged_runner --roundtrip` — 56 goldens, 0 not-lossless, **0
+  deferred**; `--inject` — 28 goldens, 0 mismatches, **0 deferred**; `--gate` — 56
+  goldens, 0 vacuous / 0 stale. The whole staged corpus is now round-tripped and
+  injected strictly.
 
 ### ~~G6~~ — Full-fidelity plan injection (node-id serialization) — ✅ CLOSED
 - **What:** lossless injection of plans (self-joins included) needs the binder's

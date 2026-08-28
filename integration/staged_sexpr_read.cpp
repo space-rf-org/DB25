@@ -153,17 +153,84 @@ void apply_type_null(Expr& e, const SNode& list) {
 
 ExprPtr expr_from(const SNode& n, std::string& err);
 
-// Collect positional operand child-lists (skipping keyword atoms + their values).
+// A keyword flag that carries NO value (a bare `:flag`), vs. the value-ful
+// keywords (`:type T`, `:over (...)`, `:filter e`, ...). Operand collection must
+// NOT consume a value after a valueless flag, or it would swallow a following
+// child operand (e.g. `(agg SUM :distinct (colref 0) …)` would drop the arg).
+bool is_valueless_flag(const std::string& a) {
+    return a == ":distinct" || a == ":ci" || a == ":negated" || a == ":correlated";
+}
+
+// Collect positional operand child-lists: skip valueless flags (no value), skip
+// a value-ful keyword together with its value (which may itself be a list, e.g.
+// `:over (...)` / `:filter (expr)` - never an operand), and collect the rest.
 std::vector<const SNode*> positional_operands(const SNode& n, std::size_t start) {
     std::vector<const SNode*> out;
     for (std::size_t k = start; k < n.items.size(); ++k) {
-        if (!n.items[k].is_list && !n.items[k].atom.empty() && n.items[k].atom[0] == ':') {
-            ++k;  // skip this keyword's value
+        const SNode& it = n.items[k];
+        if (!it.is_list && !it.atom.empty() && it.atom[0] == ':') {
+            if (is_valueless_flag(it.atom)) continue;
+            ++k;  // skip this keyword's value (atom or list)
             continue;
         }
-        if (n.items[k].is_list) out.push_back(&n.items[k]);
+        if (it.is_list) out.push_back(&n.items[k]);
     }
     return out;
+}
+
+bool setop_from(std::string_view s, ast::SetOp& out) {
+    if (s == "union") { out = ast::SetOp::Union; return true; }
+    if (s == "union-all") { out = ast::SetOp::UnionAll; return true; }
+    if (s == "intersect") { out = ast::SetOp::Intersect; return true; }
+    if (s == "except") { out = ast::SetOp::Except; return true; }
+    return false;
+}
+
+bool subquerykind_from(std::string_view s, db25::plan::SubqueryKind& out) {
+    if (s == "scalar") { out = db25::plan::SubqueryKind::Scalar; return true; }
+    if (s == "in") { out = db25::plan::SubqueryKind::In; return true; }
+    if (s == "exists") { out = db25::plan::SubqueryKind::Exists; return true; }
+    if (s == "quantified") { out = db25::plan::SubqueryKind::Quantified; return true; }
+    return false;
+}
+
+// Parse one `(key <expr>|null asc|desc [nulls-first|nulls-last])` sort key.
+bool sort_key_from(const SNode& n, db25::plan::SortKeyIR& out, std::string& err) {
+    if (!n.is_list || n.items.empty() || n.items[0].atom != "key") {
+        err = "sort key: expected (key …)";
+        return false;
+    }
+    for (std::size_t k = 1; k < n.items.size(); ++k) {
+        const SNode& it = n.items[k];
+        if (it.is_list) { out.expr = expr_from(it, err); if (!out.expr) return false; }
+        else if (it.atom == "asc") out.descending = false;
+        else if (it.atom == "desc") out.descending = true;
+        else if (it.atom == "nulls-first") { out.nulls_order_explicit = true; out.nulls_first = true; }
+        else if (it.atom == "nulls-last") { out.nulls_order_explicit = true; out.nulls_first = false; }
+        // "null" (a valueless expr) leaves out.expr null.
+    }
+    return true;
+}
+
+// Parse a window OVER spec list: (:partition (e…) :order ((key …)…) [:frame S]).
+bool window_spec_from(const SNode& over, db25::plan::WindowSpecIR& out, std::string& err) {
+    if (!over.is_list) { err = "window: expected (:partition … :order …)"; return false; }
+    for (std::size_t k = 0; k + 1 < over.items.size(); ++k) {
+        const std::string& kw = over.items[k].atom;
+        const SNode& val = over.items[k + 1];
+        if (kw == ":partition") {
+            for (const SNode& x : val.items) { auto e = expr_from(x, err); if (!e) return false; out.partition_by.push_back(std::move(e)); }
+            ++k;
+        } else if (kw == ":order") {
+            for (const SNode& x : val.items) { db25::plan::SortKeyIR sk; if (!sort_key_from(x, sk, err)) return false; out.order_by.push_back(std::move(sk)); }
+            ++k;
+        } else if (kw == ":frame") {
+            out.frame.present = true;
+            out.frame.spec = val.atom;
+            ++k;
+        }
+    }
+    return true;
 }
 
 ExprPtr expr_from(const SNode& n, std::string& err) {
@@ -219,12 +286,86 @@ ExprPtr expr_from(const SNode& n, std::string& err) {
         apply_type_null(*e, n);
         return e;
     }
-    if (kind == "func" || kind == "agg") {
-        auto e = std::make_unique<Expr>(kind == "func" ? ExprKind::ScalarFunction : ExprKind::Aggregate);
+    if (kind == "func" || kind == "agg" || kind == "winfunc") {
+        const ExprKind ek = kind == "func"    ? ExprKind::ScalarFunction
+                            : kind == "agg"   ? ExprKind::Aggregate
+                                              : ExprKind::WindowFunction;
+        auto e = std::make_unique<Expr>(ek);
         if (n.items.size() > 1) e->func_name = n.items[1].atom;
         for (std::size_t k = 2; k < n.items.size(); ++k)
             if (n.items[k].atom == ":distinct") e->distinct = true;
         for (const SNode* op : positional_operands(n, 2)) { auto c = expr_from(*op, err); if (!c) return nullptr; e->children.push_back(std::move(c)); }
+        // Aggregate FILTER (WHERE p) and WindowFunction OVER spec are value-ful
+        // keywords positional_operands already skipped; reconstruct them here.
+        for (std::size_t k = 2; k + 1 < n.items.size(); ++k) {
+            if (n.items[k].atom == ":filter") { e->filter = expr_from(n.items[k + 1], err); if (!e->filter) return nullptr; }
+            else if (n.items[k].atom == ":over") { if (!window_spec_from(n.items[k + 1], e->window, err)) return nullptr; }
+        }
+        apply_type_null(*e, n);
+        return e;
+    }
+    // NOT-flavor / case-insensitive flags carried as bare `:negated` / `:ci`.
+    const auto apply_flags = [&](Expr& e) {
+        for (std::size_t k = 1; k < n.items.size(); ++k) {
+            if (n.items[k].atom == ":negated") e.expr_flags |= db25::plan::ExprFlagNegated;
+            else if (n.items[k].atom == ":ci") e.expr_flags |= db25::plan::ExprFlagCaseInsensitive;
+        }
+    };
+    if (kind == "cast") {
+        auto e = std::make_unique<Expr>(ExprKind::Cast);
+        for (const SNode* op : positional_operands(n, 1)) { auto c = expr_from(*op, err); if (!c) return nullptr; e->children.push_back(std::move(c)); }
+        for (std::size_t k = 1; k + 1 < n.items.size(); ++k) {
+            const std::string& kw = n.items[k].atom;
+            if (kw == ":to") { ast::DataType t; if (datatype_from(n.items[k + 1].atom, t)) e->target_type = t; }
+            else if (kw == ":prec") e->type_precision = static_cast<std::uint16_t>(std::strtoul(n.items[k + 1].atom.c_str(), nullptr, 10));
+            else if (kw == ":scale") e->type_scale = static_cast<std::uint16_t>(std::strtoul(n.items[k + 1].atom.c_str(), nullptr, 10));
+            else if (kw == ":len") e->type_length = static_cast<std::uint32_t>(std::strtoul(n.items[k + 1].atom.c_str(), nullptr, 10));
+        }
+        apply_type_null(*e, n);
+        return e;
+    }
+    if (kind == "between" || kind == "like" || kind == "isnull" || kind == "inlist" || kind == "case") {
+        const ExprKind ek = kind == "between" ? ExprKind::Between
+                            : kind == "like"  ? ExprKind::Like
+                            : kind == "isnull" ? ExprKind::IsNull
+                            : kind == "inlist" ? ExprKind::InList
+                                               : ExprKind::Case;
+        auto e = std::make_unique<Expr>(ek);
+        for (const SNode* op : positional_operands(n, 1)) { auto c = expr_from(*op, err); if (!c) return nullptr; e->children.push_back(std::move(c)); }
+        apply_flags(*e);
+        apply_type_null(*e, n);
+        return e;
+    }
+    if (kind == "booltest") {
+        auto e = std::make_unique<Expr>(ExprKind::BooleanTest);
+        for (std::size_t k = 1; k + 1 < n.items.size(); ++k)
+            if (n.items[k].atom == ":is") {
+                const std::string& v = n.items[k + 1].atom;
+                e->bool_test = v == "true" ? db25::plan::BoolTest::True
+                              : v == "false" ? db25::plan::BoolTest::False
+                                             : db25::plan::BoolTest::Unknown;
+            }
+        for (const SNode* op : positional_operands(n, 1)) { auto c = expr_from(*op, err); if (!c) return nullptr; e->children.push_back(std::move(c)); }
+        apply_flags(*e);
+        apply_type_null(*e, n);
+        return e;
+    }
+    if (kind == "subquery") {
+        auto e = std::make_unique<Expr>(ExprKind::Subquery);
+        for (std::size_t k = 1; k < n.items.size(); ++k) {
+            const std::string& kw = n.items[k].atom;
+            if (kw == ":correlated") e->correlated = true;
+            else if (kw == ":kind" && k + 1 < n.items.size()) { subquerykind_from(n.items[k + 1].atom, e->subquery_kind); ++k; }
+            else if (kw == ":op" && k + 1 < n.items.size()) { binaryop_from(n.items[k + 1].atom, e->bin_op); ++k; }
+            else if (kw == ":quant" && k + 1 < n.items.size()) { if (n.items[k + 1].atom == "all") e->expr_flags |= db25::plan::ExprFlagQuantAll; ++k; }
+        }
+        apply_flags(*e);
+        apply_type_null(*e, n);
+        return e;  // sub_plan is not serialized inline (see the writer)
+    }
+    if (kind == "param") {
+        auto e = std::make_unique<Expr>(ExprKind::Parameter);
+        if (n.items.size() > 1) e->param_index = static_cast<std::uint32_t>(std::strtoul(n.items[1].atom.c_str(), nullptr, 10));
         apply_type_null(*e, n);
         return e;
     }
@@ -279,10 +420,25 @@ LogicalNodePtr node_from(const SNode& n, std::string& err) {
             else if (kw == ":out") { if (!schema_from(*val, node->output, err)) return nullptr; }
             else if (kw == ":pred") { auto e = expr_from(*val, err); if (!e) return nullptr; node->predicate = std::move(e); }
             else if (kw == ":exprs") { for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->exprs.push_back(std::move(e)); } }
-            else if (kw == ":keys") { for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->group_keys.push_back(std::move(e)); } }
+            else if (kw == ":keys") {
+                // A Sort's :keys are `(key <expr> asc|desc …)` sort keys; every
+                // other op's :keys are plain grouping expressions.
+                if (op == LogicalOp::Sort) {
+                    for (const SNode& x : val->items) { db25::plan::SortKeyIR sk; if (!sort_key_from(x, sk, err)) return nullptr; node->sort_keys.push_back(std::move(sk)); }
+                } else {
+                    for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->group_keys.push_back(std::move(e)); }
+                }
+            }
             else if (kw == ":aggs") { for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->aggregates.push_back(std::move(e)); } }
-            // Other payload keywords (:op set-op, :windows, :rows, sort :keys) are
-            // not reconstructed yet; the fixtures that use them are not injected.
+            else if (kw == ":windows") { for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->window_functions.push_back(std::move(e)); } }
+            else if (kw == ":op") { if (!setop_from(val->atom, node->set_op)) { err = "node: bad set-op '" + val->atom + "'"; return nullptr; } }
+            else if (kw == ":rows") {
+                // The writer pins only the ROW COUNT of a Values node (its row
+                // exprs are not serialized); reconstruct that many empty rows so
+                // the round-trip re-emits the same :rows N.
+                const auto count = static_cast<std::size_t>(std::strtoul(val->atom.c_str(), nullptr, 10));
+                node->value_rows.resize(count);
+            }
             continue;
         }
         if (it.is_list) {  // a child plan node

@@ -1,9 +1,6 @@
 -- sql
 SELECT dept, COUNT(*) FILTER (WHERE salary > 100) FROM emp GROUP BY dept
 
--- phaseb
-reader-todo: window (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)

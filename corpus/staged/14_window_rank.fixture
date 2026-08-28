@@ -1,9 +1,6 @@
 -- sql
 SELECT id, RANK() OVER (PARTITION BY dept ORDER BY salary) FROM emp
 
--- phaseb
-reader-todo: window (Phase-B s-expr reader does not cover this yet)
-
 -- tokens
 (tokens
   (kw SELECT 0 6)
