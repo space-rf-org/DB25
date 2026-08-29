@@ -55,6 +55,7 @@ const char* join_type(db25::ast::JoinType j) {
         case db25::ast::JoinType::Full: return "full";
         case db25::ast::JoinType::Cross: return "cross";
         case db25::ast::JoinType::Lateral: return "lateral";
+        case db25::ast::JoinType::LeftLateral: return "leftlateral";
     }
     return "?";
 }

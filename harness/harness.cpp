@@ -1007,7 +1007,13 @@ bool eval_node(const LogicalNode* n, EvalCtx& ctx, Table& out) {
             const std::size_t rw = n->child(1)->output.size();
             const JoinType jt = n->join_type;
             const bool is_cross = (jt == JoinType::Cross);
-            const bool keep_left = (jt == JoinType::Left || jt == JoinType::Full);
+            // LeftLateral is LEFT JOIN LATERAL: like a LEFT join, an unmatched
+            // left row is kept with NULLs on the right. (The evaluator does not
+            // model the per-left-row correlation itself; no corpus query is a
+            // lateral join, so this only keeps the null-supplying side correct.)
+            const bool keep_left =
+                (jt == JoinType::Left || jt == JoinType::Full ||
+                 jt == JoinType::LeftLateral);
             const bool keep_right = (jt == JoinType::Right || jt == JoinType::Full);
             // A JOIN ... USING / NATURAL join compacts its output: the predicate is
             // evaluated over the full left++right frame, but the emitted row drops
