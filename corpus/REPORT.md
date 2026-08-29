@@ -778,7 +778,7 @@ _clean (no diagnostics)_
 **bind → logical plan**
 
 ```
-SetOp (INTERSECT) [id:Integer?]
+SetOp (INTERSECT) [id:Integer]
   Project (#0:Integer) [id:Integer]
     Scan dept [id:Integer, name:Text]
   Project (#2:Integer) [dept_id:Integer?]
@@ -788,7 +788,7 @@ SetOp (INTERSECT) [id:Integer?]
 **optimize → logical plan**
 
 ```
-SetOp (INTERSECT) [id:Integer?]
+SetOp (INTERSECT) [id:Integer]
   Project (#0:Integer) [id:Integer]
     Scan dept [id:Integer, name:Text]
   Project (#2:Integer) [dept_id:Integer?]
@@ -968,7 +968,23 @@ SelectStmt
 
 _clean (no diagnostics)_
 
-**logical plan** → not produced (unresolved column reference 's.hi')
+**bind → logical plan**
+
+```
+Project (#1:Double) [hi:Double?]
+  Project (#0:Integer, #1:Double) [dept:Integer?, hi:Double?]
+    Aggregate group=(#2:Integer) aggs=(MAX(#3:Double):Double) [dept_id:Integer?, MAX:Double?]
+      Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#0:Double) [hi:Double?]
+  Project (#1:Double) [hi:Double?]
+    Aggregate group=(#0:Integer) aggs=(MAX(#1:Double):Double) [dept_id:Integer?, MAX:Double?]
+      Scan emp [dept_id:Integer?, salary:Double?]
+```
 
 ---
 
@@ -1007,7 +1023,21 @@ SelectStmt
 
 _clean (no diagnostics)_
 
-**logical plan** → not produced (derived table without a query body)
+**bind → logical plan**
+
+```
+Project (#1:Text) [label:Text?]
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer?, label:Text?]
+    Values rows=2 (1:Integer, 'eng':Text) (2:Integer, 'sales':Text) [id:Integer?, label:Text?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#1:Text) [label:Text?]
+  Filter (#0:Integer = 1:Integer):Boolean [id:Integer?, label:Text?]
+    Values rows=2 (1:Integer, 'eng':Text) (2:Integer, 'sales':Text) [id:Integer?, label:Text?]
+```
 
 ---
 
@@ -1040,7 +1070,7 @@ _clean (no diagnostics)_
 **bind → logical plan**
 
 ```
-SetOp (EXCEPT) [id:Integer?]
+SetOp (EXCEPT) [id:Integer]
   Project (#0:Integer) [id:Integer]
     Scan dept [id:Integer, name:Text]
   Project (#2:Integer) [dept_id:Integer?]
@@ -1050,7 +1080,7 @@ SetOp (EXCEPT) [id:Integer?]
 **optimize → logical plan**
 
 ```
-SetOp (EXCEPT) [id:Integer?]
+SetOp (EXCEPT) [id:Integer]
   Project (#0:Integer) [id:Integer]
     Scan dept [id:Integer, name:Text]
   Project (#2:Integer) [dept_id:Integer?]
@@ -1304,7 +1334,120 @@ Project (#0:Integer) [dept_id:Integer?]
 
 ---
 
-## 30. Query: INSERT ... SELECT (row source is a query, arity checked against the target)
+## 30. Query: CROSS JOIN LATERAL — the right derived table is correlated (d.id feeds the subquery), lowering to a lateral join whose RHS references the left via an OuterRef
+
+```sql
+SELECT d.name, e.salary FROM dept d CROSS JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'd.name'
+    ColumnRef 'e.salary'
+  FromClause
+    TableRef 'dept' [d]
+    LateralJoin 'CROSS JOIN'
+      Subquery [e]
+        SelectStmt
+          SelectList
+            ColumnRef 'salary'
+          FromClause
+            TableRef 'emp'
+          WhereClause
+            BinaryExpr '='
+              ColumnRef 'dept_id'
+              ColumnRef 'd.id'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Project (#1:Text, #2:Double) [name:Text, salary:Double?]
+  Join (LATERAL) [id:Integer, name:Text, salary:Double?]
+    Scan dept AS d [id:Integer, name:Text]
+    Project (#3:Double) [salary:Double?]
+      Filter (#2:Integer = outer1#0:Integer):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+        Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#0:Text, #1:Double) [name:Text, salary:Double?]
+  Join (LATERAL) [name:Text, salary:Double?]
+    Scan dept AS d [name:Text]
+    Project (#1:Double) [salary:Double?]
+      Filter (#0:Integer = outer1#0:Integer):Boolean [dept_id:Integer?, salary:Double?]
+        Scan emp [dept_id:Integer?, salary:Double?]
+```
+
+---
+
+## 31. Query: LEFT JOIN LATERAL — same correlation, but the RHS is also null-extended, so a dept with no matching emp is kept (leftlateral join)
+
+```sql
+SELECT d.name, e.salary FROM dept d LEFT JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e ON true
+```
+
+**parse → AST**
+
+```
+SelectStmt
+  SelectList
+    ColumnRef 'd.name'
+    ColumnRef 'e.salary'
+  FromClause
+    TableRef 'dept' [d]
+    LateralJoin 'LEFT JOIN'
+      Subquery [e]
+        SelectStmt
+          SelectList
+            ColumnRef 'salary'
+          FromClause
+            TableRef 'emp'
+          WhereClause
+            BinaryExpr '='
+              ColumnRef 'dept_id'
+              ColumnRef 'd.id'
+      BooleanLiteral 'true'
+```
+
+**analyze → diagnostics**
+
+_clean (no diagnostics)_
+
+**bind → logical plan**
+
+```
+Project (#1:Text, #2:Double) [name:Text, salary:Double?]
+  Join (LEFT LATERAL) ON TRUE:Boolean [id:Integer, name:Text, salary:Double?]
+    Scan dept AS d [id:Integer, name:Text]
+    Project (#3:Double) [salary:Double?]
+      Filter (#2:Integer = outer1#0:Integer):Boolean [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+        Scan emp [id:Integer, name:Text?, dept_id:Integer?, salary:Double?, active:Integer?]
+```
+
+**optimize → logical plan**
+
+```
+Project (#0:Text, #1:Double) [name:Text, salary:Double?]
+  Join (LEFT LATERAL) ON TRUE:Boolean [name:Text, salary:Double?]
+    Scan dept AS d [name:Text]
+    Project (#1:Double) [salary:Double?]
+      Filter (#0:Integer = outer1#0:Integer):Boolean [dept_id:Integer?, salary:Double?]
+        Scan emp [dept_id:Integer?, salary:Double?]
+```
+
+---
+
+## 32. Query: INSERT ... SELECT (row source is a query, arity checked against the target)
 
 ```sql
 INSERT INTO dept (id, name) SELECT dept_id, 'dup' FROM emp WHERE dept_id IS NOT NULL
@@ -1353,7 +1496,7 @@ Insert dept []
 
 ---
 
-## 31. DML: UPDATE whose SET value violates the CHECK (salary = -1 vs CHECK salary >= 0)
+## 33. DML: UPDATE whose SET value violates the CHECK (salary = -1 vs CHECK salary >= 0)
 
 ```sql
 UPDATE emp SET salary = -1 WHERE id = 1
@@ -1395,7 +1538,7 @@ Update emp set=(col#4 := -1:Integer) []
 
 ---
 
-## 32. Query: a deliberate error — an unresolved column, to show the analyze stage catching it
+## 34. Query: a deliberate error — an unresolved column, to show the analyze stage catching it
 
 ```sql
 SELECT nonexistent_column FROM emp

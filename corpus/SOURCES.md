@@ -11,6 +11,14 @@ the corpus is reproducible.
 | `select1` | `test/select1.test` | sqllogictest (`gregrahn/sqllogictest`, mirror of the original SQLite suite) | Public Domain (SQLite) / MIT (sqllogictest harness) |
 | `in1` | `test/evidence/in1.test` | sqllogictest (`gregrahn/sqllogictest`) | Public Domain / MIT |
 | `pg_case` | `src/test/regress/sql/case.sql` | PostgreSQL (`postgres/postgres`) | PostgreSQL License (permissive) |
+| `lateral` | `pg/lateral.sql` (**committed** under `corpus/pg/`) | DB25 (authored, not harvested) | this repo's license |
+
+The `lateral` session is the one **DB25-authored** source: a hand-written
+Postgres-canon session (`corpus/pg/lateral.sql`, vendored because it is ours)
+exercising every accepted `LATERAL` join shape — comma / `CROSS` / `[INNER]` /
+`LEFT JOIN LATERAL`, an earlier-sibling correlation, and an uncorrelated lateral
+body — end to end. The honest rejections (`RIGHT`/`FULL`/`NATURAL JOIN LATERAL`)
+live in the parser's negative tests, not here.
 
 PostgreSQL is DB25's canonical dialect anchor, so its regression SQL is the
 closest source to the canon and the natural one to grow (`select`, `join`,
