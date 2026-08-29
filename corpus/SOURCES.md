@@ -12,6 +12,7 @@ the corpus is reproducible.
 | `in1` | `test/evidence/in1.test` | sqllogictest (`gregrahn/sqllogictest`) | Public Domain / MIT |
 | `pg_case` | `src/test/regress/sql/case.sql` | PostgreSQL (`postgres/postgres`) | PostgreSQL License (permissive) |
 | `lateral` | `pg/lateral.sql` (**committed** under `corpus/pg/`) | DB25 (authored, not harvested) | this repo's license |
+| `gap_closures` | `pg/gap_closures.sql` (**committed** under `corpus/pg/`) | DB25 (authored, not harvested) | this repo's license |
 
 The `lateral` session is the one **DB25-authored** source: a hand-written
 Postgres-canon session (`corpus/pg/lateral.sql`, vendored because it is ours)

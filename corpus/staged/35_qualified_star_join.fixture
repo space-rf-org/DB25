@@ -1,0 +1,61 @@
+-- sql
+SELECT o.* FROM users u JOIN orders o ON u.id = o.user_id
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident o 7 8)
+  (op "." 8 9)
+  (op "*" 9 10)
+  (kw FROM 11 15)
+  (ident users 16 21)
+  (ident u 22 23)
+  (kw JOIN 24 28)
+  (ident orders 29 35)
+  (ident o 36 37)
+  (kw ON 38 40)
+  (ident u 41 42)
+  (op "." 42 43)
+  (ident id 43 45)
+  (op "=" 46 47)
+  (ident o 48 49)
+  (op "." 49 50)
+  (ident user_id 50 57)
+  (eof 57 57))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (Star :text "*" :qual o))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text JOIN
+      (TableRef :text orders :qual o)
+      (BinaryExpr :text "="
+        (ColumnRef :text "u.id")
+        (ColumnRef :text "o.user_id")))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (Star :text "*" :qual o))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text JOIN
+      (TableRef :text orders :qual o)
+      (BinaryExpr :text "=" :type Boolean :null t
+        (ColumnRef :text "u.id" :type Integer :null f :tid 1 :cid 1)
+        (ColumnRef :text "o.user_id" :type Integer :null t :tid 2 :cid 2)))))
+
+-- logical
+(Project :exprs ((colref 2 :tid 2 :cid 1 :type Integer :null f) (colref 3 :tid 2 :cid 2 :type Integer :null t) (colref 4 :tid 2 :cid 3 :type Double :null t)) :out ((id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+  (Join :kind inner :pred (binop "=" (colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 3 :tid 2 :cid 2 :type Integer :null t) :type Boolean :null t) :out ((id Integer :null f :alias u :tid 1 :cid 1) (name VarChar :null t :alias u :tid 1 :cid 2) (id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+    (Scan :rel users :alias u :out ((id Integer :null f :alias u :tid 1 :cid 1) (name VarChar :null t :alias u :tid 1 :cid 2)))
+    (Scan :rel orders :alias o :out ((id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3)))))
+
+-- optimized
+(Project :exprs ((colref 1 :tid 2 :cid 1 :type Integer :null f) (colref 2 :tid 2 :cid 2 :type Integer :null t) (colref 3 :tid 2 :cid 3 :type Double :null t)) :out ((id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+  (Join :kind inner :pred (binop "=" (colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 2 :tid 2 :cid 2 :type Integer :null t) :type Boolean :null t) :out ((id Integer :null f :alias u :tid 1 :cid 1) (id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+    (Scan :rel users :alias u :out ((id Integer :null f :alias u :tid 1 :cid 1)))
+    (Scan :rel orders :alias o :out ((id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3)))))
+

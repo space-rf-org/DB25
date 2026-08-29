@@ -449,6 +449,10 @@ void render_node(const LogicalNode* n, int depth, std::string& out) {
             out.append(" :rows ");
             out.append(std::to_string(n->value_rows.size()));
             break;
+        case LogicalOp::CreateTableAs:
+            out.append(" :table ");
+            out.append(ident(n->table_name));
+            break;
         default:
             break;
     }

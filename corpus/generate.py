@@ -24,6 +24,9 @@ SOURCES = [
     # DB25-authored curated session (committed under corpus/pg/), not harvested:
     # exercises every accepted LATERAL join shape end to end.
     ("pg/lateral.sql",          "pg",  50,  "lateral"),
+    # DB25-authored curated session for the closed query/plan gaps: G4 qualified
+    # star over a join, G2 quantified comparison, G3 CTAS.
+    ("pg/gap_closures.sql",     "pg",  50,  "gap_closures"),
 ]
 CANON_ENGINES = {"postgresql", "postgres"}
 DIALECT = [

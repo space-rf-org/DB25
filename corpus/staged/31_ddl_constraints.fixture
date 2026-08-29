@@ -64,8 +64,8 @@ CREATE TABLE audit_log (id INTEGER NOT NULL, ref INTEGER REFERENCES users(id), a
         (IntegerLiteral :text 0)))))
 
 -- logical
-(bind-error "statement kind not yet lowered (TODO)")
+(bind-error "plain CREATE TABLE is a catalog operation, not a query plan (only CREATE TABLE ... AS <query> is lowered)")
 
 -- optimized
-(bind-error "statement kind not yet lowered (TODO)")
+(bind-error "plain CREATE TABLE is a catalog operation, not a query plan (only CREATE TABLE ... AS <query> is lowered)")
 

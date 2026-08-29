@@ -1,0 +1,59 @@
+-- sql
+CREATE TABLE big_orders AS SELECT id, total FROM orders WHERE total > 100
+
+-- tokens
+(tokens
+  (kw CREATE 0 6)
+  (kw TABLE 7 12)
+  (ident big_orders 13 23)
+  (kw AS 24 26)
+  (kw SELECT 27 33)
+  (ident id 34 36)
+  (punct "," 36 37)
+  (ident total 38 43)
+  (kw FROM 44 48)
+  (ident orders 49 55)
+  (kw WHERE 56 61)
+  (ident total 62 67)
+  (op ">" 68 69)
+  (num 100 70 73)
+  (eof 73 73))
+
+-- ast
+(CreateTableStmt :text big_orders
+  (SelectStmt
+    (SelectList
+      (ColumnRef :text id)
+      (ColumnRef :text total))
+    (FromClause
+      (TableRef :text orders))
+    (WhereClause
+      (BinaryExpr :text ">"
+        (ColumnRef :text total)
+        (IntegerLiteral :text 100)))))
+
+-- resolved
+(CreateTableStmt :text big_orders
+  (SelectStmt
+    (SelectList
+      (ColumnRef :text id :type Integer :null f :tid 2 :cid 1)
+      (ColumnRef :text total :type Double :null t :tid 2 :cid 3))
+    (FromClause
+      (TableRef :text orders))
+    (WhereClause
+      (BinaryExpr :text ">" :type Boolean :null t
+        (ColumnRef :text total :type Double :null t :tid 2 :cid 3)
+        (IntegerLiteral :text 100 :type Integer :null f)))))
+
+-- logical
+(CreateTableAs :table big_orders :out ((id Integer :null f :tid 2 :cid 1) (total Double :null t :tid 2 :cid 3))
+  (Project :exprs ((colref 0 :tid 2 :cid 1 :type Integer :null f) (colref 2 :tid 2 :cid 3 :type Double :null t)) :out ((id Integer :null f :tid 2 :cid 1) (total Double :null t :tid 2 :cid 3))
+    (Filter :pred (binop ">" (colref 2 :tid 2 :cid 3 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))
+      (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))))))
+
+-- optimized
+(CreateTableAs :table big_orders :out ((id Integer :null f :tid 2 :cid 1) (total Double :null t :tid 2 :cid 3))
+  (Project :exprs ((colref 0 :tid 2 :cid 1 :type Integer :null f) (colref 2 :tid 2 :cid 3 :type Double :null t)) :out ((id Integer :null f :tid 2 :cid 1) (total Double :null t :tid 2 :cid 3))
+    (Filter :pred (binop ">" (colref 2 :tid 2 :cid 3 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))
+      (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))))))
+

@@ -6,9 +6,10 @@ Sources (see SOURCES.md for provenance + licensing):
 - `sample_in1.test.slt` (slt) -> session `in1` (<= 400 in-scope)
 - `pg/case.sql` (pg) -> session `pg_case` (<= 400 in-scope)
 - `pg/lateral.sql` (pg) -> session `lateral` (<= 50 in-scope)
+- `pg/gap_closures.sql` (pg) -> session `gap_closures` (<= 50 in-scope)
 
-- records scanned: 438
-- in-scope (kept): 333
+- records scanned: 444
+- in-scope (kept): 339
 - excluded: 105
 
 ## Exclusions by reason (no silent drops)
@@ -30,9 +31,10 @@ Sources (see SOURCES.md for provenance + licensing):
 - in1: 130
 - pg_case: 45
 - lateral: 8
+- gap_closures: 6
 
 ## In-scope by category
 
-- query: 256
+- query: 260
 - dml: 58
-- ddl: 19
+- ddl: 21

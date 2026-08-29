@@ -332,3 +332,9 @@ lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d JOIN LATERAL (
 lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d LEFT JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e ON true
 lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d, emp mgr, LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e
 lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d CROSS JOIN LATERAL (SELECT salary FROM emp WHERE salary > 100) e
+gap_closures	ok	ddl	accept	exec_ok	CREATE TABLE dept (id INTEGER PRIMARY KEY, name TEXT NOT NULL)
+gap_closures	ok	ddl	accept	exec_ok	CREATE TABLE emp (id INTEGER NOT NULL, name TEXT, dept_id INTEGER, salary DOUBLE)
+gap_closures	ok	query	accept	clean	SELECT e.* FROM emp e JOIN dept d ON e.dept_id = d.id
+gap_closures	ok	query	accept	clean	SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
+gap_closures	ok	query	accept	clean	SELECT id FROM emp WHERE dept_id = ANY (SELECT id FROM dept)
+gap_closures	ok	query	accept	clean	SELECT id FROM emp WHERE salary < SOME (SELECT salary FROM emp WHERE dept_id = 1)

@@ -123,7 +123,7 @@ bool logicalop_from(std::string_view s, LogicalOp& out) {
         LogicalOp::Window, LogicalOp::Distinct, LogicalOp::Sort, LogicalOp::Limit,
         LogicalOp::SetOp, LogicalOp::Values, LogicalOp::Insert, LogicalOp::Update,
         LogicalOp::Delete, LogicalOp::Returning, LogicalOp::RecursiveCTE,
-        LogicalOp::WorkingTableScan};
+        LogicalOp::WorkingTableScan, LogicalOp::CreateTableAs};
     for (auto o : c) if (s == db25::plan::logical_op_to_string(o)) { out = o; return true; }
     return false;
 }
@@ -413,7 +413,7 @@ LogicalNodePtr node_from(const SNode& n, std::string& err) {
             const SNode* val = (k + 1 < n.items.size()) ? &n.items[k + 1] : nullptr;
             if (val == nullptr) { err = "node: dangling keyword " + kw; return nullptr; }
             ++k;
-            if (kw == ":rel" || kw == ":name") node->table_name = val->atom;
+            if (kw == ":rel" || kw == ":name" || kw == ":table") node->table_name = val->atom;
             else if (kw == ":alias") node->alias = val->atom;
             else if (kw == ":kind") { if (!jointype_from(val->atom, node->join_type)) { err = "node: bad join kind"; return nullptr; } }
             else if (kw == ":limit") { node->has_limit = true; node->limit = std::strtoll(val->atom.c_str(), nullptr, 10); }
