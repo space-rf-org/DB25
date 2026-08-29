@@ -30,9 +30,9 @@ regress into silence.
 | ID | Area | Gap | Class | Honest behavior / pin |
 |----|------|-----|-------|-----------------------|
 | ~~G1~~ | binder | ROLLUP / CUBE / GROUPING SETS lowering | ✅ CLOSED | first-class `Aggregate.grouping_sets`; `04,11,12` now bind + round-trip + inject |
-| G2 | binder | Quantified comparison `ALL`/`ANY`/`SOME` lowering | DEFERRED | `bind-error "quantified comparison … not yet supported"` · `26` |
-| G3 | binder | CTAS / DDL statement lowering | DEFERRED | `bind-error "statement kind not yet lowered"` · `31` |
-| G4 | binder | Qualified star (`u.*`) over a join | DEFERRED | not-yet-lowered arity guard (honest reject) |
+| ~~G2~~ | binder | Quantified comparison `ALL`/`ANY`/`SOME` lowering | ✅ CLOSED | lowers to an owned `ExprKind::Subquery :kind quantified` (op + ALL/ANY sense) · `26` |
+| G3 | binder+catalog | DDL statement lowering | PARTIALLY CLOSED / rescoped | CTAS → `CreateTableAs` (`36`); plain DDL is a catalog op (execute_ddl), honestly not a query plan |
+| ~~G4~~ | binder | Qualified star (`u.*`) over a join | ✅ CLOSED | expanded to the relation's columns in `lower_projection` · `35` |
 | ~~G5~~ | harness | Phase-B s-expr **reader** coverage | ✅ CLOSED | reader covers every corpus construct; 0 `-- phaseb` deferrals — roundtrip 56/0, inject 28/0 |
 | ~~G6~~ | harness | Full-fidelity plan **injection** (node-id serialization) | ✅ CLOSED | provenance ids (`:tid`/`:cid`) serialized on schema + colref/outerref; self-join fixture `32_self_join` injects lossless |
 | ~~G7~~ | analyzer | `INTERVAL 'x'` literal typed `Unknown` | ✅ CLOSED | now `Interval` — analyzer #98 · `29_interval` |
@@ -65,31 +65,40 @@ Fixtures are under `corpus/staged/`.
   binder db25-logical-plan#170 (`grouping_sets` payload + lowering), and this
   harness/pin bump.
 
-### G2 — Quantified comparison lowering (`x <cmp> ALL|ANY|SOME (subquery)`)
-- **Current behavior:** analyzer types it `Boolean` and validates single-column
-  arity; the binder rejects with `bind-error "quantified comparison (ALL / ANY /
-  SOME) is not yet supported"`.
-- **Safe because:** honest, specific bind error (never the old generic
-  "unrecognized binary operator"). Pinned by `26_quantified_all`.
-- **Fix (feature):** lower to a semi/anti-join or a scalar quantified expression.
+### ~~G2~~ — Quantified comparison lowering (`x <cmp> ALL|ANY|SOME (subquery)`) — ✅ CLOSED
+- **What (was):** the binder rejected `x <cmp> ALL|ANY|SOME (subquery)` with a
+  bind error.
+- **Resolution:** it lowers to an owned `ExprKind::Subquery` of
+  `SubqueryKind::Quantified` — the comparison op rides in `Expr::bin_op` and the
+  ALL vs. ANY/SOME sense in `ExprFlagQuantAll` — owning its bound inner plan, so
+  a Filter/Project predicate carries it inline (the s-expr renders
+  `(subquery :kind quantified :op … :quant all|any)`). No new join node is
+  synthesized; a future decorrelation pass can rewrite it to a semi/anti-join.
+- **Pinned by:** `26_quantified_all` (binds, round-trips, injects).
 
-### G3 — CTAS / DDL statement lowering
-- **Current behavior:** DDL (`CREATE TABLE …`, incl. `NOT NULL` / `REFERENCES` /
-  `CHECK`) parses and analyzes; the binder returns `bind-error "statement kind not
-  yet lowered (TODO)"`. The corpus runner applies DDL to a live catalog via
-  `execute_ddl`, so later statements resolve against it.
-- **Safe because:** honest bind error; DDL is still fully parsed/analyzed and
-  builds the catalog. Pinned by `31_ddl_constraints`.
-- **Fix (feature):** a DDL/CTAS lowering path once storage exists.
+### G3 — DDL statement lowering (CTAS closed; plain DDL is a catalog op)
+- **CTAS — ✅ CLOSED.** `CREATE TABLE <name> AS <query>` now lowers to a
+  `CreateTableAs` logical op over the bound + optimized defining query
+  (`table_name` the target, `output` the query's schema, `children[0]` the
+  query). The analyzer resolves the defining query (previously a
+  `CreateTableStmt` was left unanalyzed); the binder wraps it. Pinned by
+  `36_create_table_as` (binds, round-trips, injects, mutation-caught).
+- **Plain `CREATE TABLE (cols)` — not a query plan (by design).** It carries no
+  query, so the binder returns an honest error ("plain CREATE TABLE is a catalog
+  operation, not a query plan"); it is applied to the catalog via `execute_ddl`,
+  which is where its effect lives. Pinned by `31_ddl_constraints`.
+- **Remaining (catalog-side follow-up):** `execute_ddl` does not yet REGISTER a
+  CTAS-derived table (build the new relation's columns from the query's
+  projection), so a CTAS is not yet queryable in a later corpus statement — a
+  small catalog addition, distinct from the binder lowering closed here.
 
-### G4 — Qualified star over a join
-- **What:** `SELECT u.* FROM u JOIN v …` — a qualified star whose relation is one
-  side of a join.
-- **Current behavior:** rejected via the documented not-yet-lowered arity guard
-  (surfaced clean in the contract-seam audit).
-- **Safe because:** honest rejection, not a silently wrong projection.
-- **Fix (feature):** resolve the qualified star to its relation's columns during
-  lowering.
+### ~~G4~~ — Qualified star over a join — ✅ CLOSED
+- **What (was):** `SELECT u.* FROM u JOIN v …` — a qualified star whose relation
+  is one side of a join — was reported as a not-yet-lowered arity divergence.
+- **Resolution:** `lower_projection` expands a qualified `q.*` to exactly
+  relation `q`'s columns (in the analyzer's projection order, USING/NATURAL
+  merged-column copy included), so `SELECT u.*` over a join binds to u's columns
+  rather than the whole frame. Pinned by `35_qualified_star_join`.
 
 ### ~~G5~~ — Phase-B s-expr reader coverage — ✅ CLOSED
 - **What:** `plan_from_sexpr` (the reader that round-trip and per-module injection
