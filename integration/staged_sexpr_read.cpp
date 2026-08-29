@@ -135,6 +135,7 @@ bool jointype_from(std::string_view s, ast::JoinType& out) {
     if (s == "full") { out = ast::JoinType::Full; return true; }
     if (s == "cross") { out = ast::JoinType::Cross; return true; }
     if (s == "lateral") { out = ast::JoinType::Lateral; return true; }
+    if (s == "leftlateral") { out = ast::JoinType::LeftLateral; return true; }
     return false;
 }
 
