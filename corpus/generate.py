@@ -21,6 +21,9 @@ SOURCES = [
     ("sample_select1.test.slt", "slt", 150, "select1"),
     ("sample_in1.test.slt",     "slt", 400, "in1"),
     ("pg/case.sql",             "pg",  400, "pg_case"),
+    # DB25-authored curated session (committed under corpus/pg/), not harvested:
+    # exercises every accepted LATERAL join shape end to end.
+    ("pg/lateral.sql",          "pg",  50,  "lateral"),
 ]
 CANON_ENGINES = {"postgresql", "postgres"}
 DIALECT = [
@@ -112,36 +115,43 @@ def extract_pg(path):
         cur += ch; i += 1
 
 # ---- drive ---------------------------------------------------------------------
-allrows = []; excl = Counter(); total = 0; kept_by_sess = Counter()
-for path, kind, limit, sess in SOURCES:
-    extract = extract_slt if kind == "slt" else extract_pg
-    n = 0
-    for tag, pend, sql in extract(path):
-        if not sql.strip(): continue
-        total += 1
-        if pend:                                       # slt engine gates
-            k, eng = pend
-            if k == "onlyif" and eng not in CANON_ENGINES: excl[f"engine-only:{eng}"] += 1; continue
-            if k == "skipif" and eng in CANON_ENGINES: excl["engine-skip:postgresql"] += 1; continue
-        reason = classify_out_of_scope(sql)
-        if reason: excl[reason] += 1; continue
-        allrows.append((sess, tag, category(sql), sql)); n += 1; kept_by_sess[sess] += 1
-        if n >= limit: break
+# Guarded so the module can be imported (to reuse extract_pg / extract_slt /
+# category) without re-harvesting - re-harvest only runs as `python3 generate.py`.
+def main():
+    allrows = []; excl = Counter(); total = 0; kept_by_sess = Counter()
+    for path, kind, limit, sess in SOURCES:
+        extract = extract_slt if kind == "slt" else extract_pg
+        n = 0
+        for tag, pend, sql in extract(path):
+            if not sql.strip(): continue
+            total += 1
+            if pend:                                       # slt engine gates
+                k, eng = pend
+                if k == "onlyif" and eng not in CANON_ENGINES: excl[f"engine-only:{eng}"] += 1; continue
+                if k == "skipif" and eng in CANON_ENGINES: excl["engine-skip:postgresql"] += 1; continue
+            reason = classify_out_of_scope(sql)
+            if reason: excl[reason] += 1; continue
+            allrows.append((sess, tag, category(sql), sql)); n += 1; kept_by_sess[sess] += 1
+            if n >= limit: break
 
-with open("corpus.tsv", "w") as f:
-    f.write("# session\tsource_tag\tcategory\tdb25_parse\tdb25_analyze\tsql\n")
-    for sess, tag, cat, sql in allrows:
-        f.write(f"{sess}\t{tag}\t{cat}\t?\t?\t{sql}\n")
-with open("COVERAGE.md", "w") as f:
-    f.write("# Corpus coverage\n\nSources (see SOURCES.md for provenance + licensing):\n\n")
-    for p, k, l, s in SOURCES: f.write(f"- `{p}` ({k}) -> session `{s}` (<= {l} in-scope)\n")
-    f.write(f"\n- records scanned: {total}\n- in-scope (kept): {len(allrows)}\n- excluded: {sum(excl.values())}\n")
-    f.write("\n## Exclusions by reason (no silent drops)\n\n")
-    for r, n in excl.most_common(): f.write(f"- `{r}`: {n}\n")
-    f.write("\n## In-scope by session\n\n")
-    for _, _, _, s in SOURCES: f.write(f"- {s}: {kept_by_sess[s]}\n")
-    cat = Counter(c for _, _, c, _ in allrows)
-    f.write("\n## In-scope by category\n\n")
-    for c, n in cat.most_common(): f.write(f"- {c}: {n}\n")
-print(f"scanned={total} kept={len(allrows)} excluded={sum(excl.values())} sessions={dict(kept_by_sess)}")
-print("exclusions:", dict(excl))
+    with open("corpus.tsv", "w") as f:
+        f.write("# session\tsource_tag\tcategory\tdb25_parse\tdb25_analyze\tsql\n")
+        for sess, tag, cat, sql in allrows:
+            f.write(f"{sess}\t{tag}\t{cat}\t?\t?\t{sql}\n")
+    with open("COVERAGE.md", "w") as f:
+        f.write("# Corpus coverage\n\nSources (see SOURCES.md for provenance + licensing):\n\n")
+        for p, k, l, s in SOURCES: f.write(f"- `{p}` ({k}) -> session `{s}` (<= {l} in-scope)\n")
+        f.write(f"\n- records scanned: {total}\n- in-scope (kept): {len(allrows)}\n- excluded: {sum(excl.values())}\n")
+        f.write("\n## Exclusions by reason (no silent drops)\n\n")
+        for r, n in excl.most_common(): f.write(f"- `{r}`: {n}\n")
+        f.write("\n## In-scope by session\n\n")
+        for _, _, _, s in SOURCES: f.write(f"- {s}: {kept_by_sess[s]}\n")
+        cat = Counter(c for _, _, c, _ in allrows)
+        f.write("\n## In-scope by category\n\n")
+        for c, n in cat.most_common(): f.write(f"- {c}: {n}\n")
+    print(f"scanned={total} kept={len(allrows)} excluded={sum(excl.values())} sessions={dict(kept_by_sess)}")
+    print("exclusions:", dict(excl))
+
+
+if __name__ == "__main__":
+    main()

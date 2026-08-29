@@ -39,6 +39,7 @@ regress into silence.
 | ~~G8~~ | parser | `EXTRACT(part FROM <typed literal>)` / `DATE '…'` value dropped | ✅ CLOSED | parser #83 |
 | ~~G9~~ | analyzer | `CURRENT_DATE` unresolved (treated as a column) | ✅ CLOSED | niladic function — parser #83 · `30_extract` |
 | G10 | pipeline | `1/0` preserved, not folded/rejected | DEFERRED (intentional) | soft `DivisionByZero` warning; documented PG divergence |
+| ~~G11~~ | parser+binder | `LATERAL` joins unsupported (comma / `JOIN LATERAL` failed to parse) | ✅ CLOSED | `LateralJoin` node → correlated bind (`OuterRef`) + `JoinType::Lateral`/`LeftLateral`; parser #124/#125, analyzer #157/#158, LP #176/#177 · `33_lateral`, `34_left_join_lateral` |
 
 Fixtures are under `corpus/staged/`.
 
@@ -131,6 +132,23 @@ Fixtures are under `corpus/staged/`.
   arms suppress it (`CASE WHEN 1=0 THEN 1/0 …`).
 - **Fix:** none intended — this is a design decision, recorded so it is not
   mistaken for a bug.
+
+### ~~G11~~ — `LATERAL` joins — ✅ CLOSED
+- **What (was):** the parser had no `LATERAL`: comma-form `FROM a, LATERAL (subq)`
+  was rejected and the JOIN keyword list did not recognize `LATERAL`, so
+  `CROSS`/`LEFT JOIN LATERAL` failed to parse. A correlated derived table (a
+  reference to a FROM sibling) had no legal spelling.
+- **Now:** `LATERAL` parses to a `LateralJoin` node (comma / `CROSS` / `[INNER]` /
+  `LEFT` forms), keeping the outer-join qualifier in `primary_text`. The analyzer
+  grants the RHS sibling visibility; the binder exposes the left context on
+  `outer_inputs_`, so the correlation lowers to depth-1 `OuterRef`s, and the join
+  lowers to `JoinType::Lateral` (comma/cross/inner) or `JoinType::LeftLateral`
+  (LEFT — RHS also null-extended). `RIGHT`/`FULL`/`NATURAL JOIN LATERAL` are
+  rejected (a circular dependency SQL forbids), honest at the parser.
+- **Pins:** parser #124/#125, analyzer #157/#158, logical-plan #176/#177; fixtures
+  `33_lateral` (cross, `JoinType::Lateral`) and `34_left_join_lateral`
+  (`JoinType::LeftLateral`, RHS null-extended), the `lateral` corpus session, and
+  the two `showcase.sql` LATERAL queries.
 
 ---
 

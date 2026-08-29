@@ -2,3 +2,7 @@ build/
 build-*/
 *.o
 *.a
+
+# Python bytecode (corpus/generate.py imports)
+__pycache__/
+*.pyc

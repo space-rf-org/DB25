@@ -56,6 +56,10 @@ SELECT name FROM emp WHERE salary BETWEEN 50 AND 500 AND dept_id IN (1, 2) AND n
 SELECT CAST(salary AS INTEGER), COALESCE(name, 'n/a'), NULLIF(dept_id, 0) FROM emp;
 -- Query: two chained CTEs, the second referencing the first
 WITH per_dept AS (SELECT dept_id, COUNT(*) AS n FROM emp GROUP BY dept_id), busy AS (SELECT dept_id FROM per_dept WHERE n > 1) SELECT dept_id FROM busy;
+-- Query: CROSS JOIN LATERAL — the right derived table is correlated (d.id feeds the subquery), lowering to a lateral join whose RHS references the left via an OuterRef
+SELECT d.name, e.salary FROM dept d CROSS JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e;
+-- Query: LEFT JOIN LATERAL — same correlation, but the RHS is also null-extended, so a dept with no matching emp is kept (leftlateral join)
+SELECT d.name, e.salary FROM dept d LEFT JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e ON true;
 -- Query: INSERT ... SELECT (row source is a query, arity checked against the target)
 INSERT INTO dept (id, name) SELECT dept_id, 'dup' FROM emp WHERE dept_id IS NOT NULL;
 -- DML: UPDATE whose SET value violates the CHECK (salary = -1 vs CHECK salary >= 0)

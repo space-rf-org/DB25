@@ -324,3 +324,11 @@ pg_case	ok	query	accept	clean	SELECT NULLIF(make_ad(1,2), array[2,3]::arrdomain)
 pg_case	ok	query	accept	clean	SELECT CASE 'foo'::text WHEN 'foo' THEN ARRAY['a', 'b', 'c', 'd'] || enum_range(NULL::casetestenum)::text[] ELSE ARRAY['x', 'y'] END
 pg_case	ok	ddl	accept	exec_ok	DROP TABLE CASE_TBL
 pg_case	ok	ddl	accept	exec_ok	DROP TABLE CASE2_TBL
+lateral	ok	ddl	accept	exec_ok	CREATE TABLE dept (id INTEGER PRIMARY KEY, name TEXT NOT NULL)
+lateral	ok	ddl	accept	exec_ok	CREATE TABLE emp (id INTEGER NOT NULL, name TEXT, dept_id INTEGER, salary DOUBLE)
+lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d, LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e
+lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d CROSS JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e
+lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e ON e.salary > 0
+lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d LEFT JOIN LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e ON true
+lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d, emp mgr, LATERAL (SELECT salary FROM emp WHERE dept_id = d.id) e
+lateral	ok	query	accept	clean	SELECT d.name, e.salary FROM dept d CROSS JOIN LATERAL (SELECT salary FROM emp WHERE salary > 100) e

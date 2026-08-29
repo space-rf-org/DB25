@@ -1,0 +1,92 @@
+-- sql
+SELECT u.name, o.total FROM users u LEFT JOIN LATERAL (SELECT total FROM orders WHERE user_id = u.id) o ON true
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident u 7 8)
+  (op "." 8 9)
+  (ident name 9 13)
+  (punct "," 13 14)
+  (ident o 15 16)
+  (op "." 16 17)
+  (ident total 17 22)
+  (kw FROM 23 27)
+  (ident users 28 33)
+  (ident u 34 35)
+  (kw LEFT 36 40)
+  (kw JOIN 41 45)
+  (kw LATERAL 46 53)
+  (punct "(" 54 55)
+  (kw SELECT 55 61)
+  (ident total 62 67)
+  (kw FROM 68 72)
+  (ident orders 73 79)
+  (kw WHERE 80 85)
+  (ident user_id 86 93)
+  (op "=" 94 95)
+  (ident u 96 97)
+  (op "." 97 98)
+  (ident id 98 100)
+  (punct ")" 100 101)
+  (ident o 102 103)
+  (kw ON 104 106)
+  (kw true 107 111)
+  (eof 111 111))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.name")
+    (ColumnRef :text "o.total"))
+  (FromClause
+    (TableRef :text users :qual u)
+    (LateralJoin :text "LEFT JOIN"
+      (Subquery :qual o
+        (SelectStmt
+          (SelectList
+            (ColumnRef :text total))
+          (FromClause
+            (TableRef :text orders))
+          (WhereClause
+            (BinaryExpr :text "="
+              (ColumnRef :text user_id)
+              (ColumnRef :text "u.id")))))
+      (BooleanLiteral :text true))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.name" :type VarChar :null t :tid 1 :cid 2)
+    (ColumnRef :text "o.total" :type Double :null t :tid 2 :cid 3))
+  (FromClause
+    (TableRef :text users :qual u)
+    (LateralJoin :text "LEFT JOIN"
+      (Subquery :qual o
+        (SelectStmt
+          (SelectList
+            (ColumnRef :text total :type Double :null t :tid 2 :cid 3))
+          (FromClause
+            (TableRef :text orders))
+          (WhereClause
+            (BinaryExpr :text "=" :type Boolean :null t
+              (ColumnRef :text user_id :type Integer :null t :tid 2 :cid 2)
+              (ColumnRef :text "u.id" :type Integer :null f :tid 1 :cid 1)))))
+      (BooleanLiteral :text true :type Boolean :null f))))
+
+-- logical
+(Project :exprs ((colref 1 :tid 1 :cid 2 :type VarChar :null t) (colref 2 :tid 2 :cid 3 :type Double :null t)) :out ((name VarChar :null t :tid 1 :cid 2) (total Double :null t :tid 2 :cid 3))
+  (Join :kind leftlateral :pred (lit true :type Boolean :null f) :out ((id Integer :null f :alias u :tid 1 :cid 1) (name VarChar :null t :alias u :tid 1 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+    (Scan :rel users :alias u :out ((id Integer :null f :alias u :tid 1 :cid 1) (name VarChar :null t :alias u :tid 1 :cid 2)))
+    (Project :exprs ((colref 2 :tid 2 :cid 3 :type Double :null t)) :out ((total Double :null t :alias o :tid 2 :cid 3))
+      (Filter :pred (binop "=" (colref 1 :tid 2 :cid 2 :type Integer :null t) (outerref 0 :depth 1 :tid 1 :cid 1 :type Integer :null f) :type Boolean :null t) :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))
+        (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3)))))))
+
+-- optimized
+(Project :exprs ((colref 0 :tid 1 :cid 2 :type VarChar :null t) (colref 1 :tid 2 :cid 3 :type Double :null t)) :out ((name VarChar :null t :tid 1 :cid 2) (total Double :null t :tid 2 :cid 3))
+  (Join :kind leftlateral :pred (lit true :type Boolean :null f) :out ((name VarChar :null t :alias u :tid 1 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+    (Scan :rel users :alias u :out ((name VarChar :null t :alias u :tid 1 :cid 2)))
+    (Project :exprs ((colref 1 :tid 2 :cid 3 :type Double :null t)) :out ((total Double :null t :alias o :tid 2 :cid 3))
+      (Filter :pred (binop "=" (colref 0 :tid 2 :cid 2 :type Integer :null t) (outerref 0 :depth 1 :tid 1 :cid 1 :type Integer :null f) :type Boolean :null t) :out ((user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))
+        (Scan :rel orders :out ((user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3)))))))
+
