@@ -338,3 +338,7 @@ gap_closures	ok	query	accept	clean	SELECT e.* FROM emp e JOIN dept d ON e.dept_i
 gap_closures	ok	query	accept	clean	SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
 gap_closures	ok	query	accept	clean	SELECT id FROM emp WHERE dept_id = ANY (SELECT id FROM dept)
 gap_closures	ok	query	accept	clean	SELECT id FROM emp WHERE salary < SOME (SELECT salary FROM emp WHERE dept_id = 1)
+gap_closures	ok	ddl	accept	exec_ok	CREATE TABLE high_earners AS SELECT id, salary FROM emp WHERE salary > 100
+gap_closures	ok	ddl	accept	exec_ok	CREATE TABLE emp_dept AS SELECT e.id, d.name FROM emp e JOIN dept d ON e.dept_id = d.id
+gap_closures	ok	query	accept	clean	SELECT id, salary FROM high_earners
+gap_closures	ok	query	accept	clean	SELECT name FROM emp_dept
