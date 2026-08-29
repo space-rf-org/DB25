@@ -31,7 +31,7 @@ regress into silence.
 |----|------|-----|-------|-----------------------|
 | ~~G1~~ | binder | ROLLUP / CUBE / GROUPING SETS lowering | ✅ CLOSED | first-class `Aggregate.grouping_sets`; `04,11,12` now bind + round-trip + inject |
 | ~~G2~~ | binder | Quantified comparison `ALL`/`ANY`/`SOME` lowering | ✅ CLOSED | lowers to an owned `ExprKind::Subquery :kind quantified` (op + ALL/ANY sense) · `26` |
-| G3 | binder+catalog | DDL statement lowering | PARTIALLY CLOSED / rescoped | CTAS → `CreateTableAs` (`36`); plain DDL is a catalog op (execute_ddl), honestly not a query plan |
+| ~~G3~~ | binder+catalog | DDL statement lowering | ✅ CLOSED (CTAS) / rescoped | CTAS → `CreateTableAs` (`36`) + `execute_ddl` registers the table; plain DDL is a catalog op, honestly not a query plan |
 | ~~G4~~ | binder | Qualified star (`u.*`) over a join | ✅ CLOSED | expanded to the relation's columns in `lower_projection` · `35` |
 | ~~G5~~ | harness | Phase-B s-expr **reader** coverage | ✅ CLOSED | reader covers every corpus construct; 0 `-- phaseb` deferrals — roundtrip 56/0, inject 28/0 |
 | ~~G6~~ | harness | Full-fidelity plan **injection** (node-id serialization) | ✅ CLOSED | provenance ids (`:tid`/`:cid`) serialized on schema + colref/outerref; self-join fixture `32_self_join` injects lossless |
@@ -76,21 +76,21 @@ Fixtures are under `corpus/staged/`.
   synthesized; a future decorrelation pass can rewrite it to a semi/anti-join.
 - **Pinned by:** `26_quantified_all` (binds, round-trips, injects).
 
-### G3 — DDL statement lowering (CTAS closed; plain DDL is a catalog op)
-- **CTAS — ✅ CLOSED.** `CREATE TABLE <name> AS <query>` now lowers to a
+### ~~G3~~ — DDL statement lowering (CTAS closed; plain DDL is a catalog op) — ✅ CLOSED
+- **CTAS — ✅ CLOSED, end to end.** `CREATE TABLE <name> AS <query>` lowers to a
   `CreateTableAs` logical op over the bound + optimized defining query
   (`table_name` the target, `output` the query's schema, `children[0]` the
-  query). The analyzer resolves the defining query (previously a
-  `CreateTableStmt` was left unanalyzed); the binder wraps it. Pinned by
-  `36_create_table_as` (binds, round-trips, injects, mutation-caught).
+  query): the analyzer resolves the defining query (previously a
+  `CreateTableStmt` was left unanalyzed), the binder wraps it (pinned by
+  `36_create_table_as` — binds, round-trips, injects, mutation-caught), and
+  `execute_ddl` REGISTERS the new table, deriving its columns from the query's
+  projection so a later statement resolves against it. The `gap_closures` corpus
+  session exercises this: the two CTAS create the tables (`exec_ok`), and the
+  following `SELECT`s against them analyze clean.
 - **Plain `CREATE TABLE (cols)` — not a query plan (by design).** It carries no
   query, so the binder returns an honest error ("plain CREATE TABLE is a catalog
   operation, not a query plan"); it is applied to the catalog via `execute_ddl`,
   which is where its effect lives. Pinned by `31_ddl_constraints`.
-- **Remaining (catalog-side follow-up):** `execute_ddl` does not yet REGISTER a
-  CTAS-derived table (build the new relation's columns from the query's
-  projection), so a CTAS is not yet queryable in a later corpus statement — a
-  small catalog addition, distinct from the binder lowering closed here.
 
 ### ~~G4~~ — Qualified star over a join — ✅ CLOSED
 - **What (was):** `SELECT u.* FROM u JOIN v …` — a qualified star whose relation

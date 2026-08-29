@@ -8,8 +8,8 @@ Sources (see SOURCES.md for provenance + licensing):
 - `pg/lateral.sql` (pg) -> session `lateral` (<= 50 in-scope)
 - `pg/gap_closures.sql` (pg) -> session `gap_closures` (<= 50 in-scope)
 
-- records scanned: 444
-- in-scope (kept): 339
+- records scanned: 448
+- in-scope (kept): 343
 - excluded: 105
 
 ## Exclusions by reason (no silent drops)
@@ -31,10 +31,10 @@ Sources (see SOURCES.md for provenance + licensing):
 - in1: 130
 - pg_case: 45
 - lateral: 8
-- gap_closures: 6
+- gap_closures: 10
 
 ## In-scope by category
 
-- query: 260
+- query: 264
 - dml: 58
-- ddl: 21
+- ddl: 23
