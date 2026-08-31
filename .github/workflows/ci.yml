@@ -44,6 +44,10 @@ jobs:
           git -C external/db25-logical-plan submodule update --init --recursive
           float external/db25-logical-plan/external/parser
           float external/db25-logical-plan/external/analyzer
+          # The physical planner floats on its own main too. Its CMake reuses the
+          # umbrella's db25logicalplan target (guarded add_subdirectory), so its
+          # vendored logical-plan copy is not built and needs no floating.
+          float external/db25-physical-plan
 
       - name: Install compiler
         # ubuntu-24.04 already ships g++-13 and g++-14; only refresh apt and
@@ -98,6 +102,10 @@ jobs:
           git -C external/db25-logical-plan submodule update --init --recursive
           float external/db25-logical-plan/external/parser
           float external/db25-logical-plan/external/analyzer
+          # The physical planner floats on its own main too. Its CMake reuses the
+          # umbrella's db25logicalplan target (guarded add_subdirectory), so its
+          # vendored logical-plan copy is not built and needs no floating.
+          float external/db25-physical-plan
 
       - name: Install compiler
         # Only install if missing (ubuntu-24.04 already ships g++-14); avoids a
