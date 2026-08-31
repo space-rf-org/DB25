@@ -1,3 +1,6 @@
 [submodule "external/db25-logical-plan"]
 	path = external/db25-logical-plan
 	url = https://github.com/space-rf-org/db25-logical-plan
+[submodule "external/db25-physical-plan"]
+	path = external/db25-physical-plan
+	url = https://github.com/space-rf-org/db25-physical-plan

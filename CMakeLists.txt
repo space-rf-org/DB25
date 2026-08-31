@@ -34,6 +34,21 @@ endif()
 add_subdirectory(external/db25-logical-plan)
 
 # ---------------------------------------------------------------------------
+# The physical planner (db25-physical-plan). It vendors db25-logical-plan too,
+# but its CMake guards the add_subdirectory on `NOT TARGET db25logicalplan`, so
+# here it REUSES the target added just above instead of adding a second copy.
+# Its own tests are off in this super-build (they run in its own CI). Linking
+# db25physicalplan brings db25/physical on top of the logical-plan stack.
+# ---------------------------------------------------------------------------
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/CMakeLists.txt)
+    message(FATAL_ERROR
+        "external/db25-physical-plan is empty. Run:\n"
+        "  git submodule update --init --recursive external/db25-physical-plan")
+endif()
+set(DB25_PHYSICAL_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+add_subdirectory(external/db25-physical-plan)
+
+# ---------------------------------------------------------------------------
 # Sources. The harness foundation plus every registered test suite. Sibling
 # agents drop suites under tests/**; they register via db25::harness::test() and
 # define no main(), so they GLOB straight into both executables.
@@ -180,6 +195,29 @@ add_test(NAME corpus_report
 # too so its rendering path is exercised (a crash / UB fails under sanitizers).
 add_test(NAME corpus_report_html
          COMMAND corpus_report --html ${CMAKE_CURRENT_SOURCE_DIR}/corpus/showcase.sql)
+
+# ---------------------------------------------------------------------------
+# physical_integration: CI-gated cross-repo seam - drives the full pipeline
+# (parse -> analyze -> bind -> optimize) and lowers the result through the pinned
+# db25-physical-plan, asserting a physical plan of the expected shape. Proves the
+# physical planner is wired into the umbrella; its own unit tests run in its repo.
+# ---------------------------------------------------------------------------
+add_executable(physical_integration integration/physical_integration.cpp)
+target_link_libraries(physical_integration PRIVATE db25physicalplan)
+target_compile_options(physical_integration PRIVATE -fno-exceptions -Wall -Wextra)
+add_test(NAME physical_integration COMMAND physical_integration)
+
+# ---------------------------------------------------------------------------
+# stage_timer: a lab tool (not a gate) - times each frontend stage in isolation
+# on the simple join query and dumps each stage artifact, now including the
+# physical stage (T6). Built so it cannot rot; run by hand for the numbers.
+# ---------------------------------------------------------------------------
+add_executable(stage_timer
+    integration/stage_timer.cpp
+    integration/staged_sexpr.cpp)
+target_include_directories(stage_timer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/integration)
+target_link_libraries(stage_timer PRIVATE db25physicalplan)
+target_compile_options(stage_timer PRIVATE -fno-exceptions -Wall -Wextra)
 
 # Tutorial examples (docs/tutorial.md): runnable end-to-end walkthroughs.
 add_subdirectory(examples)
