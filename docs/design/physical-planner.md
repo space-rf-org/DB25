@@ -270,6 +270,13 @@ correctness, generality, and spec-drivenness win every tie. The envelope's role 
 a **regression tripwire and an honesty reference**, kept because a number without
 material impact means nothing — so we hold ourselves to a real, reproducible one.
 
+**How the umbrella exercises it.** The staged harness and the integration check
+lower through the SHIPPED spec, not the built-in single-candidate fallback, so the
+physical goldens pin what the real configuration produces. A spec that stopped
+loading, or stopped conforming, fails loudly rather than silently reverting the
+harness to a planner nobody runs - which is what made the keyless-MergeJoin defect
+visible the moment the wiring landed.
+
 **How we measure.** Extend `stage_timer.cpp` with a `T6 physical` stage once it
 exists (fresh inputs per iter, warm median over N runs, same as the others).
 Track physical-plan median on the reference query as a reported metric (not a hard
@@ -302,11 +309,26 @@ PR per concern, merged when CI is green, pins propagated through the chain.
   within the envelope, every seam present (even if the runtime-profile producer is
   absent).
 
-**Increment 1 — the HTAP decision made real.**
-- Second join algorithm + access-path alternatives (seek vs. scan vs.
-  segment-skip); costing that distinguishes them.
-- Row-vs-column substrate as a costed property choice (D4) on a two-format catalog.
-- Freshness as a correctness-constrained property.
+**Increment 1 — the HTAP decision made real. DELIVERED.**
+- Multi-candidate lowering: implementation rules became one-to-many, memo groups
+  carry their cardinality and what their winner provides, and the per-operator
+  cost formulas were extracted so the tree form and the memo form are literally
+  the same arithmetic - the "one cost model" invariant (D3) made structural.
+- MergeJoin as a real second join candidate: cheaper per row but REQUIRING both
+  inputs sorted on the join keys, so a candidate is charged for the enforcers it
+  causes and the plan that is built is the plan that was costed.
+- Row-vs-column substrate as a costed choice, via a StorageCatalog input
+  declaring which formats each table is available in (D4).
+- Freshness as a CORRECTNESS constraint rather than a cost preference: a lagging
+  copy cannot answer a query that must see the latest writes, no enforcer can
+  manufacture freshness, so such a candidate is discarded and - when nothing
+  qualifies - the lowering fails honestly.
+- Applicability before cost: a candidate whose precondition does not hold is not
+  a cheaper option, it is not an option. (MergeJoin needs at least one equi-key.
+  Without this the planner emitted a merge join over a cross product, because with
+  no keys it also required no sort and so looked cheapest. The umbrella's physical
+  golden stage caught it; the unit tests had not, because they only ever joined on
+  a key.)
 
 **Increment 2 — search maturity.**
 - Branch-and-bound pruning + memo hygiene tuned against the envelope.

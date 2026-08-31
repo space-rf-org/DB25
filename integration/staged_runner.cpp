@@ -39,6 +39,7 @@
 
 #include "db25/physical/lowering.hpp"
 #include "db25/physical/sexpr.hpp"
+#include "db25/physical/spec.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -144,6 +145,29 @@ struct StageArtifacts {
     std::string physical;
 };
 
+#ifndef DB25_PHYSICAL_SPEC_DIR
+#define DB25_PHYSICAL_SPEC_DIR "."
+#endif
+
+// The shipped physical spec, loaded once. Lowering goes through it rather than
+// the built-in single-candidate fallback, so the physical goldens pin what the
+// REAL configuration produces - a spec that stopped loading, or stopped
+// conforming, must fail loudly here rather than silently reverting the harness to
+// a planner nobody runs.
+const physical::PhysicalSpec& shipped_spec() {
+    static const physical::PhysicalSpec spec = [] {
+        std::string error;
+        auto loaded = physical::load_spec(
+            std::string(DB25_PHYSICAL_SPEC_DIR) + "/physical.spec.sexpr", error);
+        if (!loaded) {
+            std::printf("staged_runner: cannot load physical spec: %s\n", error.c_str());
+            std::exit(2);
+        }
+        return *loaded;
+    }();
+    return spec;
+}
+
 StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::string& sql) {
     // T1: the token stream (independent of parse success).
     const std::string tokens = staged::tokens_to_sexpr(sql);
@@ -185,7 +209,9 @@ StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::strin
         // failure is pinned above - the golden then documents precisely how far
         // down the pipeline that statement currently gets.
         if (opt) {
-            physical::LoweringResult lowered = physical::lower(*opt);
+            physical::LoweringContext pctx;
+            pctx.spec = &shipped_spec();
+            physical::LoweringResult lowered = physical::lower(*opt, pctx);
             physical = lowered.ok ? physical::physical_to_sexpr(*lowered.plan)
                                   : "(lower-error \"" + lowered.error + "\")";
         } else {
@@ -275,7 +301,9 @@ GateResult gate_physical(const std::string& golden,
 
     const auto render = [](plan::LogicalNode* p) -> std::string {
         if (p == nullptr) return {};
-        physical::LoweringResult lowered = physical::lower(*p);
+        physical::LoweringContext pctx;
+        pctx.spec = &shipped_spec();
+        physical::LoweringResult lowered = physical::lower(*p, pctx);
         return lowered.ok ? trim(physical::physical_to_sexpr(*lowered.plan)) : std::string{};
     };
 

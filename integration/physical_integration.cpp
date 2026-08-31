@@ -13,9 +13,14 @@
 
 #include "db25/physical/lowering.hpp"
 #include "db25/physical/sexpr.hpp"
+#include "db25/physical/spec.hpp"
 
 #include <cstdio>
 #include <string>
+
+#ifndef DB25_PHYSICAL_SPEC_DIR
+#define DB25_PHYSICAL_SPEC_DIR "."
+#endif
 
 using namespace db25;
 
@@ -57,8 +62,21 @@ int main() {
 
     auto optimized = plan::optimize(std::move(bound.root));
 
+    // Lower through the SHIPPED spec (the real configuration), not the built-in
+    // fallback - so this gates the spec the project actually ships.
+    std::string spec_error;
+    auto spec = physical::load_spec(std::string(DB25_PHYSICAL_SPEC_DIR) + "/physical.spec.sexpr",
+                                    spec_error);
+    CHECK(spec.has_value());
+    if (!spec) {
+        std::printf("physical_integration: cannot load spec: %s\n", spec_error.c_str());
+        return 1;
+    }
+    physical::LoweringContext pctx;
+    pctx.spec = &*spec;
+
     // The cross-repo seam: lower the optimized logical plan to a physical plan.
-    auto lowered = physical::lower(*optimized);
+    auto lowered = physical::lower(*optimized, pctx);
     CHECK(lowered.ok);
     if (!lowered.ok) {
         std::printf("physical_integration: lower failed: %s\n", lowered.error.c_str());
