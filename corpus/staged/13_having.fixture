@@ -68,3 +68,6 @@ SELECT dept, SUM(salary) FROM emp GROUP BY dept HAVING SUM(salary) > 100
     (Aggregate :keys ((colref 0 :tid 3 :cid 2 :type Text :null t)) :aggs ((agg SUM (colref 1 :tid 3 :cid 4 :type Double :null t) :type Double :null t)) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (SUM Double :null t))
       (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2) (salary Double :null t :alias emp :tid 3 :cid 4))))))
 
+-- physical
+(lower-error "unsupported logical operator in Increment-0 lowering")
+

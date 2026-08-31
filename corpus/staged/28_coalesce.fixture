@@ -40,3 +40,7 @@ SELECT COALESCE(dept, 'none') FROM emp
 (Project :exprs ((func COALESCE (colref 0 :tid 3 :cid 2 :type Text :null t) (lit none :type Text :null f) :type Text :null f)) :out ((COALESCE Text :null f))
   (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2))))
 
+-- physical
+(Project exprs=[(COALESCE (col #0) (lit 'none'))] out=[COALESCE:Text]
+  (SeqScan table=emp fmt=row out=[dept:Text?]))
+

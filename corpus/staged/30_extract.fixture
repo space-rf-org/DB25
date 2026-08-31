@@ -34,3 +34,6 @@ SELECT EXTRACT(YEAR FROM CURRENT_DATE)
 (Project :exprs ((func EXTRACT (lit YEAR :type Text :null f) (func CURRENT_DATE :type Date :null f) :type Double :null f)) :out ((EXTRACT Double :null f))
   (Values :rows 1 :out ()))
 
+-- physical
+(lower-error "unsupported logical operator in Increment-0 lowering")
+

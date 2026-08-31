@@ -69,3 +69,6 @@ CREATE TABLE audit_log (id INTEGER NOT NULL, ref INTEGER REFERENCES users(id), a
 -- optimized
 (bind-error "plain CREATE TABLE is a catalog operation, not a query plan (only CREATE TABLE ... AS <query> is lowered)")
 
+-- physical
+(bind-error "plain CREATE TABLE is a catalog operation, not a query plan (only CREATE TABLE ... AS <query> is lowered)")
+

@@ -45,3 +45,8 @@ SELECT id FROM emp WHERE dept LIKE 'eng%'
   (Filter :pred (like (colref 1 :tid 3 :cid 2 :type Text :null t) (lit "eng%" :type Text :null f) :type Boolean :null t) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2))
     (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2)))))
 
+-- physical
+(Project exprs=[(col #0)] out=[id:Integer]
+  (Filter pred=(Like (col #1) (lit 'eng%')) out=[id:Integer dept:Text?]
+    (SeqScan table=emp fmt=row out=[id:Integer dept:Text?])))
+

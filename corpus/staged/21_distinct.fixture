@@ -34,3 +34,6 @@ SELECT DISTINCT dept FROM emp
   (Project :exprs ((colref 0 :tid 3 :cid 2 :type Text :null t)) :out ((dept Text :null t :tid 3 :cid 2))
     (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2)))))
 
+-- physical
+(lower-error "unsupported logical operator in Increment-0 lowering")
+

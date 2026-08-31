@@ -154,7 +154,7 @@ add_executable(staged_runner
     ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
     ${ANALYZER_SRC_DIR}/check_eval.cpp
     ${ANALYZER_SRC_DIR}/transaction.cpp)
-target_link_libraries(staged_runner PRIVATE db25logicalplan)
+target_link_libraries(staged_runner PRIVATE db25physicalplan)
 target_compile_options(staged_runner PRIVATE -Wall -Wextra)
 add_test(NAME staged_runner
          COMMAND staged_runner ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)

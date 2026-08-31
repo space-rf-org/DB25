@@ -61,3 +61,8 @@ SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
   (Filter :pred (subquery :kind quantified :op ">" :quant all :type Boolean :null t) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4))
     (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
+-- physical
+(Project exprs=[(col #0)] out=[id:Integer]
+  (Filter pred=(Subquery (col #3)) out=[id:Integer dept:Text? region:Text? salary:Double?]
+    (SeqScan table=emp fmt=row out=[id:Integer dept:Text? region:Text? salary:Double?])))
+

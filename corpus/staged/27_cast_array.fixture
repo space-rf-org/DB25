@@ -42,3 +42,7 @@ SELECT CAST(dept AS text[]) FROM emp
 (Project :exprs ((cast  (colref 0 :tid 3 :cid 2 :type Text :null t) :to Unknown :type Unknown :null t)) :out ((CAST Unknown :null t))
   (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2))))
 
+-- physical
+(Project exprs=[(Cast (col #0))] out=[CAST:Unknown?]
+  (SeqScan table=emp fmt=row out=[dept:Text?]))
+
