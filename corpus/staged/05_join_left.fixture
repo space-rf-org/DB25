@@ -66,3 +66,9 @@ SELECT u.id, o.total FROM users u LEFT JOIN orders o ON u.id = o.user_id
     (Scan :rel users :alias u :out ((id Integer :null f :alias u :tid 1 :cid 1)))
     (Scan :rel orders :alias o :out ((user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3)))))
 
+-- physical
+(Project exprs=[(col #0) (col #2)] out=[id:Integer total:Double?]
+  (HashJoin keys=[(L#0 R#0)] out=[id:Integer user_id:Integer? total:Double?]
+    (SeqScan table=users fmt=row out=[id:Integer])
+    (SeqScan table=orders fmt=row out=[user_id:Integer? total:Double?])))
+

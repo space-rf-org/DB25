@@ -102,3 +102,6 @@ WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10) SEL
       (Filter :pred (binop "<" (colref 0 :type Integer :null f) (lit 10 :type Integer :null f) :type Boolean :null f) :out ((n Integer :null f :alias t))
         (WorkingTableScan :rel t :out ((n Integer :null f :alias t)))))))
 
+-- physical
+(lower-error "unsupported logical operator in Increment-0 lowering")
+

@@ -42,3 +42,9 @@ SELECT id FROM users NATURAL JOIN orders
     (Scan :rel users :out ((id Integer :null f :alias users :tid 1 :cid 1)))
     (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1)))))
 
+-- physical
+(Project exprs=[(col #0)] out=[id:Integer]
+  (HashJoin keys=[(L#0 R#0)] out=[id:Integer id:Integer]
+    (SeqScan table=users fmt=row out=[id:Integer])
+    (SeqScan table=orders fmt=row out=[id:Integer])))
+

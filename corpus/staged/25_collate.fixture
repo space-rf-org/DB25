@@ -35,3 +35,7 @@ SELECT dept COLLATE "C" FROM emp
 (Project :exprs ((func COLLATE (colref 0 :tid 3 :cid 2 :type Text :null t) (lit C :type Text :null f) :type Text :null t)) :out ((C Text :null t))
   (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2))))
 
+-- physical
+(Project exprs=[(COLLATE (col #0) (lit 'C'))] out=[C:Text?]
+  (SeqScan table=emp fmt=row out=[dept:Text?]))
+

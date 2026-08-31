@@ -83,3 +83,10 @@ SELECT a.dept, b.salary FROM emp a JOIN emp b ON a.dept = b.dept WHERE a.id <> b
       (Scan :rel emp :alias a :out ((id Integer :null f :alias a :tid 3 :cid 1) (dept Text :null t :alias a :tid 3 :cid 2)))
       (Scan :rel emp :alias b :out ((id Integer :null f :alias b :tid 3 :cid 1) (dept Text :null t :alias b :tid 3 :cid 2) (salary Double :null t :alias b :tid 3 :cid 4))))))
 
+-- physical
+(Project exprs=[(col #1) (col #4)] out=[dept:Text? salary:Double?]
+  (Filter pred=(!= (col #0) (col #2)) out=[id:Integer dept:Text? id:Integer dept:Text? salary:Double?]
+    (HashJoin keys=[(L#1 R#1)] out=[id:Integer dept:Text? id:Integer dept:Text? salary:Double?]
+      (SeqScan table=emp fmt=row out=[id:Integer dept:Text?])
+      (SeqScan table=emp fmt=row out=[id:Integer dept:Text? salary:Double?]))))
+

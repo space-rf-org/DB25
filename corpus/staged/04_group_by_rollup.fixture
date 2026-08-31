@@ -54,3 +54,6 @@ SELECT dept, SUM(salary) FROM emp GROUP BY ROLLUP(dept)
   (punct ")" 54 55)
   (eof 55 55))
 
+-- physical
+(lower-error "unsupported logical operator in Increment-0 lowering")
+

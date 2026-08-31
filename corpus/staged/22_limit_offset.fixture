@@ -52,3 +52,6 @@ SELECT id FROM emp ORDER BY id LIMIT 10 OFFSET 5
     (Project :exprs ((colref 0 :tid 3 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 3 :cid 1))
       (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1))))))
 
+-- physical
+(lower-error "unsupported logical operator in Increment-0 lowering")
+

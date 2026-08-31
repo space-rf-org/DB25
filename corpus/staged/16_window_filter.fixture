@@ -64,3 +64,6 @@ SELECT dept, COUNT(*) FILTER (WHERE salary > 100) FROM emp GROUP BY dept
   (Aggregate :keys ((colref 0 :tid 3 :cid 2 :type Text :null t)) :aggs ((agg COUNT :filter (binop ">" (colref 1 :tid 3 :cid 4 :type Double :null t) (lit 100 :type Integer :null f) :type Boolean :null t) :type BigInt :null f)) :out ((dept Text :null t :alias emp :tid 3 :cid 2) (COUNT BigInt :null f))
     (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
+-- physical
+(lower-error "unsupported logical operator in Increment-0 lowering")
+

@@ -49,3 +49,8 @@ SELECT id, name FROM users WHERE id = 1
   (num 1 38 39)
   (eof 39 39))
 
+-- physical
+(Project exprs=[(col #0) (col #1)] out=[id:Integer name:VarChar?]
+  (Filter pred=(= (col #0) (lit 1)) out=[id:Integer name:VarChar?]
+    (SeqScan table=users fmt=row out=[id:Integer name:VarChar?])))
+

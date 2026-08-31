@@ -37,6 +37,9 @@
 #include "db25/semantic/analyzer.hpp"
 #include "db25/semantic/catalog.hpp"
 
+#include "db25/physical/lowering.hpp"
+#include "db25/physical/sexpr.hpp"
+
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -138,6 +141,7 @@ struct StageArtifacts {
     std::string resolved;
     std::string logical;
     std::string optimized;
+    std::string physical;
 };
 
 StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::string& sql) {
@@ -147,7 +151,8 @@ StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::strin
     parser::Parser p;
     auto res = p.parse(sql);
     if (!res.has_value()) {
-        return {tokens, "(parse-error)", "(parse-error)", "(parse-error)", "(parse-error)"};
+        return {tokens,          "(parse-error)", "(parse-error)",
+                "(parse-error)", "(parse-error)", "(parse-error)"};
     }
 
     // T2: untyped AST, straight off the parser.
@@ -170,13 +175,28 @@ StageArtifacts run_stages(const semantic::InMemoryCatalog& cat, const std::strin
     plan::Binder binder_b(analyzer, cat);
     plan::BindResult bound2 = binder_b.bind(res.value());
     std::string optimized;
+    std::string physical;
     if (bound2.ok) {
         plan::LogicalNodePtr opt = plan::optimize(std::move(bound2.root));
         optimized = staged::plan_to_sexpr(opt.get());
+        // T6: lower the optimized plan to a physical plan. Increment 0 lowers
+        // scan / filter / project / one join; a statement using anything else is
+        // a first-class PINNED outcome (`(lower-error ...)`), exactly as a bind
+        // failure is pinned above - the golden then documents precisely how far
+        // down the pipeline that statement currently gets.
+        if (opt) {
+            physical::LoweringResult lowered = physical::lower(*opt);
+            physical = lowered.ok ? physical::physical_to_sexpr(*lowered.plan)
+                                  : "(lower-error \"" + lowered.error + "\")";
+        } else {
+            physical = "(lower-error \"no optimized plan\")";
+        }
     } else {
         optimized = "(bind-error \"" + bound2.error + "\")";
+        physical = "(bind-error \"" + bound2.error + "\")";
     }
-    return {trim(tokens), trim(ast), trim(resolved), trim(logical), trim(optimized)};
+    return {trim(tokens),     trim(ast),       trim(resolved),
+            trim(logical),    trim(optimized), trim(physical)};
 }
 
 // --- Falsifiability gate (plan layers) --------------------------------------
@@ -217,7 +237,8 @@ struct GateResult {
 
 bool is_real_plan(const std::string& golden) {
     return !golden.empty() && golden.front() == '(' &&
-           golden.rfind("(bind-error", 0) != 0 && golden.rfind("(parse-error", 0) != 0;
+           golden.rfind("(bind-error", 0) != 0 && golden.rfind("(parse-error", 0) != 0 &&
+           golden.rfind("(lower-error", 0) != 0;
 }
 
 // `make` rebinds a FRESH owned plan each call (mutations are destructive).
@@ -238,6 +259,37 @@ GateResult gate_plan(const std::string& golden,
         corrupt_root_schema(p.get());
         ++r.applied;
         if (trim(staged::plan_to_sexpr(p.get())) != golden) ++r.caught;
+    }
+    return r;
+}
+
+// The PHYSICAL golden is gated by the same logical mutations: the physical plan
+// is lowered FROM the logical one, so a dropped predicate or a corrupted output
+// schema must show up in the lowered plan too. A physical golden no logical
+// mutation can budge is vacuous, exactly as for the plan goldens above.
+GateResult gate_physical(const std::string& golden,
+                         const std::function<plan::LogicalNodePtr()>& make) {
+    GateResult r;
+    if (!is_real_plan(golden)) return r;  // (lower-error ...) is not gateable
+    r.gateable = true;
+
+    const auto render = [](plan::LogicalNode* p) -> std::string {
+        if (p == nullptr) return {};
+        physical::LoweringResult lowered = physical::lower(*p);
+        return lowered.ok ? trim(physical::physical_to_sexpr(*lowered.plan)) : std::string{};
+    };
+
+    if (auto base = make(); base && render(base.get()) != golden) {
+        r.stale = true;  // fixture is out of date; regenerate with --update
+    }
+    if (auto p = make(); p && drop_first_predicate(p.get())) {
+        ++r.applied;
+        if (render(p.get()) != golden) ++r.caught;
+    }
+    if (auto p = make(); p) {
+        corrupt_root_schema(p.get());
+        ++r.applied;
+        if (render(p.get()) != golden) ++r.caught;
     }
     return r;
 }
@@ -303,6 +355,7 @@ int main(int argc, char** argv) {
             const std::pair<const char*, GateResult> checks[] = {
                 {"logical", gate_plan(f.find("logical") ? *f.find("logical") : "", bind_once)},
                 {"optimized", gate_plan(f.find("optimized") ? *f.find("optimized") : "", opt_once)},
+                {"physical", gate_physical(f.find("physical") ? *f.find("physical") : "", opt_once)},
             };
             for (const auto& [label, gr] : checks) {
                 if (!gr.gateable) continue;
@@ -409,7 +462,8 @@ int main(int argc, char** argv) {
     long total = 0, mismatches = 0, updated = 0;
     // The stages compared, in pipeline order - so a mismatch reports the FIRST
     // stage that diverged.
-    const std::vector<std::string> ordered_stages = {"tokens", "ast", "resolved", "logical", "optimized"};
+    const std::vector<std::string> ordered_stages = {"tokens",  "ast",       "resolved",
+                                                     "logical", "optimized", "physical"};
 
     for (const auto& path : files) {
         std::ifstream is(path);
@@ -425,8 +479,9 @@ int main(int argc, char** argv) {
         ++total;
         const StageArtifacts got = run_stages(cat, *sql);
         std::map<std::string, std::string> produced = {
-            {"tokens", got.tokens}, {"ast", got.ast}, {"resolved", got.resolved},
-            {"logical", got.logical}, {"optimized", got.optimized}};
+            {"tokens", got.tokens},       {"ast", got.ast},
+            {"resolved", got.resolved},   {"logical", got.logical},
+            {"optimized", got.optimized}, {"physical", got.physical}};
 
         if (update) {
             for (const auto& stage : ordered_stages) {

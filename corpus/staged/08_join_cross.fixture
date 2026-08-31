@@ -52,3 +52,9 @@ SELECT u.id, o.id FROM users u CROSS JOIN orders o
     (Scan :rel users :alias u :out ((id Integer :null f :alias u :tid 1 :cid 1)))
     (Scan :rel orders :alias o :out ((id Integer :null f :alias o :tid 2 :cid 1)))))
 
+-- physical
+(Project exprs=[(col #0) (col #1)] out=[id:Integer id:Integer]
+  (HashJoin keys=[] out=[id:Integer id:Integer]
+    (SeqScan table=users fmt=row out=[id:Integer])
+    (SeqScan table=orders fmt=row out=[id:Integer])))
+
