@@ -1,0 +1,87 @@
+-- sql
+SELECT u.id, o.total FROM users u JOIN orders o ON u.id = o.user_id AND o.total > 10
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident u 7 8)
+  (op "." 8 9)
+  (ident id 9 11)
+  (punct "," 11 12)
+  (ident o 13 14)
+  (op "." 14 15)
+  (ident total 15 20)
+  (kw FROM 21 25)
+  (ident users 26 31)
+  (ident u 32 33)
+  (kw JOIN 34 38)
+  (ident orders 39 45)
+  (ident o 46 47)
+  (kw ON 48 50)
+  (ident u 51 52)
+  (op "." 52 53)
+  (ident id 53 55)
+  (op "=" 56 57)
+  (ident o 58 59)
+  (op "." 59 60)
+  (ident user_id 60 67)
+  (kw AND 68 71)
+  (ident o 72 73)
+  (op "." 73 74)
+  (ident total 74 79)
+  (op ">" 80 81)
+  (num 10 82 84)
+  (eof 84 84))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.id")
+    (ColumnRef :text "o.total"))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text JOIN
+      (TableRef :text orders :qual o)
+      (BinaryExpr :text AND
+        (BinaryExpr :text "="
+          (ColumnRef :text "u.id")
+          (ColumnRef :text "o.user_id"))
+        (BinaryExpr :text ">"
+          (ColumnRef :text "o.total")
+          (IntegerLiteral :text 10))))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text "u.id" :type Integer :null f :tid 1 :cid 1)
+    (ColumnRef :text "o.total" :type Double :null t :tid 2 :cid 3))
+  (FromClause
+    (TableRef :text users :qual u)
+    (JoinClause :text JOIN
+      (TableRef :text orders :qual o)
+      (BinaryExpr :text AND :type Boolean :null t
+        (BinaryExpr :text "=" :type Boolean :null t
+          (ColumnRef :text "u.id" :type Integer :null f :tid 1 :cid 1)
+          (ColumnRef :text "o.user_id" :type Integer :null t :tid 2 :cid 2))
+        (BinaryExpr :text ">" :type Boolean :null t
+          (ColumnRef :text "o.total" :type Double :null t :tid 2 :cid 3)
+          (IntegerLiteral :text 10 :type Integer :null f))))))
+
+-- logical
+(Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 4 :tid 2 :cid 3 :type Double :null t)) :out ((id Integer :null f :tid 1 :cid 1) (total Double :null t :tid 2 :cid 3))
+  (Join :kind inner :pred (binop AND (binop "=" (colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 3 :tid 2 :cid 2 :type Integer :null t) :type Boolean :null t) (binop ">" (colref 4 :tid 2 :cid 3 :type Double :null t) (lit 10 :type Integer :null f) :type Boolean :null t) :type Boolean :null t) :out ((id Integer :null f :alias u :tid 1 :cid 1) (name VarChar :null t :alias u :tid 1 :cid 2) (id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+    (Scan :rel users :alias u :out ((id Integer :null f :alias u :tid 1 :cid 1) (name VarChar :null t :alias u :tid 1 :cid 2)))
+    (Scan :rel orders :alias o :out ((id Integer :null f :alias o :tid 2 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3)))))
+
+-- optimized
+(Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 2 :tid 2 :cid 3 :type Double :null t)) :out ((id Integer :null f :tid 1 :cid 1) (total Double :null t :tid 2 :cid 3))
+  (Join :kind inner :pred (binop AND (binop "=" (colref 0 :tid 1 :cid 1 :type Integer :null f) (colref 1 :tid 2 :cid 2 :type Integer :null t) :type Boolean :null t) (binop ">" (colref 2 :tid 2 :cid 3 :type Double :null t) (lit 10 :type Integer :null f) :type Boolean :null t) :type Boolean :null t) :out ((id Integer :null f :alias u :tid 1 :cid 1) (user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3))
+    (Scan :rel users :alias u :out ((id Integer :null f :alias u :tid 1 :cid 1)))
+    (Scan :rel orders :alias o :out ((user_id Integer :null t :alias o :tid 2 :cid 2) (total Double :null t :alias o :tid 2 :cid 3)))))
+
+-- physical
+(Project exprs=[(col #0) (col #2)] out=[id:Integer total:Double?]
+  (HashJoin keys=[(L#0 R#0)] residual=[(> (col #2) (lit 10))] out=[id:Integer user_id:Integer? total:Double?]
+    (SeqScan table=users fmt=row out=[id:Integer])
+    (SeqScan table=orders fmt=row out=[user_id:Integer? total:Double?])))
+
