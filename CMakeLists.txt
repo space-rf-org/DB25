@@ -156,6 +156,8 @@ add_executable(staged_runner
     ${ANALYZER_SRC_DIR}/transaction.cpp)
 target_link_libraries(staged_runner PRIVATE db25physicalplan)
 target_compile_options(staged_runner PRIVATE -Wall -Wextra)
+target_compile_definitions(staged_runner PRIVATE
+    DB25_PHYSICAL_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/spec")
 add_test(NAME staged_runner
          COMMAND staged_runner ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
 # Falsifiability gate: every committed plan golden must be caught (changed) by
@@ -205,6 +207,10 @@ add_test(NAME corpus_report_html
 add_executable(physical_integration integration/physical_integration.cpp)
 target_link_libraries(physical_integration PRIVATE db25physicalplan)
 target_compile_options(physical_integration PRIVATE -fno-exceptions -Wall -Wextra)
+# Lower through the SHIPPED spec, not the built-in fallback: the goldens and this
+# check should pin what the real configuration produces.
+target_compile_definitions(physical_integration PRIVATE
+    DB25_PHYSICAL_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/spec")
 add_test(NAME physical_integration COMMAND physical_integration)
 
 # ---------------------------------------------------------------------------
