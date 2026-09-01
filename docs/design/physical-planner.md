@@ -254,27 +254,39 @@ re-measured together and never quoted across sessions:
 
 | Stage | reference query | simple join |
 |---|---|---|
-| tokenize → parse → analyze → bind → optimize (logical) | **45 µs** (44-47 run to run) | 11.3 µs |
-| physical planning (T6) | **does not lower** | 5.7 µs |
-| **Postgres 16.13 total planning time (fused)** | **113 µs** (p10 102 / p90 169) | 29 µs |
-| DB25 logical as a fraction of Postgres | **0.40** | 0.39 |
+| tokenize → parse → analyze → bind → optimize (logical) | 54.0 µs | 11.4 µs |
+| physical planning (T6) | **28.0 µs** | 6.1 µs |
+| **DB25 total, parse → physical plan** | **82.1 µs** | 17.7 µs |
+| **Postgres 16.13 total planning time (fused)** | **108 µs** (p10 100 / p90 153) | 29 µs |
+| DB25 as a fraction of Postgres | **0.76** | 0.61 |
 
-**The reference query does not lower.** The physical operator set is SeqScan,
-Filter, Project, HashJoin, MergeJoin, NestedLoopJoin, Sort, FormatConvert - no
-Aggregate, no Window, no Limit - so T6 reports `unsupported logical operator in
-lowering` after 0.55 us. That is the cost of giving up, not a planning time, and
-`stage_timer` prints it as a failure rather than folding it into a total. The
-envelope is therefore currently exercised end to end only by the simple join.
-Closing that operator gap is what makes the headline number self-measuring.
+**The reference query plans, as of Increment 3.3.** It did not until then: the
+operator set had no Aggregate, no Window and no Limit, so T6 reported
+`unsupported logical operator in lowering` after half a microsecond, and the
+headline measured how fast the planner gave up. It now produces a complete
+physical plan - the CTE aggregate hashes, the LATERAL subquery's scalar SUM
+streams, the lateral join is a nested loop, the window's sort is PARTITION BY then
+ORDER BY, and ORDER BY over the window output sits under the LIMIT.
 
-**A ratio worth watching.** The position paper measured this same query at DB25
-23.3 us against Postgres 74.0 us, a ratio of 0.31. Today the ratio is 0.40. Ratios
-cancel most of the machine difference, so roughly a quarter of DB25's relative lead
-has been spent since - presumably on the correctness work that landed in between
-(LATERAL, CTAS, grouping sets, overflow diagnostics, the parser structural guard).
-Nothing here is alarming; the envelope is still wide. But it is exactly the kind of
-drift that is invisible without a fixed reference query, which is the point of
-pinning one.
+The envelope holds with room to spare: **82.1 µs against Postgres's 108 µs for the
+same query on the same host in the same session.** DB25 delivers a complete
+physical plan in 76% of the time Postgres takes to plan.
+
+**A ratio worth watching.** The position paper measured this query at DB25 23.3 µs
+against Postgres 74.0 µs - a ratio of 0.31 for a LOGICAL plan. The comparable
+figure today is 0.50 (54.0 against 108). Ratios cancel most of the machine
+difference, so a real part of DB25's relative lead has been spent since, on the
+correctness work that landed in between (LATERAL, CTAS, grouping sets, overflow
+diagnostics, the parser structural guard) and on this document's own correction of
+what T6 was measuring. Nothing here is alarming - the full pipeline still finishes
+inside the Postgres envelope - but it is exactly the kind of drift that is
+invisible without a fixed reference query, which is the point of pinning one.
+
+Note also that the two sides are no longer running different distances. Until
+Increment 3.3 the honest caveat was that DB25 stopped at a rule-optimized logical
+plan while Postgres's number bought a cost-based, execution-ready one. On this
+query that caveat is now largely retired: 82.1 µs buys a costed physical plan with
+join algorithms, aggregate strategies and enforced orderings chosen.
 
 Postgres has **no separately-reportable physical-planning number** — that 113 µs
 *fuses* logical optimization, path (physical) selection, and costing. So we set two
@@ -292,9 +304,9 @@ targets, not one:
   reported honestly. We do **not** claim "beating Postgres on physical," because
   that slice does not exist to compare against.
 
-**The tension, named.** Cascades full search is thorough, not cheap. On the
-simple join it fits the headroom comfortably. On the reference query it is
-unmeasured, and on large join counts it will not fit — which is exactly why D5's
+**The tension, named.** Cascades full search is thorough, not cheap. It fits the
+headroom on both measured queries - 28.0 µs of roughly 54 on the reference query -
+but on large join counts it will not fit — which is exactly why D5's
 fast path and budget-guard are on the roadmap. The envelope *is* the reason the
 roadmap has those, not gold-plating.
 
@@ -505,7 +517,21 @@ order that makes the reference query self-measuring soonest.
   dropping an aggregate's FILTER, so `COUNT(*)` and `COUNT(*) FILTER (WHERE p)`
   rendered identically. The plan was right and the WRITER was wrong, which matters
   because the writer is what the goldens are made of.
-- **3.3 Window**, whose sort requirement pushes down through the existing enforcer.
+- **3.3 Window. DELIVERED.** Consumes its input sorted by (PARTITION BY ++ ORDER
+  BY), appends one column per function, emits in that order - the sort requirement
+  goes through the existing enforcer unchanged, which was the point. WITH THIS THE
+  REFERENCE QUERY PLANS END TO END for the first time: 82.1 µs against Postgres's
+  108 µs on the same host in the same session, of which the physical planner is
+  28.0. Three refusals, all of the same shape as the rest of this section: window
+  functions with DIFFERENT OVER clauses on one node fail (the operator states ONE
+  input sort requirement, and serving one function's ordering while computing the
+  other would emit a plan whose stated requirement does not describe what it needs;
+  functions differing only in their FRAME share an operator, because a frame does
+  not change what ordering the input needs); a computed PARTITION BY or window
+  ORDER BY key fails, since it has no positional index to be and, unlike an
+  aggregate, there is no order-free alternative; and the frame is RENDERED rather
+  than dropped, because a plan that silently forgot ROWS BETWEEN computes a
+  different answer.
 - **3.4 Distinct and SetOp** (hash vs sort dedup - the same shape of choice again).
 - **3.5 Values**, which is also what a FROM-less `SELECT` lowers over.
 
