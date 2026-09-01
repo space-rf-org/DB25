@@ -215,8 +215,9 @@ add_test(NAME physical_integration COMMAND physical_integration)
 
 # ---------------------------------------------------------------------------
 # stage_timer: a lab tool (not a gate) - times each frontend stage in isolation
-# on the simple join query and dumps each stage artifact, now including the
-# physical stage (T6). Built so it cannot rot; run by hand for the numbers.
+# and dumps each stage artifact, including the physical stage (T6). The headline
+# query is bench/reference_query.sql, read at runtime so the measured query and
+# the documented query cannot drift apart. Built so it cannot rot; run by hand.
 # ---------------------------------------------------------------------------
 add_executable(stage_timer
     integration/stage_timer.cpp
@@ -226,7 +227,8 @@ target_link_libraries(stage_timer PRIVATE db25physicalplan)
 target_compile_options(stage_timer PRIVATE -fno-exceptions -Wall -Wextra)
 # T6 times the planner as shipped, which means lowering through the shipped spec.
 target_compile_definitions(stage_timer PRIVATE
-    DB25_PHYSICAL_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/spec")
+    DB25_PHYSICAL_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/spec"
+    DB25_REFERENCE_QUERY="${CMAKE_CURRENT_SOURCE_DIR}/bench/reference_query.sql")
 
 # Tutorial examples (docs/tutorial.md): runnable end-to-end walkthroughs.
 add_subdirectory(examples)

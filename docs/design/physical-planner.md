@@ -238,32 +238,65 @@ structurally, not by convention:
 
 This is a first-class target, stated honestly.
 
-**Reference measurements (identical host, warm medians, empty tables):**
+**The reference query is `bench/reference_query.sql`** — the position paper's
+comparison query: a CTE with two aggregates, an inner join against it, a window
+function, a correlated `LEFT JOIN LATERAL` with its own aggregate, a predicate
+against a CTE-computed value, and `ORDER BY` over a window output under `LIMIT`.
+It is the query DB25 is measured against from here on. `stage_timer` reads it from
+that file at runtime, so the measured query and the documented query cannot drift
+apart.
 
-| Stage | DB25 today |
-|---|---|
-| tokenize → parse → analyze → bind → optimize (logical) | **23.3 µs** |
-| physical planning | 0 (does not exist yet) |
-| **Postgres 16 total planning time (fused)** | **~74.0 µs** |
+**Reference measurements (one host, one session, warm medians over 2000 runs,
+empty tables, no statistics, `-O3`; PostgreSQL 16.13 via `EXPLAIN (SUMMARY)`).**
+Absolute figures below are comparable only *within* this block — this container's
+speed varies by roughly 2x between sessions, so DB25 and Postgres are always
+re-measured together and never quoted across sessions:
 
-Postgres has **no separately-reportable physical-planning number** — its
-~74 µs *fuses* logical optimization, path (physical) selection, and costing. So we
-set two targets, not one:
+| Stage | reference query | simple join |
+|---|---|---|
+| tokenize → parse → analyze → bind → optimize (logical) | **45 µs** (44-47 run to run) | 11.3 µs |
+| physical planning (T6) | **does not lower** | 5.7 µs |
+| **Postgres 16.13 total planning time (fused)** | **113 µs** (p10 102 / p90 169) | 29 µs |
+| DB25 logical as a fraction of Postgres | **0.40** | 0.39 |
+
+**The reference query does not lower.** The physical operator set is SeqScan,
+Filter, Project, HashJoin, MergeJoin, NestedLoopJoin, Sort, FormatConvert - no
+Aggregate, no Window, no Limit - so T6 reports `unsupported logical operator in
+lowering` after 0.55 us. That is the cost of giving up, not a planning time, and
+`stage_timer` prints it as a failure rather than folding it into a total. The
+envelope is therefore currently exercised end to end only by the simple join.
+Closing that operator gap is what makes the headline number self-measuring.
+
+**A ratio worth watching.** The position paper measured this same query at DB25
+23.3 us against Postgres 74.0 us, a ratio of 0.31. Today the ratio is 0.40. Ratios
+cancel most of the machine difference, so roughly a quarter of DB25's relative lead
+has been spent since - presumably on the correctness work that landed in between
+(LATERAL, CTAS, grouping sets, overflow diagnostics, the parser structural guard).
+Nothing here is alarming; the envelope is still wide. But it is exactly the kind of
+drift that is invisible without a fixed reference query, which is the point of
+pinning one.
+
+Postgres has **no separately-reportable physical-planning number** — that 113 µs
+*fuses* logical optimization, path (physical) selection, and costing. So we set two
+targets, not one:
 
 - **Envelope target (primary, defensible).** DB25 total `tokenize → physical plan`
   stays within Postgres total planning time on the reference query/host. Today:
-  23.3 µs used, **~51 µs headroom** for physical planning. This is the honesty
-  tripwire — if we blow it on the reference query, something is wrong (over-search,
-  poor memo hygiene), and the benchmark catches it as a regression.
+  45 µs used of 113 µs, **~68 µs headroom** for physical planning - none of it
+  yet spent, because the reference query does not lower. On the simple join, where
+  a real T6 exists, the whole pipeline is 17.0 µs against Postgres's 29 µs. This is
+  the honesty tripwire — if we blow it on the reference query, something is wrong
+  (over-search, poor memo hygiene), and the benchmark catches it as a regression.
 - **Physical-pure-time (tracked, not claimed).** We allocate a budget from the
   headroom and golden-track physical planning time as a first-class metric,
   reported honestly. We do **not** claim "beating Postgres on physical," because
   that slice does not exist to compare against.
 
 **The tension, named.** Cascades full search is thorough, not cheap. On the
-reference query (few joins) it fits the ~51 µs headroom comfortably. On large join
-counts it will not — which is exactly why D5's fast path and budget-guard are on
-the roadmap. The envelope *is* the reason the roadmap has those, not gold-plating.
+simple join it fits the headroom comfortably. On the reference query it is
+unmeasured, and on large join counts it will not fit — which is exactly why D5's
+fast path and budget-guard are on the roadmap. The envelope *is* the reason the
+roadmap has those, not gold-plating.
 
 **Non-goal, operationalized.** Beating anyone on speed is a non-goal on principle;
 correctness, generality, and spec-drivenness win every tie. The envelope's role is
