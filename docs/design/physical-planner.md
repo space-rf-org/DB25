@@ -277,10 +277,30 @@ loading, or stopped conforming, fails loudly rather than silently reverting the
 harness to a planner nobody runs - which is what made the keyless-MergeJoin defect
 visible the moment the wiring landed.
 
-**How we measure.** Extend `stage_timer.cpp` with a `T6 physical` stage once it
-exists (fresh inputs per iter, warm median over N runs, same as the others).
-Track physical-plan median on the reference query as a reported metric (not a hard
-CI gate — perf gates are noisy — but a tracked series that flags regressions).
+**How we measure.** `stage_timer.cpp` carries a `T6 physical` stage (fresh inputs
+per iter, warm median over N runs, same as the others). Physical-plan median on the
+reference query is a reported metric, not a hard CI gate — wall-clock gates are
+noisy — but a tracked series that flags regressions.
+
+Two things that series has already been wrong about, both recorded here because
+the lesson generalizes past this planner:
+
+- **It must lower through the SHIPPED SPEC.** T6 originally called `lower()` with a
+  default context, which times the built-in fallback mapping — fewer candidates, no
+  spec implementation rules — so every figure it produced described a configuration
+  nobody runs, understating the real planner by about 50%. (The same defect hit the
+  staged harness in Unit 1.5 and was caught there by a golden; here it survived
+  longer, because a timing tool has no golden to disagree with. A number quietly
+  measuring the wrong thing still looks like a number.)
+- **Only same-machine, same-session comparisons mean anything.** Absolute figures
+  from different sessions differ by more than the changes being measured, and a
+  regression was once escalated on a cross-session comparison that turned out to be
+  machine load. Every timing claim in this document is an A/B measured in one
+  session, on one machine, in Release.
+
+Because wall-clock is this fragile, the planner's actual regression GATE is
+allocations per `lower()` — deterministic, machine-independent, and the mechanism
+behind every performance regression this planner has had.
 
 ---
 
@@ -363,8 +383,24 @@ allocations per lower() for a five-node plan). The repair removed allocations
 rather than relocating them - operand-indexed data is arity-bounded and held
 inline, the group's schema is borrowed - and added an ALLOCATION BUDGET test,
 because allocation counts are deterministic and machine-independent where
-wall-clock ceilings are neither. Net across the whole increment: T6 2.51 -> 2.89us
-and parse->physical 9.78 -> 10.27us, measured same-machine on both sides.
+wall-clock ceilings are neither.
+
+*Cost, corrected.* The figures first recorded here (T6 2.51 -> 2.89us) came from a
+`stage_timer` that lowered with a default context and so timed the FALLBACK
+mapping, not the planner as shipped. Measured through the shipped spec, same
+machine, same session:
+
+| pin | T6 | parse -> physical |
+| --- | --- | --- |
+| pre-Increment-2 | 3.59 us | 11.81 us |
+| Increment 2 as first merged | 4.91 us | 13.13 us |
+| after five optimization passes | 4.15 us | 12.14 us |
+
+So the increment cost +37% before optimization and +16% after, against a figure
+that had been reported as +15%. It remains comfortably inside the ~51 us of
+headroom, but the earlier number was measuring the wrong planner, and a design
+document that records the flattering measurement is worse than one that records
+none.
 
 Two tests in this increment asserted the wrong thing and were caught only by
 mutating the code they covered: one blessed the defect it was written to prevent,
