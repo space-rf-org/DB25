@@ -460,11 +460,45 @@ mutating the code they covered: one blessed the defect it was written to prevent
 one checked that a flag was reported rather than that the guard bounded anything.
 Falsification is not a formality here; it is the step that finds these.
 
-**Increment 3 — parallelism & distribution.**
+**Increment 3 — closing the operator gap.**
+The planner implemented four of the logical IR's ~20 operators, which is why the
+reference query does not lower and 18 of the umbrella's 37 staged fixtures could
+not reach a physical plan at all. This increment is the operator set, taken in the
+order that makes the reference query self-measuring soonest.
+
+- **3.1 Sort and Limit. DELIVERED.** ORDER BY reuses the Sort operator, which had
+  existed only as an enforcer - establishing an order is one operation, and only
+  who asked for it differs. That reuse exposed a latent split: `derive_op` returned
+  an EMPTY order for a Sort and the tree form patched the real one in afterwards,
+  which is fine while `enforce()` (who knows what it just built) is the only
+  producer, and wrong the moment a Sort is a memo group whose properties the SEARCH
+  reads. The keys are an input to `derive_op` now, so both forms derive identically
+  - what the header always claimed.
+  A Limit is ORDER-SENSITIVE, and is therefore the first operator that preserves a
+  property it must not have pushed into it: `Sort_x(Limit_10(c))` keeps ten rows in
+  c's order and sorts those ten, `Limit_10(Sort_x(c))` keeps the ten smallest by x.
+  Different result sets, so `pushdown_requirement` refuses for Limit. NULLS FIRST /
+  LAST is carried rather than dropped, which makes sort-key satisfaction asymmetric
+  (a requirement with no opinion is met by any placement) and splits memoization's
+  exact identity from satisfaction's rule - one function could not be both.
+  Deliberately absent: expression sort keys (`ORDER BY a + b` has no positional
+  index, and fails honestly rather than sorting by the wrong column) and TopN
+  (it fuses two logical nodes, so it needs a transformation rule the memo does not
+  have yet).
+- **3.2 Aggregate.** Hash vs streaming: the sorted-input variant is exactly the
+  property-directed choice the Increment 2 machinery was built for.
+- **3.3 Window**, whose sort requirement pushes down through the existing enforcer.
+- **3.4 Distinct and SetOp** (hash vs sort dedup - the same shape of choice again).
+- **3.5 Values**, which is also what a FROM-less `SELECT` lowers over.
+
+Grouping sets, recursive CTEs, CTAS and DML lower later; they are represented in
+the logical IR and unimplemented here, and the gap register tracks them.
+
+**Increment 4 — parallelism & distribution.**
 - Pipeline/pipeline-breaker identification (codegen-ready shape, HyPer lesson).
 - Exchange/repartition enforcers; distribution as a property.
 
-**Increment 4+ — fast path & plan cache (tier 0/1).**
+**Increment 5+ — fast path & plan cache (tier 0/1).**
 - Plan-shape cache key (parameters separate).
 - Heuristic fast path as a *restriction* of the Cascades rule set (one catalog,
   fixed non-cost application strategy), below a spec-declared complexity threshold,
