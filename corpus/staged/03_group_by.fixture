@@ -50,5 +50,5 @@ SELECT dept, SUM(salary) FROM emp GROUP BY dept
   (eof 47 47))
 
 -- physical
-(lower-error "unsupported logical operator in Increment-0 lowering")
+(lower-error "unsupported logical operator in lowering")
 
