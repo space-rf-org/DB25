@@ -35,5 +35,5 @@ SELECT DISTINCT dept FROM emp
     (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2)))))
 
 -- physical
-(lower-error "unsupported logical operator in Increment-0 lowering")
+(lower-error "unsupported logical operator in lowering")
 

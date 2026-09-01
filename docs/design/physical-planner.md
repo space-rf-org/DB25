@@ -330,73 +330,46 @@ PR per concern, merged when CI is green, pins propagated through the chain.
   golden stage caught it; the unit tests had not, because they only ever joined on
   a key.)
 
-**Increment 2 — search maturity: property-directed group optimization.**
+**Increment 2 — search maturity: property-directed group optimization. DELIVERED.**
+- A group's winner is keyed by the REQUIREMENT it was optimized for. The old
+  single winner - one best plan per group, settled bottom-up before any consumer
+  stated a requirement - is the wrong unit of memoization for Cascades: it makes
+  it impossible to ASK a group for a property, only to charge it for lacking one.
+- Top-down `optimize_group`, splitting lowering into EXPLORATION (groups and
+  candidates, no costs) and OPTIMIZATION (the search proper). Per candidate it
+  costs two routes and keeps the cheaper: satisfy the operator's own input needs
+  and enforce ON TOP, or push the requirement INTO the input where the operator
+  preserves it. Neither is universally better - a Sort below a Filter sorts rows
+  the Filter is about to discard - so it is a cost comparison, not a rule.
+  The motivating case works: the same join takes a HashJoin unconstrained and a
+  MergeJoin when its output is required in key order.
+- Branch-and-bound, with an ADMISSIBLE bound: every cost term is non-negative, so
+  a partial cost is a lower bound on the total and a pruned candidate cannot have
+  won. The gate is not that pruning is fast but that it changes NOTHING - every
+  case is lowered twice, pruned and exhaustive, and the plans must be identical.
+- Structural memo dedup, OPT-IN. Measured at +1.0us to find nothing: no query in
+  the corpus repeats a logical subtree. Its premise is rule application - join
+  reordering above all - so it ships complete, tested, and off until then.
+- The D5 budget guard, wired to a spec-declared join-count threshold and REPORTED
+  rather than silent. Open question 5 stands: the threshold's VALUE is still not
+  derived from the planning-time budget, only made into data.
 
-*The defect being removed.* Every memo group currently commits to exactly one
-winner — the cheapest group-expression, chosen bottom-up, before anything above
-it has said what it needs. That is the wrong unit of memoization for Cascades.
-The right one is not "the best plan for this group" but *"the best plan for this
-group that satisfies these properties"*: the same relation, asked for different
-properties, can have different winners. Because a group cannot represent that, a
-child can never be ASKED to produce a property. It can only be charged for not
-having one.
+*What this increment cost, and what that taught.* Unit 2.1 nearly doubled T6 while
+changing no plans, and was merged because NOTHING MEASURED IT - T6 lived in this
+document, not in a build. The root cause was older: Increment 0 above specifies an
+arena-allocated memo and shipped std::vector and std::string instead, a deviation
+that was free when made and compounding by the time anyone noticed (116 heap
+allocations per lower() for a five-node plan). The repair removed allocations
+rather than relocating them - operand-indexed data is arity-bounded and held
+inline, the group's schema is borrowed - and added an ALLOCATION BUDGET test,
+because allocation counts are deterministic and machine-independent where
+wall-clock ceilings are neither. Net across the whole increment: T6 2.51 -> 2.89us
+and parse->physical 9.78 -> 10.27us, measured same-machine on both sides.
 
-So Increment 1 built the whole property vocabulary — `derive`, `satisfies`,
-`required_input_properties`, `enforce` — and then used it only defensively. This
-increment is where the SEARCH consumes it. That makes it the largest remaining
-gap to cost-optimal plans, not a refinement of one.
-
-*What it costs today.* For `SELECT ... FROM a JOIN b ON a.k = b.k ORDER BY a.k`
-the join group compares HashJoin against MergeJoin-plus-two-input-Sorts and takes
-the local winner. Say HashJoin wins. `derive_op` then correctly reports that the
-hash join destroys order, so the ORDER BY inserts a Sort over the JOIN OUTPUT.
-Optimized for the property instead, the comparison would be MergeJoin plus two
-sorts of the INPUTS against HashJoin plus one sort of the OUTPUT — a different
-question with a different answer whenever the join is expansive, and one the
-planner cannot currently ask. The unconditional sort above the join is not a
-costing error; it is unreachable alternatives. The same mechanism generalizes to
-the other two Increment 1 properties: a parent requiring column format should
-push that requirement into the scan (`column_scan_row`) rather than let the scan
-pick its local favourite and pay a `FormatConvert` (`convert_row`) above it.
-
-*The mechanisms.*
-- **Winner keyed by required properties.** A group's winner becomes a small map
-  from a property key to `{winner, cost}`. A structural change with no search
-  change, provable on its own: ask one group for two requirements, get two plans.
-- **Top-down `optimize_group(g, required)`.** Per group-expression, compute
-  `required_input_properties`, recurse into children WITH those requirements,
-  cost the result; then compare against the enforcer route (optimize the child
-  for `Any`, add the enforcer on top) and take the minimum. That minimum is the
-  enforce-vs-push-down decision made rather than assumed.
-- **Branch-and-bound.** A cost upper bound passed downward, abandoning a partial
-  candidate the moment it exceeds the bound without costing the rest of its
-  subtree. Not an optimization of the search — what makes the search affordable.
-- **Memo hygiene.** Structural dedup, so two identical subplans share a group.
-  Without it top-down search re-derives the same subtree exponentially.
-- **Budget guard (the D5 seam).** Past a join-count threshold, exhaustive search
-  does not fit the envelope; the seam reserved in D5 gets wired to a greedy
-  fallback, with the threshold a SPEC input rather than a constant in the code.
-  (Deriving the threshold's value from the planning-time budget remains open
-  question 5 — this increment wires the seam and the fallback, not the number.)
-
-*The risk, stated plainly.* This is the increment where planners blow their time
-budget. §3 records ~1.5 µs physical and ~9.5 µs parse-to-physical against ~51 µs
-of headroom; the last three mechanisms above exist entirely to defend that
-number. So the T6 envelope measurement is a FAILING condition here, not a
-reported one — and the falsifiability check is search-specific: disable pruning
-and assert the chosen winners are IDENTICAL. Pruning that changes a plan is a
-bug, not a speedup.
-
-*Units.* 2.1 winner keyed by `(group, required properties)`; 2.2 top-down
-`optimize_group` with the enforce-vs-push-down choice; 2.3 branch-and-bound plus
-a pruned-candidate counter and the identical-winners check; 2.4 structural group
-dedup; 2.5 budget guard — spec-driven threshold, greedy fallback, determinism
-test; 2.6 propagate to the umbrella and re-measure T6.
-
-*Exit criterion:* a group asked for two different property sets answers with two
-different winners; the ORDER-BY-over-join case above chooses on the real
-comparison; pruning provably does not change a plan; and T6 is still inside the
-envelope.
+Two tests in this increment asserted the wrong thing and were caught only by
+mutating the code they covered: one blessed the defect it was written to prevent,
+one checked that a flag was reported rather than that the guard bounded anything.
+Falsification is not a formality here; it is the step that finds these.
 
 **Increment 3 — parallelism & distribution.**
 - Pipeline/pipeline-breaker identification (codegen-ready shape, HyPer lesson).

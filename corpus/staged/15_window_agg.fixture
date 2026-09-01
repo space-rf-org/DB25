@@ -55,5 +55,5 @@ SELECT id, SUM(salary) OVER (PARTITION BY dept) FROM emp
     (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
 
 -- physical
-(lower-error "unsupported logical operator in Increment-0 lowering")
+(lower-error "unsupported logical operator in lowering")
 

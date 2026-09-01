@@ -53,5 +53,5 @@ SELECT id FROM emp ORDER BY id LIMIT 10 OFFSET 5
       (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1))))))
 
 -- physical
-(lower-error "unsupported logical operator in Increment-0 lowering")
+(lower-error "unsupported logical operator in lowering")
 
