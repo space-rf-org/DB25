@@ -83,7 +83,7 @@ SELECT u.name, o.total FROM users u JOIN orders o ON o.user_id = u.id WHERE u.id
 
 -- physical
 (Project exprs=[(col #1) (col #3)] out=[name:VarChar? total:Double?]
-  (HashJoin kind=inner keys=[(L#0 R#0)] out=[id:Integer name:VarChar? user_id:Integer? total:Double?]
+  (HashJoin kind=inner build=left keys=[(L#0 R#0)] out=[id:Integer name:VarChar? user_id:Integer? total:Double?]
     (Filter pred=(= (col #0) (lit 42)) out=[id:Integer name:VarChar?]
       (SeqScan table=users fmt=row out=[id:Integer name:VarChar?]))
     (SeqScan table=orders fmt=row out=[user_id:Integer? total:Double?])))

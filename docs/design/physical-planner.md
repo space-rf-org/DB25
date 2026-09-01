@@ -254,11 +254,11 @@ re-measured together and never quoted across sessions:
 
 | Stage | reference query | simple join |
 |---|---|---|
-| tokenize → parse → analyze → bind → optimize (logical) | 54.0 µs | 11.4 µs |
-| physical planning (T6) | **28.0 µs** | 6.1 µs |
-| **DB25 total, parse → physical plan** | **82.1 µs** | 17.7 µs |
-| **Postgres 16.13 total planning time (fused)** | **108 µs** (p10 100 / p90 153) | 29 µs |
-| DB25 as a fraction of Postgres | **0.76** | 0.61 |
+| tokenize → parse → analyze → bind → optimize (logical) | 56.3 µs | 11.8 µs |
+| physical planning (T6) | **30.0 µs** | 6.2 µs |
+| **DB25 total, parse → physical plan** | **86.3 µs** (82-89 run to run) | 18.0 µs |
+| **Postgres 16.13 total planning time (fused)** | **112 µs** (p10 100 / p90 166) | 29 µs |
+| DB25 as a fraction of Postgres | **0.77** | 0.62 |
 
 **The reference query plans, as of Increment 3.3.** It did not until then: the
 operator set had no Aggregate, no Window and no Limit, so T6 reported
@@ -268,9 +268,14 @@ physical plan - the CTE aggregate hashes, the LATERAL subquery's scalar SUM
 streams, the lateral join is a nested loop, the window's sort is PARTITION BY then
 ORDER BY, and ORDER BY over the window output sits under the LIMIT.
 
-The envelope holds with room to spare: **82.1 µs against Postgres's 108 µs for the
+The envelope holds with room to spare: **86.3 µs against Postgres's 112 µs for the
 same query on the same host in the same session.** DB25 delivers a complete
-physical plan in 76% of the time Postgres takes to plan.
+physical plan in 77% of the time Postgres takes to plan.
+
+T6 moved from 28.0 to 30.0 µs across Increments 3.4 to 3.6, which is the price of
+a larger operator catalogue and of the hash join now offering two build sides
+rather than one. It is a real cost and it bought real plans: the same series took
+the fixtures the planner cannot lower from 12 to 5.
 
 **A ratio worth watching.** The position paper measured this query at DB25 23.3 µs
 against Postgres 74.0 µs - a ratio of 0.31 for a LOGICAL plan. The comparable
@@ -305,7 +310,7 @@ targets, not one:
   that slice does not exist to compare against.
 
 **The tension, named.** Cascades full search is thorough, not cheap. It fits the
-headroom on both measured queries - 28.0 µs of roughly 54 on the reference query -
+headroom on both measured queries - 30.0 µs of roughly 56 on the reference query -
 but on large join counts it will not fit — which is exactly why D5's
 fast path and budget-guard are on the roadmap. The envelope *is* the reason the
 roadmap has those, not gold-plating.
@@ -532,8 +537,28 @@ order that makes the reference query self-measuring soonest.
   aggregate, there is no order-free alternative; and the frame is RENDERED rather
   than dropped, because a plan that silently forgot ROWS BETWEEN computes a
   different answer.
-- **3.4 Distinct and SetOp** (hash vs sort dedup - the same shape of choice again).
-- **3.5 Values**, which is also what a FROM-less `SELECT` lowers over.
+- **3.4 Distinct, SetOp and Values. DELIVERED.** HashDistinct / StreamingDistinct
+  are the aggregate trade again, and DISTINCT is over every output column - which
+  are positional by construction - so streaming is always available and needs no
+  honest-failure path. UnionAll and HashSetOp are NOT alternatives for one
+  another: applicability selects between them, because UnionAll is the cheaper and
+  would otherwise win an INTERSECT and silently keep every row. All six set
+  operations are carried and rendered. ValuesScan handles the FROM-less SELECT's
+  one row of zero columns, whose width is carried rather than divided out of an
+  empty list.
+- **3.5 SemiJoin and AntiJoin. DELIVERED.** EXISTS / IN and NOT EXISTS. Both emit
+  the LEFT schema only and each qualifying left row ONCE, so a semi join can never
+  exceed its left input - unlike a join, whose output is the product. Four
+  operators rather than two with a mode flag, since semi and anti are exact
+  complements. No staged fixture exercised either before this unit: the corpus
+  could not say whether they lowered, because it never asked.
+- **3.6 Join build-side selection. DELIVERED.** Which input a hash join
+  materializes was hard-wired to the right one, and the plan did not record it at
+  all. It is now a costed candidate, offered only for an INNER or CROSS HashJoin -
+  an outer join tracks matches on a particular side, a semi or anti join probes
+  the left against a right-built set, EXCEPT is not symmetric, and since the swap
+  is sometimes CHEAPER, offering it where it is unsound would have the cost model
+  take it and compute a different query.
 
 Grouping sets, recursive CTEs, CTAS and DML lower later; they are represented in
 the logical IR and unimplemented here, and the gap register tracks them.

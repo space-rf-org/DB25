@@ -35,5 +35,6 @@ SELECT EXTRACT(YEAR FROM CURRENT_DATE)
   (Values :rows 1 :out ()))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(Project exprs=[(EXTRACT (lit 'YEAR') (CURRENT_DATE))] out=[EXTRACT:Double]
+  (ValuesScan rows=[] out=[]))
 

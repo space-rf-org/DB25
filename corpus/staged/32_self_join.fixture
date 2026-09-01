@@ -86,7 +86,7 @@ SELECT a.dept, b.salary FROM emp a JOIN emp b ON a.dept = b.dept WHERE a.id <> b
 -- physical
 (Project exprs=[(col #1) (col #4)] out=[dept:Text? salary:Double?]
   (Filter pred=(!= (col #0) (col #2)) out=[id:Integer dept:Text? id:Integer dept:Text? salary:Double?]
-    (HashJoin kind=inner keys=[(L#1 R#1)] out=[id:Integer dept:Text? id:Integer dept:Text? salary:Double?]
+    (HashJoin kind=inner build=right keys=[(L#1 R#1)] out=[id:Integer dept:Text? id:Integer dept:Text? salary:Double?]
       (SeqScan table=emp fmt=row out=[id:Integer dept:Text?])
       (SeqScan table=emp fmt=row out=[id:Integer dept:Text? salary:Double?]))))
 

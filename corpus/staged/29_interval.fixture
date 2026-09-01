@@ -29,5 +29,6 @@ SELECT INTERVAL '1 day'
   (Values :rows 1 :out ()))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(Project exprs=[(lit '1 day')] out=['1 day':Interval]
+  (ValuesScan rows=[] out=[]))
 
