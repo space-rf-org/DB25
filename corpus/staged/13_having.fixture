@@ -69,5 +69,8 @@ SELECT dept, SUM(salary) FROM emp GROUP BY dept HAVING SUM(salary) > 100
       (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2) (salary Double :null t :alias emp :tid 3 :cid 4))))))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(Project exprs=[(col #0) (col #1)] out=[dept:Text? SUM:Double?]
+  (Filter pred=(> (col #1) (lit 100)) out=[dept:Text? SUM:Double?]
+    (HashAggregate keys=[(col #0)] aggs=[(SUM (col #1))] out=[dept:Text? SUM:Double?]
+      (SeqScan table=emp fmt=row out=[dept:Text? salary:Double?]))))
 
