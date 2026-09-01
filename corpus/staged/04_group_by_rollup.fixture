@@ -55,5 +55,5 @@ SELECT dept, SUM(salary) FROM emp GROUP BY ROLLUP(dept)
   (eof 55 55))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(lower-error "grouping sets (ROLLUP / CUBE / GROUPING SETS) are not yet implemented in physical lowering")
 

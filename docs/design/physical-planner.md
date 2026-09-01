@@ -485,8 +485,26 @@ order that makes the reference query self-measuring soonest.
   index, and fails honestly rather than sorting by the wrong column) and TopN
   (it fuses two logical nodes, so it needs a transformation rule the memo does not
   have yet).
-- **3.2 Aggregate.** Hash vs streaming: the sorted-input variant is exactly the
-  property-directed choice the Increment 2 machinery was built for.
+- **3.2 Aggregate. DELIVERED.** HashAggregate and StreamingAggregate, chosen by
+  cost - the first property-directed choice outside a join. The trade does not go
+  the way it first looks: an aggregate REDUCES its input, so a Sort above it sorts
+  the groups while a Sort below it sorts every row, and at the default 10% group
+  selectivity hashing wins even when the output order is required. Streaming wins
+  on a HIGH-CARDINALITY grouping key, where both routes sort the same rows and only
+  the per-row rate separates them. A grouping key that is not a plain column
+  reference makes STREAMING inapplicable rather than the query unplannable -
+  hashing needs no order and hashes the expression itself, so a capability the
+  planner lacks costs a plan alternative, not an answer. ROLLUP / CUBE / GROUPING
+  SETS fail and name the construct.
+  Two things this unit taught, both about the safety nets rather than the feature:
+  the allocation budget caught `sizeof(Group)` crossing 256 (libstdc++ packs
+  512/sizeof(T) per deque node, so the memo's node allocations DOUBLED for every
+  query, aggregate or not) - the payload now shares one vector split at a count
+  tucked into existing padding, and the increment costs nothing. And reading the
+  regenerated goldens - not a failing test - caught the physical s-expr writer
+  dropping an aggregate's FILTER, so `COUNT(*)` and `COUNT(*) FILTER (WHERE p)`
+  rendered identically. The plan was right and the WRITER was wrong, which matters
+  because the writer is what the goldens are made of.
 - **3.3 Window**, whose sort requirement pushes down through the existing enforcer.
 - **3.4 Distinct and SetOp** (hash vs sort dedup - the same shape of choice again).
 - **3.5 Values**, which is also what a FROM-less `SELECT` lowers over.
