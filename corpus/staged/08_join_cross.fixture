@@ -54,7 +54,7 @@ SELECT u.id, o.id FROM users u CROSS JOIN orders o
 
 -- physical
 (Project exprs=[(col #0) (col #1)] out=[id:Integer id:Integer]
-  (NestedLoopJoin keys=[] out=[id:Integer id:Integer]
+  (NestedLoopJoin kind=cross keys=[] out=[id:Integer id:Integer]
     (SeqScan table=users fmt=row out=[id:Integer])
     (SeqScan table=orders fmt=row out=[id:Integer])))
 
