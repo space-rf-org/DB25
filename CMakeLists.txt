@@ -224,6 +224,9 @@ add_executable(stage_timer
 target_include_directories(stage_timer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/integration)
 target_link_libraries(stage_timer PRIVATE db25physicalplan)
 target_compile_options(stage_timer PRIVATE -fno-exceptions -Wall -Wextra)
+# T6 times the planner as shipped, which means lowering through the shipped spec.
+target_compile_definitions(stage_timer PRIVATE
+    DB25_PHYSICAL_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/spec")
 
 # Tutorial examples (docs/tutorial.md): runnable end-to-end walkthroughs.
 add_subdirectory(examples)

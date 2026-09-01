@@ -15,6 +15,7 @@
 #include "db25/semantic/catalog.hpp"
 
 #include "db25/physical/lowering.hpp"
+#include "db25/physical/spec.hpp"
 #include "db25/physical/sexpr.hpp"
 
 #include "staged_sexpr.hpp"
@@ -45,6 +46,40 @@ static double median(std::vector<double>& v) {
     return v.empty() ? 0.0 : v[v.size() / 2];
 }
 
+#ifndef DB25_PHYSICAL_SPEC_DIR
+#define DB25_PHYSICAL_SPEC_DIR "."
+#endif
+
+// T6 must time the planner the project actually ships, which means lowering
+// through the SHIPPED SPEC. Timing a default LoweringContext instead measured the
+// built-in fallback mapping - fewer candidates, no spec-driven implementation
+// rules - so the headline planner number described a configuration nobody runs.
+//
+// Unit 1.5 fixed exactly this in the staged harness. The same defect survived
+// here, and survived longer, because a timing tool has no golden to disagree
+// with: a number that is quietly measuring the wrong thing still looks like a
+// number. It was caught only when an optimization improved this tool by 3% and
+// the planner's own benchmark by 16%, and the gap had to be explained.
+static const db25::physical::PhysicalSpec& shipped_spec() {
+    static const db25::physical::PhysicalSpec spec = [] {
+        std::string error;
+        auto loaded = db25::physical::load_spec(
+            std::string(DB25_PHYSICAL_SPEC_DIR) + "/physical.spec.sexpr", error);
+        if (!loaded) {
+            std::printf("stage_timer: cannot load physical spec: %s\n", error.c_str());
+            std::exit(2);
+        }
+        return *loaded;
+    }();
+    return spec;
+}
+
+static db25::physical::LoweringContext timing_context() {
+    db25::physical::LoweringContext ctx;
+    ctx.spec = &shipped_spec();
+    return ctx;
+}
+
 int main() {
     const std::string sql = "SELECT a.x, b.y FROM a JOIN b ON a.id = b.id WHERE a.x > 10";
     const auto cat = make_catalog();
@@ -72,7 +107,8 @@ int main() {
     auto optimized = plan::optimize(std::move(bound.root));
     std::printf("---- T5 OPTIMIZED ----\n%s\n\n", staged::plan_to_sexpr(optimized.get()).c_str());
 
-    auto lowered = physical::lower(*optimized);
+    const auto pctx = timing_context();
+    auto lowered = physical::lower(*optimized, pctx);
     if (!lowered.ok) { std::printf("LOWER FAILED: %s\n", lowered.error.c_str()); return 1; }
     std::printf("---- T6 PHYSICAL ----\n%s\n\n",
                 physical::physical_to_sexpr(*lowered.plan).c_str());
@@ -107,7 +143,7 @@ int main() {
         opt.push_back(us(t7 - t6));
 
         auto t8 = clk::now();
-        auto lo = physical::lower(*op);
+        auto lo = physical::lower(*op, pctx);
         auto t9 = clk::now();
         low.push_back(us(t9 - t8));
 
