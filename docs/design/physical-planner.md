@@ -382,6 +382,26 @@ PR per concern, merged when CI is green, pins propagated through the chain.
   no keys it also required no sort and so looked cheapest. The umbrella's physical
   golden stage caught it; the unit tests had not, because they only ever joined on
   a key.)
+- The JOIN KIND is part of the physical plan, and part of the group identity.
+  Lowering originally switched on `LogicalOp::Join` and never read `join_type`, so
+  an INNER and a LEFT join over the same inputs produced byte-identical plans -
+  the same HashJoin node, the same keys, the same rendering. The only trace of
+  "LEFT" was a nullability flag inherited from the logical schema, which describes
+  the RESULT, not the operator's obligation, so an executor had nothing telling it
+  to null-extend. The kind is also in the memo dedup key: `logical_op` cannot
+  separate an inner from a left join because both are `LogicalOp::Join`, and
+  without it one query's left join could be answered by another's inner-join
+  winner. The s-expr writer prints `kind=` on every join, inner included - a field
+  printed only when it differs from a default teaches readers that silence means
+  the default, and silence is what let these goldens agree for four increments.
+- A LATERAL join is a NestedLoopJoin, on applicability rather than cost. Its right
+  input is correlated - the subtree reads the current left row through an OuterRef
+  - so a hash join, which builds from that input once and standalone, is not slower
+  but unexecutable. Leaving it to costing could not work: the hash join is cheaper
+  and would win. The defect hid behind a query shape - `LEFT JOIN LATERAL (..) ON
+  true` has no equi-key and fell to a nested loop anyway - so its golden looked
+  correct until an equality was put in the ON clause. `38_lateral_equi_join` is
+  that query, pinned.
 
 **Increment 2 — search maturity: property-directed group optimization. DELIVERED.**
 - A group's winner is keyed by the REQUIREMENT it was optimized for. The old

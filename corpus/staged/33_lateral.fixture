@@ -88,7 +88,7 @@ SELECT u.name, o.total FROM users u CROSS JOIN LATERAL (SELECT total FROM orders
 
 -- physical
 (Project exprs=[(col #0) (col #1)] out=[name:VarChar? total:Double?]
-  (NestedLoopJoin keys=[] out=[name:VarChar? total:Double?]
+  (NestedLoopJoin kind=lateral keys=[] out=[name:VarChar? total:Double?]
     (SeqScan table=users fmt=row out=[name:VarChar?])
     (Project exprs=[(col #1)] out=[total:Double?]
       (Filter pred=(= (col #0) (outer d1 #0)) out=[user_id:Integer? total:Double?]
