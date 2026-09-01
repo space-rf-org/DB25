@@ -68,7 +68,7 @@ SELECT u.id, o.total FROM users u RIGHT JOIN orders o ON u.id = o.user_id
 
 -- physical
 (Project exprs=[(col #0) (col #2)] out=[id:Integer? total:Double?]
-  (HashJoin kind=right keys=[(L#0 R#0)] out=[id:Integer? user_id:Integer? total:Double?]
+  (HashJoin kind=right build=right keys=[(L#0 R#0)] out=[id:Integer? user_id:Integer? total:Double?]
     (SeqScan table=users fmt=row out=[id:Integer])
     (SeqScan table=orders fmt=row out=[user_id:Integer? total:Double?])))
 

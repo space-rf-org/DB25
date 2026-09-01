@@ -55,5 +55,9 @@ SELECT id FROM users INTERSECT SELECT user_id FROM orders
     (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3)))))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(HashSetOp kind=intersect out=[id:Integer]
+  (Project exprs=[(col #0)] out=[id:Integer]
+    (SeqScan table=users fmt=row out=[id:Integer name:VarChar?]))
+  (Project exprs=[(col #1)] out=[user_id:Integer?]
+    (SeqScan table=orders fmt=row out=[id:Integer user_id:Integer? total:Double?])))
 

@@ -51,7 +51,7 @@ SELECT id FROM users JOIN orders USING (id)
 
 -- physical
 (Project exprs=[(col #0)] out=[id:Integer]
-  (HashJoin kind=inner keys=[(L#0 R#0)] out=[id:Integer id:Integer]
+  (HashJoin kind=inner build=right keys=[(L#0 R#0)] out=[id:Integer id:Integer]
     (SeqScan table=users fmt=row out=[id:Integer])
     (SeqScan table=orders fmt=row out=[id:Integer])))
 

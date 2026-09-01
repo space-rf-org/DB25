@@ -35,5 +35,7 @@ SELECT DISTINCT dept FROM emp
     (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2)))))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(HashDistinct out=[dept:Text?]
+  (Project exprs=[(col #0)] out=[dept:Text?]
+    (SeqScan table=emp fmt=row out=[dept:Text?])))
 
