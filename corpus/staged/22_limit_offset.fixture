@@ -53,5 +53,8 @@ SELECT id FROM emp ORDER BY id LIMIT 10 OFFSET 5
       (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1))))))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(Limit limit=10 offset=5 out=[id:Integer]
+  (Sort by=[#0 asc] out=[id:Integer]
+    (Project exprs=[(col #0)] out=[id:Integer]
+      (SeqScan table=emp fmt=row out=[id:Integer]))))
 
