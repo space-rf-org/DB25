@@ -72,5 +72,7 @@ SELECT dept, region, COUNT(*) FROM emp GROUP BY GROUPING SETS ((dept), (region))
     (Scan :rel emp :out ((dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3)))))
 
 -- physical
-(lower-error "grouping sets (ROLLUP / CUBE / GROUPING SETS) are not yet implemented in physical lowering")
+(Project exprs=[(col #0) (col #1) (col #2)] out=[dept:Text? region:Text? COUNT:BigInt]
+  (HashGroupingSets keys=[(col #0) (col #1)] aggs=[(COUNT)] sets=[(0) (1)] out=[dept:Text? region:Text? COUNT:BigInt]
+    (SeqScan table=emp fmt=row out=[dept:Text? region:Text?])))
 

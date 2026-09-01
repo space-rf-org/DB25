@@ -560,8 +560,19 @@ order that makes the reference query self-measuring soonest.
   is sometimes CHEAPER, offering it where it is unsound would have the cost model
   take it and compute a different query.
 
-Grouping sets, recursive CTEs, CTAS and DML lower later; they are represented in
-the logical IR and unimplemented here, and the gap register tracks them.
+- **3.7 GROUPING SETS, ROLLUP and CUBE. DELIVERED.** One HashGroupingSets that
+  hashes each input row into every set's table in a single pass; each set is a
+  BITMASK over the grouping keys. No streaming counterpart exists or can: different
+  sets want different input orderings. Applicability rather than cost picks between
+  it and the plain aggregates - for the FOURTH time in this planner, and for the
+  same reason each time, the wrong candidate is the cheaper one. A plain aggregate
+  hashes once where this hashes once per set, so left to costing it would win a
+  GROUPING SETS node and compute one combination where the query asked for several.
+  The 24 bytes the sets need on Group were funded by making `table_name` a borrowed
+  pointer, keeping sizeof(Group) at exactly 256 - see the note in memo.hpp.
+
+Recursive CTEs and CTAS lower later; they are represented in the logical IR and
+unimplemented here, and the gap register tracks them.
 
 **Increment 4 — parallelism & distribution.**
 - Pipeline/pipeline-breaker identification (codegen-ready shape, HyPer lesson).
