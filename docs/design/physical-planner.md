@@ -438,8 +438,13 @@ PR per concern, merged when CI is green, pins propagated through the chain.
   won. The gate is not that pruning is fast but that it changes NOTHING - every
   case is lowered twice, pruned and exhaustive, and the plans must be identical.
 - Structural memo dedup, OPT-IN. Measured at +1.0us to find nothing: no query in
-  the corpus repeats a logical subtree. Its premise is rule application - join
-  reordering above all - so it ships complete, tested, and off until then.
+  the corpus repeats a logical subtree. Its premise was rule application - join
+  reordering above all - so it shipped complete, tested, and off until then.
+  Reordering has since arrived (3.8) and did NOT change the answer: the interval
+  DP's groups are keyed by LEAF RANGE within one region, so they are distinct by
+  construction and are never indexed. A test asserts the reordered plan is
+  identical with dedup on and off, which is the claim that matters; the saving is
+  still waiting for a workload with genuinely repeated subtrees.
 - The D5 budget guard, wired to a spec-declared join-count threshold and REPORTED
   rather than silent. Open question 5 stands: the threshold's VALUE is still not
   derived from the planning-time budget, only made into data.
@@ -570,6 +575,49 @@ order that makes the reference query self-measuring soonest.
   GROUPING SETS node and compute one combination where the query asked for several.
   The 24 bytes the sets need on Group were funded by making `table_name` a borrowed
   pointer, keeping sizeof(Group) at exactly 256 - see the note in memo.hpp.
+
+- **3.8 Join reordering. DELIVERED.** `(A join B) join C` and `A join (B join C)`
+  return the same rows at very different costs, and until now the planner built
+  whichever one the FROM clause happened to write - lowering was 1:1 with the
+  logical tree. Two changes made it a decision.
+
+  **3.8a** moved `inputs`, `hash_keys` and `residual` from the Group to each
+  GroupExpr. The memo had assumed every candidate in a group is an alternative
+  ALGORITHM for one logical operator, which holds exactly as long as lowering is
+  1:1. Reordering ends it: the two associations belong in the same group and read
+  different inputs, and before this there was no field in which to say so. In
+  Cascades a group-expression IS (operator, input groups), so this was the memo
+  moving to the model it already claimed to implement. It also dropped
+  sizeof(Group) from 256 to 192.
+
+  **3.8b** is the search. The obstacle is that a ColumnRef is a POSITIONAL index
+  into `child0.output ++ child1.output`, so moving a join changes what every index
+  above it means. The way through is a property of traversal order: an in-order
+  walk gives every subtree a CONTIGUOUS range of the region's columns, in the
+  region's own order, so a join over leaf ranges `[i,k)` and `[k,j)` produces
+  exactly the region's columns `[off_i, off_j)` already in the right order. No
+  permutation anywhere, one subtraction to translate an index, and the region's
+  output is unchanged - so nothing above it has to know. That makes the search an
+  INTERVAL DP: one group per leaf range, one group-expression per split. O(n^2)
+  groups and O(n^3) candidates against O(3^n) for the general subset DP, and it is
+  the whole of what re-association can reach. It re-associates but does not
+  PERMUTE: `A B C D` considers `(A B)(C D)` but not `(A C)(B D)`, which would
+  change the output column order and needs a permutation this unit deliberately
+  does not contain.
+
+  Two rules bound it and neither is about cost. Only CONNECTED splits are
+  enumerated, because the cardinality model charges one flat `join_selectivity` per
+  join and so estimates a cartesian product at a FRACTION of `|A|x|B|` - a search
+  over those would be choosing between plans on the strength of that error. And
+  outer and LATERAL joins END a region and become leaves of it, which is what keeps
+  reordering sound AROUND them rather than refusing the query.
+
+  It costs nothing where it does not apply: T6 on the reference query was 20.48us
+  before and 20.17us after, and the allocation budget did not move - which took the
+  arena's schemas being a vector of unique_ptr rather than a deque (an empty
+  libstdc++ deque allocates at construction) and the region analysis counting leaves
+  before building anything. Where it does apply, a three-table join with one large
+  and two small tables planned 5.4x cheaper.
 
 Recursive CTEs and CTAS lower later; they are represented in the logical IR and
 unimplemented here, and the gap register tracks them.
