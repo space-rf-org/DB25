@@ -14,6 +14,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace db25::plan {
 struct LogicalNode;
@@ -29,6 +30,20 @@ class Analyzer;
 }  // namespace db25::semantic
 
 namespace db25::staged {
+
+// Every ExprKind::Subquery embedded in a node's OWNED expressions, in a fixed
+// traversal order.
+//
+// One function, used by BOTH the writer and the reader, and that is the whole
+// point: the writer emits each subquery's inner plan as a `(subplan ...)` block
+// in this order and the reader reattaches them in this order, so the two cannot
+// disagree about which plan belongs to which subquery. Two collectors that had
+// to be kept in step would eventually not be.
+//
+// It does NOT descend into a subquery's own inner plan - that plan is emitted
+// separately, and its own subqueries with it, one level at a time.
+void node_subqueries(const db25::plan::LogicalNode* n,
+                     std::vector<db25::plan::Expr*>& out);
 
 // Serialize the token stream (T1) to canonical s-expr: one atom per token,
 // (kind "text" start end) with byte-offset spans. Trivia (whitespace / comment)

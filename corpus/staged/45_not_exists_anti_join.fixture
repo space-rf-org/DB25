@@ -1,0 +1,87 @@
+-- sql
+SELECT id FROM users WHERE NOT EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)
+
+-- tokens
+(tokens
+  (kw SELECT 0 6)
+  (ident id 7 9)
+  (kw FROM 10 14)
+  (ident users 15 20)
+  (kw WHERE 21 26)
+  (kw NOT 27 30)
+  (kw EXISTS 31 37)
+  (punct "(" 38 39)
+  (kw SELECT 39 45)
+  (num 1 46 47)
+  (kw FROM 48 52)
+  (ident orders 53 59)
+  (kw WHERE 60 65)
+  (ident orders 66 72)
+  (op "." 72 73)
+  (ident user_id 73 80)
+  (op "=" 81 82)
+  (ident users 83 88)
+  (op "." 88 89)
+  (ident id 89 91)
+  (punct ")" 91 92)
+  (eof 92 92))
+
+-- ast
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id))
+  (FromClause
+    (TableRef :text users))
+  (WhereClause
+    (UnaryExpr :text EXISTS
+      (Subquery
+        (SelectStmt
+          (SelectList
+            (IntegerLiteral :text 1))
+          (FromClause
+            (TableRef :text orders))
+          (WhereClause
+            (BinaryExpr :text "="
+              (ColumnRef :text "orders.user_id")
+              (ColumnRef :text "users.id"))))))))
+
+-- resolved
+(SelectStmt
+  (SelectList
+    (ColumnRef :text id :type Integer :null f :tid 1 :cid 1))
+  (FromClause
+    (TableRef :text users))
+  (WhereClause
+    (UnaryExpr :text EXISTS :type Boolean :null f
+      (Subquery :correlated
+        (SelectStmt
+          (SelectList
+            (IntegerLiteral :text 1 :type Integer :null f))
+          (FromClause
+            (TableRef :text orders))
+          (WhereClause
+            (BinaryExpr :text "=" :type Boolean :null t
+              (ColumnRef :text "orders.user_id" :type Integer :null t :tid 2 :cid 2)
+              (ColumnRef :text "users.id" :type Integer :null f :tid 1 :cid 1))))))))
+
+-- logical
+(Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 1 :cid 1))
+  (Filter :pred (subquery :kind exists :correlated :negated :type Boolean :null f) :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2))
+    (subplan
+      (Project :exprs ((lit 1 :type Integer :null f)) :out ((1 Integer :null f))
+        (Filter :pred (binop "=" (colref 1 :tid 2 :cid 2 :type Integer :null t) (outerref 0 :depth 1 :tid 1 :cid 1 :type Integer :null f) :type Boolean :null t) :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))
+          (Scan :rel orders :out ((id Integer :null f :alias orders :tid 2 :cid 1) (user_id Integer :null t :alias orders :tid 2 :cid 2) (total Double :null t :alias orders :tid 2 :cid 3))))))
+    (Scan :rel users :out ((id Integer :null f :alias users :tid 1 :cid 1) (name VarChar :null t :alias users :tid 1 :cid 2)))))
+
+-- optimized
+(Project :exprs ((colref 0 :tid 1 :cid 1 :type Integer :null f)) :out ((id Integer :null f :tid 1 :cid 1))
+  (AntiJoin :pred (binop "=" (colref 1 :tid 2 :cid 2 :type Integer :null t) (colref 0 :tid 1 :cid 1 :type Integer :null f) :type Boolean :null t) :out ((id Integer :null f :alias users :tid 1 :cid 1))
+    (Scan :rel users :out ((id Integer :null f :alias users :tid 1 :cid 1)))
+    (Scan :rel orders :out ((user_id Integer :null t :alias orders :tid 2 :cid 2)))))
+
+-- physical
+(Project exprs=[(col #0)] out=[id:Integer]
+  (HashAntiJoin keys=[(L#0 R#0)] out=[id:Integer]
+    (SeqScan table=users fmt=row out=[id:Integer])
+    (SeqScan table=orders fmt=row out=[user_id:Integer?])))
+

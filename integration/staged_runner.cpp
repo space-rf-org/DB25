@@ -324,11 +324,254 @@ GateResult gate_physical(const std::string& golden,
 
 }  // namespace
 
+// ---------------------------------------------------------------------------
+// --fields: the LOGICAL WRITER's distinguishability sweep.
+//
+// A golden is a test only to the extent that two different plans render
+// differently, and --roundtrip does NOT establish that. It proves
+// write(read(golden)) == golden, which is losslessness "w.r.t. the rendered
+// fields" - a field the writer never renders is outside the guarantee, and a
+// reader that also drops it is a perfectly consistent fixed point.
+//
+// That hole has now produced two defects. The whole DML payload rendered as a
+// bare `(Update :out ())`, so two different UPDATEs shared a golden. And
+// SemiJoin / AntiJoin fell through to `default:` and rendered no match
+// condition, so
+//   EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)
+// and
+//   EXISTS (SELECT 1 FROM orders WHERE orders.user_id > users.id)
+// produced BYTE-IDENTICAL logical and optimized goldens, while their physical
+// plans are a hash semi join on a key and a nested loop with a residual.
+//
+// So: build a node per logical operator carrying a value in every payload field
+// it uses, render it, change ONE field, and require the rendering to change.
+// The operator list is taken from logical_op_to_string itself - the same
+// authority the writer switches on - so an operator added to the IR is swept
+// here without anyone remembering to add it.
+namespace fieldsweep {
+
+// Owned expressions the built nodes borrow.
+struct Fixtures {
+    plan::ExprPtr col0, col1, lit1, lit2, agg, win;
+};
+Fixtures& fx() {
+    static Fixtures f = [] {
+        Fixtures v;
+        const auto col = [](std::uint32_t i) {
+            auto e = std::make_unique<plan::Expr>(plan::ExprKind::ColumnRef);
+            e->input_index = i;
+            e->type = ast::DataType::Integer;
+            return e;
+        };
+        const auto lit = [](std::int64_t n) {
+            auto e = std::make_unique<plan::Expr>(plan::ExprKind::Literal);
+            e->type = ast::DataType::Integer;
+            e->value.value = n;
+            return e;
+        };
+        v.col0 = col(0);
+        v.col1 = col(1);
+        v.lit1 = lit(1);
+        v.lit2 = lit(2);
+        v.agg = std::make_unique<plan::Expr>(plan::ExprKind::Aggregate);
+        v.agg->func_name = "SUM";
+        v.win = std::make_unique<plan::Expr>(plan::ExprKind::WindowFunction);
+        v.win->func_name = "RANK";
+        return v;
+    }();
+    return f;
+}
+
+plan::ExprPtr col(std::uint32_t i) {
+    auto e = std::make_unique<plan::Expr>(plan::ExprKind::ColumnRef);
+    e->input_index = i;
+    e->type = ast::DataType::Integer;
+    return e;
+}
+plan::ExprPtr lit(std::int64_t n) {
+    auto e = std::make_unique<plan::Expr>(plan::ExprKind::Literal);
+    e->type = ast::DataType::Integer;
+    e->value.value = n;
+    return e;
+}
+plan::ExprPtr agg_call(const char* name) {
+    auto e = std::make_unique<plan::Expr>(plan::ExprKind::Aggregate);
+    e->func_name = name;
+    return e;
+}
+plan::ExprPtr win_call(const char* name) {
+    auto e = std::make_unique<plan::Expr>(plan::ExprKind::WindowFunction);
+    e->func_name = name;
+    return e;
+}
+
+// A node with a representative value in every payload field its operator uses.
+plan::LogicalNodePtr base(plan::LogicalOp op) {
+    auto n = std::make_unique<plan::LogicalNode>(op);
+    n->output = {{"a", ast::DataType::Integer, false}, {"b", ast::DataType::Integer, true}};
+    n->table_name = "t";
+    n->alias = "x";
+    n->predicate = col(0);
+    n->exprs.push_back(col(0));
+    n->join_type = ast::JoinType::Inner;
+    n->group_keys.push_back(col(0));
+    n->aggregates.push_back(agg_call("SUM"));
+    n->grouping_sets = {{0}};
+    n->window_functions.push_back(win_call("RANK"));
+    n->sort_keys.push_back(plan::SortKeyIR{col(0), false, false, false});
+    n->value_rows.push_back({});
+    n->value_rows.back().push_back(lit(1));
+    n->has_limit = true;
+    n->limit = 10;
+    n->has_offset = true;
+    n->offset = 5;
+    n->set_op = ast::SetOp::Union;
+    n->target_columns = {"id"};
+    n->assignments.push_back(plan::Assignment{2, lit(1)});
+    n->conflict_action = plan::ConflictAction::DoUpdate;
+    n->conflict_columns = {"id"};
+    return n;
+}
+
+struct FieldCase {
+    plan::LogicalOp op;
+    const char* field;
+    void (*mutate)(plan::LogicalNode&);
+};
+
+void m_table(plan::LogicalNode& n) { n.table_name = "other"; }
+void m_alias(plan::LogicalNode& n) { n.alias = "y"; }
+void m_output(plan::LogicalNode& n) { n.output.pop_back(); }
+void m_pred(plan::LogicalNode& n) { n.predicate = col(1); }
+void m_exprs(plan::LogicalNode& n) { n.exprs.clear(); n.exprs.push_back(col(1)); }
+void m_join_type(plan::LogicalNode& n) { n.join_type = ast::JoinType::Left; }
+void m_group_keys(plan::LogicalNode& n) { n.group_keys.clear(); n.group_keys.push_back(col(1)); }
+void m_aggs(plan::LogicalNode& n) { n.aggregates.clear(); n.aggregates.push_back(agg_call("MIN")); }
+void m_gsets(plan::LogicalNode& n) { n.grouping_sets = {{0}, {}}; }
+void m_windows(plan::LogicalNode& n) {
+    n.window_functions.clear();
+    n.window_functions.push_back(win_call("DENSE_RANK"));
+}
+void m_sort_col(plan::LogicalNode& n) {
+    n.sort_keys.clear();
+    n.sort_keys.push_back(plan::SortKeyIR{col(1), false, false, false});
+}
+void m_sort_dir(plan::LogicalNode& n) {
+    n.sort_keys.clear();
+    n.sort_keys.push_back(plan::SortKeyIR{col(0), true, false, false});
+}
+void m_values(plan::LogicalNode& n) {
+    n.value_rows.clear();
+    n.value_rows.push_back({});
+    n.value_rows.back().push_back(lit(2));
+}
+void m_limit(plan::LogicalNode& n) { n.limit = 11; }
+void m_offset(plan::LogicalNode& n) { n.offset = 6; }
+void m_setop(plan::LogicalNode& n) { n.set_op = ast::SetOp::Except; }
+void m_target_cols(plan::LogicalNode& n) { n.target_columns = {"other"}; }
+void m_assignments(plan::LogicalNode& n) {
+    n.assignments.clear();
+    n.assignments.push_back(plan::Assignment{2, lit(2)});
+}
+void m_conflict_action(plan::LogicalNode& n) { n.conflict_action = plan::ConflictAction::DoNothing; }
+void m_conflict_cols(plan::LogicalNode& n) { n.conflict_columns = {"other"}; }
+
+const std::vector<FieldCase>& cases() {
+    using LO = plan::LogicalOp;
+    static const std::vector<FieldCase> v{
+        {LO::Scan, "table_name", m_table},
+        {LO::Scan, "alias", m_alias},
+        {LO::Scan, "output", m_output},
+        {LO::Filter, "predicate", m_pred},
+        {LO::Project, "exprs", m_exprs},
+        {LO::Join, "join_type", m_join_type},
+        {LO::Join, "predicate", m_pred},
+        // The two that rendered nothing at all until this sweep was written.
+        {LO::SemiJoin, "predicate", m_pred},
+        {LO::AntiJoin, "predicate", m_pred},
+        {LO::Aggregate, "group_keys", m_group_keys},
+        {LO::Aggregate, "aggregates", m_aggs},
+        {LO::Aggregate, "grouping_sets", m_gsets},
+        {LO::Window, "window_functions", m_windows},
+        // DISTINCT carries no payload - it is over every output column - so what
+        // distinguishes two of its plans is the schema and the child. Asserting
+        // the schema is rendered is the honest statement of that, and a writer
+        // that dropped `:out` fails it.
+        {LO::Distinct, "output", m_output},
+        {LO::Sort, "sort_keys.expr", m_sort_col},
+        {LO::Sort, "sort_keys.direction", m_sort_dir},
+        {LO::Limit, "limit", m_limit},
+        {LO::Limit, "offset", m_offset},
+        {LO::SetOp, "set_op", m_setop},
+        {LO::Values, "value_rows", m_values},
+        {LO::Insert, "table_name", m_table},
+        {LO::Insert, "target_columns", m_target_cols},
+        {LO::Insert, "conflict_action", m_conflict_action},
+        {LO::Insert, "conflict_columns", m_conflict_cols},
+        {LO::Insert, "assignments", m_assignments},
+        {LO::Update, "table_name", m_table},
+        {LO::Update, "assignments", m_assignments},
+        {LO::Delete, "table_name", m_table},
+        {LO::Returning, "exprs", m_exprs},
+        {LO::RecursiveCTE, "table_name", m_table},
+        {LO::RecursiveCTE, "set_op", m_setop},
+        {LO::WorkingTableScan, "table_name", m_table},
+        {LO::CreateTableAs, "table_name", m_table},
+    };
+    return v;
+}
+
+}  // namespace fieldsweep
+
+// Every logical operator the IR names, taken from its own string table - the
+// same authority the writer switches on - so a new operator is swept here
+// without anyone remembering to add it.
+static std::vector<plan::LogicalOp> all_logical_ops() {
+    std::vector<plan::LogicalOp> ops;
+    for (int i = 0; i < 256; ++i) {
+        const auto op = static_cast<plan::LogicalOp>(i);
+        if (std::string(plan::logical_op_to_string(op)) != "?") ops.push_back(op);
+    }
+    return ops;
+}
+
+static int run_field_sweep() {
+    long checked = 0, invisible = 0, uncovered = 0;
+    for (const fieldsweep::FieldCase& c : fieldsweep::cases()) {
+        auto before = fieldsweep::base(c.op);
+        auto after = fieldsweep::base(c.op);
+        c.mutate(*after);
+        const std::string sb = staged::plan_to_sexpr(before.get());
+        const std::string sa = staged::plan_to_sexpr(after.get());
+        ++checked;
+        if (sb == sa) {
+            ++invisible;
+            std::printf("  INVISIBLE %s.%s does not reach the rendered plan:\n    %s\n",
+                        plan::logical_op_to_string(c.op), c.field, sb.c_str());
+        }
+    }
+    for (const plan::LogicalOp op : all_logical_ops()) {
+        bool covered = false;
+        for (const fieldsweep::FieldCase& c : fieldsweep::cases()) {
+            covered = covered || (c.op == op);
+        }
+        if (!covered) {
+            ++uncovered;
+            std::printf("  UNCOVERED %s has no field case - what distinguishes two "
+                        "of its plans?\n", plan::logical_op_to_string(op));
+        }
+    }
+    std::printf("staged_runner --fields: %ld field(s) checked, %ld invisible, "
+                "%ld operator(s) uncovered\n", checked, invisible, uncovered);
+    return (invisible == 0 && uncovered == 0) ? 0 : 1;
+}
+
 int main(int argc, char** argv) {
     bool update = false;
     bool gate = false;
     bool roundtrip = false;
     bool inject = false;
+    bool fields = false;
     std::string dir;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -336,10 +579,14 @@ int main(int argc, char** argv) {
         else if (a == "--gate") gate = true;
         else if (a == "--roundtrip") roundtrip = true;
         else if (a == "--inject") inject = true;
+        else if (a == "--fields") fields = true;
         else dir = a;
     }
+    // --fields needs no fixture directory: it renders nodes it builds itself.
+    if (fields) return run_field_sweep();
     if (dir.empty()) {
-        std::printf("staged_runner: usage: staged_runner [--update|--gate] <fixture-dir>\n");
+        std::printf("staged_runner: usage: staged_runner "
+                    "[--update|--gate|--roundtrip|--inject|--fields] <fixture-dir>\n");
         return 2;
     }
 
