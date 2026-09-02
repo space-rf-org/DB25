@@ -103,5 +103,11 @@ WITH RECURSIVE t(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM t WHERE n < 10) SEL
         (WorkingTableScan :rel t :out ((n Integer :null f :alias t)))))))
 
 -- physical
-(lower-error "unsupported logical operator in lowering")
+(Project exprs=[(col #0)] out=[n:Integer]
+  (RecursiveFixpoint cte=t kind=union-all out=[n:Integer]
+    (Project exprs=[(lit 1)] out=[1:Integer]
+      (ValuesScan rows=[] out=[]))
+    (Project exprs=[(+ (col #0) (lit 1))] out=[+:Integer]
+      (Filter pred=(< (col #0) (lit 10)) out=[n:Integer]
+        (WorkingTableScan cte=t out=[n:Integer])))))
 

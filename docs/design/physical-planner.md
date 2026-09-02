@@ -619,8 +619,42 @@ order that makes the reference query self-measuring soonest.
   before building anything. Where it does apply, a three-table join with one large
   and two small tables planned 5.4x cheaper.
 
-Recursive CTEs and CTAS lower later; they are represented in the logical IR and
-unimplemented here, and the gap register tracks them.
+- **3.9a WITH RECURSIVE and CREATE TABLE AS. DELIVERED.** The last two logical
+  operators the corpus could not lower - both fixtures ended in `(lower-error
+  "unsupported logical operator in lowering")`, the physical planner refusing a
+  query the three stages beneath it had planned completely. **Fixtures that cannot
+  lower: 2 -> 0.**
+
+  RecursiveFixpoint takes the anchor and the recursive term as its TWO children,
+  because they are not interchangeable: the anchor runs once and the term once per
+  iteration, and a plan that hid the recursion inside one input could not say so.
+  WorkingTableScan is the self-reference - a leaf, and the only operator in the
+  catalogue whose rows come from elsewhere in its own plan; always Fresh, not by
+  convention but because the rows were computed by this query and there is no
+  stored copy that could lag. CreateTableAs materializes the stream into a new
+  table.
+
+  What the COST MODEL needed was new: until now every operator evaluated each
+  input exactly once, so the recursive term's whole subtree would have been
+  charged once - costing a recursive query as though the recursion were free.
+  `input_evaluations` says how many times an operator evaluates an input; both
+  places that accumulate child cost multiply by it, and the branch-and-bound bound
+  passed DOWN is divided by the same factor so the comparison stays like for like.
+  The nested loops deliberately return one, because their quadratic pair term
+  already prices re-scanning the right input and multiplying on top would charge
+  it twice. Two numbers here are ASSUMPTIONS and are named as such - the iteration
+  count (ten, as Postgres also assumes) and the working table's size - because
+  neither is derivable: the recursive term is explored bottom-up, before the
+  fixpoint that will feed it exists.
+
+  A defect found on the way: the structural dedup key carried a table name only
+  for a Scan, so two working-table scans of DIFFERENT CTEs with the same column
+  types were structurally identical and would have shared one memo group - one
+  recursion reading the other's rows.
+
+DML - Insert, Update, Delete and Returning - is what remains unlowered. It is
+represented in the logical IR, has no corpus fixture yet, and the gap register
+tracks it.
 
 **Increment 4 — parallelism & distribution.**
 - Pipeline/pipeline-breaker identification (codegen-ready shape, HyPer lesson).
