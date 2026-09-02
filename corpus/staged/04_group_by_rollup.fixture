@@ -55,5 +55,7 @@ SELECT dept, SUM(salary) FROM emp GROUP BY ROLLUP(dept)
   (eof 55 55))
 
 -- physical
-(lower-error "grouping sets (ROLLUP / CUBE / GROUPING SETS) are not yet implemented in physical lowering")
+(Project exprs=[(col #0) (col #1)] out=[dept:Text? SUM:Double?]
+  (HashGroupingSets keys=[(col #0)] aggs=[(SUM (col #1))] sets=[(0) ()] out=[dept:Text? SUM:Double?]
+    (SeqScan table=emp fmt=row out=[dept:Text? salary:Double?])))
 
