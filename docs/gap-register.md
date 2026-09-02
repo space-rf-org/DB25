@@ -84,7 +84,10 @@ Fixtures are under `corpus/staged/`.
   `CreateTableStmt` was left unanalyzed), the binder wraps it (pinned by
   `36_create_table_as` — binds, round-trips, injects, mutation-caught), and
   `execute_ddl` REGISTERS the new table, deriving its columns from the query's
-  projection so a later statement resolves against it. The `gap_closures` corpus
+  projection so a later statement resolves against it. Increment 3.9a of the
+  physical planner completes the path: `36` no longer stops at the logical stage
+  but lowers to a physical `CreateTableAs` over the planned query, so the fixture
+  is green through every stage rather than through four of five. The `gap_closures` corpus
   session exercises this: the two CTAS create the tables (`exec_ok`), and the
   following `SELECT`s against them analyze clean.
 - **Plain `CREATE TABLE (cols)` — not a query plan (by design).** It carries no
