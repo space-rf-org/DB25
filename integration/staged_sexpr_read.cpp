@@ -1,5 +1,6 @@
 // Phase B plan reader: canonical plan s-expr -> owned LogicalNode. See header.
 #include "staged_sexpr_read.hpp"
+#include "staged_sexpr.hpp"
 
 #include "db25/ast/node_types.hpp"
 #include "db25/plan/expr_ir.hpp"
@@ -362,7 +363,10 @@ ExprPtr expr_from(const SNode& n, std::string& err) {
         }
         apply_flags(*e);
         apply_type_null(*e, n);
-        return e;  // sub_plan is not serialized inline (see the writer)
+        // sub_plan is attached by the NODE layer from a (subplan ...) block -
+        // see node_from. It is not inline because an expression has no depth
+        // to indent a nested plan by.
+        return e;
     }
     if (kind == "param") {
         auto e = std::make_unique<Expr>(ExprKind::Parameter);
@@ -404,6 +408,12 @@ LogicalNodePtr node_from(const SNode& n, std::string& err) {
     if (!logicalop_from(n.items[0].atom, op)) { err = "node: unsupported op '" + n.items[0].atom + "'"; return nullptr; }
 
     auto node = std::make_unique<LogicalNode>(op);
+
+    // A `(subplan <plan>)` block is an embedded subquery's owned inner plan.
+    // Parsed here and ATTACHED BELOW, after the node's own expressions exist -
+    // the same collector the writer emitted them by decides which plan goes to
+    // which subquery, so the two cannot disagree about the pairing.
+    std::vector<LogicalNodePtr> subplans;
 
     // Walk items: keyword+value pairs are payload; bare child-lists are children.
     for (std::size_t k = 1; k < n.items.size(); ++k) {
@@ -487,11 +497,34 @@ LogicalNodePtr node_from(const SNode& n, std::string& err) {
             }
             continue;
         }
-        if (it.is_list) {  // a child plan node
-            auto child = node_from(it, err);
+        if (it.is_list) {
+            if (!it.items.empty() && !it.items[0].is_list && it.items[0].atom == "subplan") {
+                if (it.items.size() != 2) { err = "node: malformed (subplan ...)"; return nullptr; }
+                auto sp = node_from(it.items[1], err);
+                if (!sp) return nullptr;
+                subplans.push_back(std::move(sp));
+                continue;
+            }
+            auto child = node_from(it, err);  // a child plan node
             if (!child) return nullptr;
             node->children.push_back(std::move(child));
         }
+    }
+
+    // Reattach the inner plans, in the order the shared collector visits the
+    // subqueries - which is the order the writer emitted them in.
+    std::vector<Expr*> subqueries;
+    db25::staged::node_subqueries(node.get(), subqueries);
+    if (subqueries.size() != subplans.size()) {
+        // Loud rather than quiet: a mismatch means the writer and this reader
+        // disagree about which expressions can hold a subquery, and silently
+        // dropping one would put an empty Subquery back into a plan.
+        err = "node: " + std::to_string(subplans.size()) + " (subplan ...) block(s) for " +
+              std::to_string(subqueries.size()) + " subquery expression(s)";
+        return nullptr;
+    }
+    for (std::size_t i = 0; i < subqueries.size(); ++i) {
+        subqueries[i]->sub_plan = std::move(subplans[i]);
     }
     return node;
 }

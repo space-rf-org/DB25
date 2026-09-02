@@ -386,6 +386,43 @@ void render_assignments(const std::vector<db25::plan::Assignment>& a, std::strin
     out.push_back(')');
 }
 
+}  // namespace
+
+// See the header: ONE collector, shared by the writer below and the reader, so
+// the order a subquery's plan is emitted in is the order it is reattached in.
+void node_subqueries(const LogicalNode* n, std::vector<db25::plan::Expr*>& out) {
+    if (n == nullptr) return;
+    struct W {
+        static void go(db25::plan::Expr* e, std::vector<db25::plan::Expr*>& acc) {
+            if (e == nullptr) return;
+            if (e->kind == db25::plan::ExprKind::Subquery) acc.push_back(e);
+            for (const auto& c : e->children) go(c.get(), acc);
+            if (e->kind == db25::plan::ExprKind::WindowFunction) {
+                for (const auto& p : e->window.partition_by) go(p.get(), acc);
+                for (const auto& k : e->window.order_by) go(k.expr.get(), acc);
+            }
+            // A subquery can live in an aggregate's FILTER predicate, or in an
+            // ordered-aggregate key. Both are owned expressions the writer
+            // renders, so both have to be walked or their plans go missing.
+            if (e->filter) go(e->filter.get(), acc);
+            for (const auto& k : e->agg_order_by) go(k.expr.get(), acc);
+        }
+    };
+    auto* m = const_cast<LogicalNode*>(n);  // collect for the reader to fill in
+    W::go(m->predicate.get(), out);
+    for (const auto& e : m->exprs) W::go(e.get(), out);
+    for (const auto& e : m->group_keys) W::go(e.get(), out);
+    for (const auto& e : m->aggregates) W::go(e.get(), out);
+    for (const auto& e : m->window_functions) W::go(e.get(), out);
+    for (const auto& k : m->sort_keys) W::go(k.expr.get(), out);
+    for (const auto& row : m->value_rows) {
+        for (const auto& e : row) W::go(e.get(), out);
+    }
+    for (const auto& a : m->assignments) W::go(a.value.get(), out);
+}
+
+namespace {
+
 void render_node(const LogicalNode* n, int depth, std::string& out) {
     indent(out, depth);
     if (n == nullptr) { out.append("(null)"); return; }
@@ -564,6 +601,26 @@ void render_node(const LogicalNode* n, int depth, std::string& out) {
 
     out.append(" :out ");
     render_schema(n->output, out);
+
+    // Each embedded subquery's OWNED inner plan, as a `(subplan <plan>)` block,
+    // in collection order. Emitted by the NODE layer rather than inline in the
+    // expression so a nested plan indents like any other node - and because an
+    // expression renderer has no depth to indent by, which is why the previous
+    // comment here said the node layer did this while nothing did.
+    //
+    // Without them a golden said `(subquery :kind exists :correlated)` and no
+    // more: two different subqueries shared one golden, and reading a plan back
+    // produced a Subquery with nothing inside it, so the optimizer had nothing
+    // to decorrelate.
+    std::vector<db25::plan::Expr*> subqueries;
+    node_subqueries(n, subqueries);
+    for (const db25::plan::Expr* sq : subqueries) {
+        out.push_back('\n');
+        indent(out, depth + 1);
+        out.append("(subplan\n");
+        render_node(sq->sub_plan.get(), depth + 2, out);
+        out.push_back(')');
+    }
 
     for (const auto& c : n->children) {
         out.push_back('\n');
