@@ -682,11 +682,93 @@ order that makes the reference query self-measuring soonest.
   between two nodes.
 
 **Increment 4 — parallelism & distribution.**
-- Pipeline/pipeline-breaker identification (codegen-ready shape, HyPer lesson).
-- Exchange/repartition enforcers; distribution as a property.
+
+- **4.1 Pipelines and pipeline breakers. DELIVERED.** The shape a code generator
+  consumes: a plan cut into maximal runs of operators a tuple passes through
+  without being written down, plus the explicit points where it is. The HyPer
+  lesson, taken literally.
+
+  The decision that mattered: **breaking is a property of an EDGE, not of an
+  operator.** A hash join does not "break the pipeline" - it breaks its BUILD
+  side and streams its probe side, and an operator-level label cannot say that.
+  So `edge_kind(op, input_index, build_right)` classifies each edge as Streaming,
+  Materialized, Rescanned or Separate, and a pipeline is a maximal run of
+  streaming edges. `pipelines()` returns them in post-order, which is legal
+  execution order: an edge that materializes is a dependency, and post-order
+  visits the producer first.
+
+  This is also what makes the pipeline label CHECKABLE, and checking it found
+  **nine operator labels in the shipped spec that contradicted the code.** The
+  spec now declares `(edges ...)` per input and DERIVES the operator's `kind`
+  (a breaker is an operator that materializes an input); `check_conformance`
+  verifies both directions. The nine were corrected. Two negative spec tests were
+  added because the obvious test - "the shipped spec conforms" - passes when the
+  conformance check checks nothing.
+
+- **4.2 Distribution as a property, and the Exchange that enforces it.
+  DELIVERED.** `Distribution {kind, keys}` joins sort order, storage format and
+  freshness as a fourth physical property, with `Exchange` as its enforcer. A
+  table's partitioning comes from a `DistributionCatalog`; the memo BORROWS a
+  `const Distribution*` from it rather than owning a copy.
+
+  Two things here are easy to get backwards and are stated in the code as
+  invariants. First, **hashed on a SUBSET of the required keys is the STRONGER
+  guarantee**: rows agreeing on `(a, b)` agree on `a`, so a table hashed on `a`
+  satisfies a requirement of `(a, b)`, not the reverse. Second, **Broadcast is
+  not Single**: every node holds every row, which satisfies a co-location
+  requirement and does *not* satisfy a requirement that one node hold the rows.
+  Enforcement inserts the Exchange FIRST and clears the sort order, because
+  repartitioning destroys it - an enforcer chain that sorted and then exchanged
+  would claim an order the plan does not have.
+
+  Two costs were paid deliberately. `PhysicalProperties` is copied once per
+  candidate per goal, so a `std::vector` of distribution keys took the
+  allocation budget from 77 to 138; `SmallVec<uint32_t, 4>` took it back. And
+  adding a `Distribution` to `Group` fired the `sizeof(Group) <= 256`
+  static_assert - exactly the line it was put there to catch - which is why the
+  memo borrows a pointer.
 
 **Increment 5+ — fast path & plan cache (tier 0/1).**
-- Plan-shape cache key (parameters separate).
+
+- **5.1 The plan cache. DELIVERED.** Two things make it harder than a hash map,
+  and both are consequences of decisions made earlier.
+
+  **Ownership.** A physical plan BORROWS its expressions from the logical plan -
+  it selects algorithms, it does not rewrite predicates. So a cache holding only
+  the physical plan would hand back a plan pointing at a logical plan the caller
+  had since destroyed. `CachedPlan` owns BOTH and `get()` returns a reference into
+  the cache. That is the borrowing contract followed to its conclusion.
+
+  **What counts as the same query.** Not the SQL text: two spellings of one query
+  should share a plan, and one spelling under two catalogs must not. The key is
+  the logical plan's STRUCTURE plus every declared planning input - calibration,
+  cardinality model, storage and distribution catalogs, required output
+  properties, required freshness, the search flags, the spec version. Two digests
+  rather than one, so a diagnostic can say which half moved.
+
+  **Parameters needed no machinery,** which is the payoff from an IR decision
+  made much earlier: a prepared statement's values are `ExprKind::Parameter`
+  nodes, so they are not in the plan at all and the key is naturally independent
+  of what is bound. A LITERAL is the opposite case and must be in the key - the
+  plan RENDERS it, so reusing the plan for `x > 10` on `x > 20` would filter on
+  the wrong constant. Abstracting literals is what a system does when its plans
+  carry parameter slots instead; ours already distinguishes the two.
+
+  Which fields are in the key is **not a one-time judgement**: four sweeps change
+  one member of `plan::Expr`, `plan::LogicalNode`, `plan::ColumnSchema` and the
+  nested IR structs at a time and require the key to move, and each reads the
+  upstream header at run time to check its own coverage - so a field added
+  upstream fails these tests until somebody decides whether it belongs. One
+  exclusion is deliberate and asserted rather than left unmentioned: `Expr::source`
+  is a borrowed AST pointer that differs between two parses of the same query, so
+  keying it would make every lookup a miss.
+
+  Two of those sweeps exist because the mutation pass found them missing - a key
+  that dropped LIMIT/OFFSET passed the original tests, as did one that folded the
+  storage catalog in sequence instead of order-independently - and one defect was
+  fixed in the code: `ColumnSchema::hidden` was not digested, and the schema is
+  carried into the physical plan and handed back on a hit.
+
 - Heuristic fast path as a *restriction* of the Cascades rule set (one catalog,
   fixed non-cost application strategy), below a spec-declared complexity threshold,
   golden-tested at the boundary.
