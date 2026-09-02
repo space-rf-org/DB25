@@ -412,6 +412,19 @@ void render_node(const LogicalNode* n, int depth, std::string& out) {
         case LogicalOp::Filter:
             if (n->predicate) { out.append(" :pred "); render_expr(*n->predicate, out); }
             break;
+        // A semi or anti join's MATCH CONDITION, over the left ++ right frame.
+        // These fell to `default:` and rendered nothing, so
+        //   EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)
+        // and
+        //   EXISTS (SELECT 1 FROM orders WHERE orders.user_id > users.id)
+        // produced byte-identical goldens - as would an UNCONDITIONED semi join,
+        // which keeps every left row that has any right row at all. A
+        // decorrelation that dropped the condition would have looked correct.
+        // No :kind here: semi and anti are named by the operator itself.
+        case LogicalOp::SemiJoin:
+        case LogicalOp::AntiJoin:
+            if (n->predicate) { out.append(" :pred "); render_expr(*n->predicate, out); }
+            break;
         case LogicalOp::Project:
             render_expr_list(":exprs", n->exprs, out);
             break;

@@ -33,12 +33,13 @@ regress into silence.
 | ~~G2~~ | binder | Quantified comparison `ALL`/`ANY`/`SOME` lowering | ✅ CLOSED | lowers to an owned `ExprKind::Subquery :kind quantified` (op + ALL/ANY sense) · `26` |
 | ~~G3~~ | binder+catalog | DDL statement lowering | ✅ CLOSED (CTAS) / rescoped | CTAS → `CreateTableAs` (`36`) + `execute_ddl` registers the table; plain DDL is a catalog op, honestly not a query plan |
 | ~~G4~~ | binder | Qualified star (`u.*`) over a join | ✅ CLOSED | expanded to the relation's columns in `lower_projection` · `35` |
-| ~~G5~~ | harness | Phase-B s-expr **reader** coverage | ✅ CLOSED | reader covers every corpus construct; 0 `-- phaseb` deferrals — roundtrip 56/0, inject 28/0 |
+| ~~G5~~ | harness | Phase-B s-expr **reader** coverage | ✅ CLOSED for what the WRITER emits | reader keeps pace with the writer; the two `-- phaseb` deferrals are a WRITER gap (G12), not a reader one |
 | ~~G6~~ | harness | Full-fidelity plan **injection** (node-id serialization) | ✅ CLOSED | provenance ids (`:tid`/`:cid`) serialized on schema + colref/outerref; self-join fixture `32_self_join` injects lossless |
 | ~~G7~~ | analyzer | `INTERVAL 'x'` literal typed `Unknown` | ✅ CLOSED | now `Interval` — analyzer #98 · `29_interval` |
 | ~~G8~~ | parser | `EXTRACT(part FROM <typed literal>)` / `DATE '…'` value dropped | ✅ CLOSED | parser #83 |
 | ~~G9~~ | analyzer | `CURRENT_DATE` unresolved (treated as a column) | ✅ CLOSED | niladic function — parser #83 · `30_extract` |
 | G10 | pipeline | `1/0` preserved, not folded/rejected | DEFERRED (intentional) | soft `DivisionByZero` warning; documented PG divergence |
+| G12 | harness | A subquery's INNER PLAN is not serialized by the staged writer | OPEN | `(subquery :kind exists :correlated)` and nothing more, so two different subqueries share a golden and `--inject` cannot decorrelate; `44`, `45` carry `-- phaseb` |
 | ~~G11~~ | parser+binder | `LATERAL` joins unsupported (comma / `JOIN LATERAL` failed to parse) | ✅ CLOSED | `LateralJoin` node → correlated bind (`OuterRef`) + `JoinType::Lateral`/`LeftLateral`; parser #124/#125, analyzer #157/#158, LP #176/#177 · `33_lateral`, `34_left_join_lateral` |
 
 Fixtures are under `corpus/staged/`.
@@ -54,6 +55,14 @@ and that shape is worth recognising the next time.
   node as a row COUNT rather than its rows. Two different UPDATEs produced the
   same golden, so a fixture pinned on it could not fail. The writer and the
   reader now carry all of it, and the round-trip and injection gates cover it.
+- **The staged LOGICAL writer never rendered a semi or anti join's PREDICATE.**
+  `SemiJoin` and `AntiJoin` fell through to `default:`, so
+  `EXISTS (SELECT 1 FROM orders WHERE orders.user_id = users.id)` and
+  `... WHERE orders.user_id > users.id` produced BYTE-IDENTICAL logical and
+  optimized goldens - while their physical plans are a hash semi join on a key
+  and a nested loop with a residual. An unconditioned semi join would have
+  rendered the same as both. Fixed, and pinned by `44` / `45`, which the corpus
+  had no equivalent of: there was no semi- or anti-join fixture at all.
 - **The binder left every DML node's `output` EMPTY** while a `Returning` above
   it projected `col #0` of those columns - a projection over a zero-column
   input, which no executor could run. It was invisible for as long as nothing
@@ -136,6 +145,28 @@ and that shape is worth recognising the next time.
   deferred**; `--inject` — 28 goldens, 0 mismatches, **0 deferred**; `--gate` — 56
   goldens, 0 vacuous / 0 stale. The whole staged corpus is now round-tripped and
   injected strictly.
+- **Amended:** two `-- phaseb` markers came back with fixtures `44` / `45`, and
+  they are NOT a reader regression. The reader keeps pace with the writer; what
+  the writer never emits is a subquery's inner PLAN, so `read(logical)` rebuilds a
+  Filter whose Subquery is empty and `--inject` has nothing to decorrelate. The
+  round-trip stays lossless, because both sides omit it identically - which is
+  exactly why round-trip could not see it. Tracked as **G12**.
+
+### G12 — a subquery's inner plan is not serialized — OPEN
+- **What:** the staged logical writer renders `ExprKind::Subquery` as
+  `(subquery :kind exists :correlated ...)` and stops. Its comment says the
+  sub-plan is "rendered by the node layer, not inline"; **nothing renders it**.
+  So `WHERE EXISTS (SELECT 1 FROM orders ...)` and
+  `WHERE EXISTS (SELECT 1 FROM emp ...)` share a logical golden, and
+  `optimize(read(logical))` cannot decorrelate what it cannot see.
+- **Why it survived:** `--roundtrip` proves `write(read(x)) == x`, which a writer
+  and reader that BOTH omit a field satisfy perfectly. Losslessness is only
+  losslessness *with respect to the rendered fields* - which is the same hole that
+  hid the DML payload and the semi/anti predicate, and is now closed for flat
+  fields by `staged_runner --fields`. A nested PLAN is the part that sweep cannot
+  reach, because the mutation it would need is "a different subquery".
+- **Honest behavior:** `44` / `45` carry `-- phaseb`, so the deferral is
+  enumerated and counted rather than silent.
 
 ### ~~G6~~ — Full-fidelity plan injection (node-id serialization) — ✅ CLOSED
 - **What:** lossless injection of plans (self-joins included) needs the binder's

@@ -175,6 +175,12 @@ add_test(NAME staged_roundtrip
 # OPTIMIZED golden. Tests the optimizer alone on a committed input.
 add_test(NAME staged_inject
          COMMAND staged_runner --inject ${CMAKE_CURRENT_SOURCE_DIR}/corpus/staged)
+# Field distinguishability: for every logical operator and every payload field it
+# uses, changing that ONE field must change the rendered plan. --roundtrip cannot
+# see this - it proves write(read(x)) == x, which a reader and writer that BOTH
+# drop a field satisfy perfectly. Two defects came through that hole (the whole
+# DML payload, and a semi/anti join's match condition), so it is now a gate.
+add_test(NAME staged_fields COMMAND staged_runner --fields)
 
 # ---------------------------------------------------------------------------
 # corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown
