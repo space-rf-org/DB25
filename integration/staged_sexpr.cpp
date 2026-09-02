@@ -367,6 +367,25 @@ void render_expr_list(const char* label, const std::vector<db25::plan::ExprPtr>&
     out.push_back(')');
 }
 
+// A SET list: `(set (col <catalog column id> <expr>) ...)`. The id is a CATALOG
+// column of the target relation, not a positional index into anything in this
+// plan - the operator writes that column and does not read it - so it is spelled
+// with a `col` head that says which kind of number it is.
+void render_assignments(const std::vector<db25::plan::Assignment>& a, std::string& out) {
+    out.append(" :set (");
+    bool first = true;
+    for (const db25::plan::Assignment& as : a) {
+        if (!first) out.push_back(' ');
+        first = false;
+        out.append("(col ");
+        out.append(std::to_string(as.target_column_id));
+        out.push_back(' ');
+        if (as.value) render_expr(*as.value, out);
+        out.push_back(')');
+    }
+    out.push_back(')');
+}
+
 void render_node(const LogicalNode* n, int depth, std::string& out) {
     indent(out, depth);
     if (n == nullptr) { out.append("(null)"); return; }
@@ -446,12 +465,82 @@ void render_node(const LogicalNode* n, int depth, std::string& out) {
             out.append(set_op(n->set_op));
             break;
         case LogicalOp::Values:
-            out.append(" :rows ");
-            out.append(std::to_string(n->value_rows.size()));
+            // The ROW EXPRESSIONS, not just how many rows there are. A count
+            // could not tell `VALUES (1, 'ada')` from `VALUES (2, 'bob')`, so a
+            // fixture pinned on it could not catch a binder that lowered the
+            // wrong literals - and the physical stage renders them, which made
+            // the logical stage the lossy one of the two.
+            out.append(" :rows (");
+            {
+                bool first_row = true;
+                for (const auto& row : n->value_rows) {
+                    if (!first_row) out.push_back(' ');
+                    first_row = false;
+                    out.push_back('(');
+                    bool first = true;
+                    for (const auto& e : row) {
+                        if (!first) out.push_back(' ');
+                        first = false;
+                        if (e) render_expr(*e, out);
+                    }
+                    out.push_back(')');
+                }
+            }
+            out.push_back(')');
             break;
         case LogicalOp::CreateTableAs:
             out.append(" :table ");
             out.append(ident(n->table_name));
+            break;
+        // The write path. Until these were written the DML operators fell to
+        // `default:` and rendered as a bare `(Update :out ())` - no target
+        // relation, no SET list, no column list, no ON CONFLICT. Two different
+        // UPDATEs produced the SAME golden, which is a fixture that cannot fail.
+        case LogicalOp::Insert:
+            out.append(" :table ");
+            out.append(ident(n->table_name));
+            if (!n->target_columns.empty()) {
+                out.append(" :cols (");
+                bool first = true;
+                for (const std::string& c : n->target_columns) {
+                    if (!first) out.push_back(' ');
+                    first = false;
+                    out.append(ident(c));
+                }
+                out.push_back(')');
+            }
+            if (n->conflict_action != db25::plan::ConflictAction::None) {
+                out.append(" :conflict ");
+                out.append(n->conflict_action == db25::plan::ConflictAction::DoNothing
+                               ? "nothing" : "update");
+                if (!n->conflict_columns.empty()) {
+                    out.append(" :on (");
+                    bool first = true;
+                    for (const std::string& c : n->conflict_columns) {
+                        if (!first) out.push_back(' ');
+                        first = false;
+                        out.append(ident(c));
+                    }
+                    out.push_back(')');
+                }
+                // DO UPDATE's SET list; a DO NOTHING has none.
+                if (n->conflict_action == db25::plan::ConflictAction::DoUpdate) {
+                    render_assignments(n->assignments, out);
+                }
+            }
+            break;
+        case LogicalOp::Update:
+            out.append(" :table ");
+            out.append(ident(n->table_name));
+            render_assignments(n->assignments, out);
+            break;
+        case LogicalOp::Delete:
+            out.append(" :table ");
+            out.append(ident(n->table_name));
+            break;
+        case LogicalOp::Returning:
+            // A projection over the affected rows, so its payload is a Project's.
+            render_expr_list(":exprs", n->exprs, out);
             break;
         default:
             break;

@@ -28,11 +28,11 @@ SELECT EXTRACT(YEAR FROM CURRENT_DATE)
 
 -- logical
 (Project :exprs ((func EXTRACT (lit YEAR :type Text :null f) (func CURRENT_DATE :type Date :null f) :type Double :null f)) :out ((EXTRACT Double :null f))
-  (Values :rows 1 :out ()))
+  (Values :rows (()) :out ()))
 
 -- optimized
 (Project :exprs ((func EXTRACT (lit YEAR :type Text :null f) (func CURRENT_DATE :type Date :null f) :type Double :null f)) :out ((EXTRACT Double :null f))
-  (Values :rows 1 :out ()))
+  (Values :rows (()) :out ()))
 
 -- physical
 (Project exprs=[(EXTRACT (lit 'YEAR') (CURRENT_DATE))] out=[EXTRACT:Double]

@@ -22,11 +22,11 @@ SELECT INTERVAL '1 day'
 
 -- logical
 (Project :exprs ((lit "1 day" :type Interval :null f)) :out (("'1 day'" Interval :null f))
-  (Values :rows 1 :out ()))
+  (Values :rows (()) :out ()))
 
 -- optimized
 (Project :exprs ((lit "1 day" :type Interval :null f)) :out (("'1 day'" Interval :null f))
-  (Values :rows 1 :out ()))
+  (Values :rows (()) :out ()))
 
 -- physical
 (Project exprs=[(lit '1 day')] out=['1 day':Interval]

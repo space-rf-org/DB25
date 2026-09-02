@@ -445,11 +445,45 @@ LogicalNodePtr node_from(const SNode& n, std::string& err) {
             else if (kw == ":windows") { for (const SNode& x : val->items) { auto e = expr_from(x, err); if (!e) return nullptr; node->window_functions.push_back(std::move(e)); } }
             else if (kw == ":op") { if (!setop_from(val->atom, node->set_op)) { err = "node: bad set-op '" + val->atom + "'"; return nullptr; } }
             else if (kw == ":rows") {
-                // The writer pins only the ROW COUNT of a Values node (its row
-                // exprs are not serialized); reconstruct that many empty rows so
-                // the round-trip re-emits the same :rows N.
-                const auto count = static_cast<std::size_t>(std::strtoul(val->atom.c_str(), nullptr, 10));
-                node->value_rows.resize(count);
+                // A list of rows, each a list of value expressions. This used to
+                // be a bare COUNT, which round-tripped but could not tell one
+                // VALUES list from another - so a fixture pinned on it could not
+                // fail on a binder that lowered the wrong literals.
+                for (const SNode& row : val->items) {
+                    std::vector<db25::plan::ExprPtr> r;
+                    for (const SNode& x : row.items) {
+                        auto e = expr_from(x, err);
+                        if (!e) return nullptr;
+                        r.push_back(std::move(e));
+                    }
+                    node->value_rows.push_back(std::move(r));
+                }
+            }
+            else if (kw == ":cols") {
+                for (const SNode& c : val->items) node->target_columns.push_back(c.atom);
+            }
+            else if (kw == ":on") {
+                for (const SNode& c : val->items) node->conflict_columns.push_back(c.atom);
+            }
+            else if (kw == ":conflict") {
+                if (val->atom == "nothing") node->conflict_action = db25::plan::ConflictAction::DoNothing;
+                else if (val->atom == "update") node->conflict_action = db25::plan::ConflictAction::DoUpdate;
+                else { err = "node: bad conflict action '" + val->atom + "'"; return nullptr; }
+            }
+            else if (kw == ":set") {
+                // `(col <catalog column id> <expr>)` per assignment.
+                for (const SNode& a : val->items) {
+                    if (a.items.size() != 3 || a.items[0].atom != "col") {
+                        err = "node: malformed assignment in :set";
+                        return nullptr;
+                    }
+                    db25::plan::Assignment as;
+                    as.target_column_id =
+                        static_cast<std::uint32_t>(std::strtoul(a.items[1].atom.c_str(), nullptr, 10));
+                    as.value = expr_from(a.items[2], err);
+                    if (!as.value) return nullptr;
+                    node->assignments.push_back(std::move(as));
+                }
             }
             continue;
         }
