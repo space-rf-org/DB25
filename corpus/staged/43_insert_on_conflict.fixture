@@ -1,0 +1,76 @@
+-- sql
+INSERT INTO users (id, name) VALUES (1, 'ada') ON CONFLICT (id) DO UPDATE SET name = 'bob'
+
+-- tokens
+(tokens
+  (kw INSERT 0 6)
+  (kw INTO 7 11)
+  (ident users 12 17)
+  (punct "(" 18 19)
+  (ident id 19 21)
+  (punct "," 21 22)
+  (ident name 23 27)
+  (punct ")" 27 28)
+  (kw VALUES 29 35)
+  (punct "(" 36 37)
+  (num 1 37 38)
+  (punct "," 38 39)
+  (str "'ada'" 40 45)
+  (punct ")" 45 46)
+  (kw ON 47 49)
+  (kw CONFLICT 50 58)
+  (punct "(" 59 60)
+  (ident id 60 62)
+  (punct ")" 62 63)
+  (kw DO 64 66)
+  (kw UPDATE 67 73)
+  (kw SET 74 77)
+  (ident name 78 82)
+  (op "=" 83 84)
+  (str "'bob'" 85 90)
+  (eof 90 90))
+
+-- ast
+(InsertStmt
+  (TableRef :text users)
+  (ColumnList
+    (Identifier :text id)
+    (Identifier :text name))
+  (ValuesClause
+    (Subquery
+      (IntegerLiteral :text 1)
+      (StringLiteral :text "'ada'")))
+  (OnConflictClause
+    (Identifier :text id)
+    (SetClause
+      (BinaryExpr :text name
+        (StringLiteral :text "'bob'")))))
+
+-- resolved
+(InsertStmt
+  (TableRef :text users)
+  (ColumnList
+    (Identifier :text id)
+    (Identifier :text name))
+  (ValuesClause
+    (Subquery
+      (IntegerLiteral :text 1 :type Integer :null f)
+      (StringLiteral :text "'ada'" :type Text :null f)))
+  (OnConflictClause
+    (Identifier :text id)
+    (SetClause
+      (BinaryExpr :text name
+        (StringLiteral :text "'bob'" :type Text :null f)))))
+
+-- logical
+(Insert :table users :cols (id name) :conflict update :on (id) :set ((col 2 (lit bob :type Text :null f))) :out ()
+  (Values :rows (((lit 1 :type Integer :null f) (lit ada :type Text :null f))) :out ()))
+
+-- optimized
+(Insert :table users :cols (id name) :conflict update :on (id) :set ((col 2 (lit bob :type Text :null f))) :out ()
+  (Values :rows (((lit 1 :type Integer :null f) (lit ada :type Text :null f))) :out ()))
+
+-- physical
+(Insert table=users cols=[id name] conflict=update on=[id] set=[(col2 (lit 'bob'))] out=[]
+  (ValuesScan rows=[((lit 1) (lit 'ada'))] out=[]))
+

@@ -43,6 +43,23 @@ regress into silence.
 
 Fixtures are under `corpus/staged/`.
 
+Two defects were found by ADDING FIXTURES rather than by an audit, when the
+physical planner learned to lower DML (increment 3.9b) and the corpus gained
+`39`-`43`. Recorded here because both are the same shape - a stage that renders
+less than it computes, so a golden cannot tell two different statements apart -
+and that shape is worth recognising the next time.
+
+- **The staged LOGICAL writer rendered DML as a bare `(Update :out ())`** - no
+  target relation, no SET list, no column list, no ON CONFLICT, and a `Values`
+  node as a row COUNT rather than its rows. Two different UPDATEs produced the
+  same golden, so a fixture pinned on it could not fail. The writer and the
+  reader now carry all of it, and the round-trip and injection gates cover it.
+- **The binder left every DML node's `output` EMPTY** while a `Returning` above
+  it projected `col #0` of those columns - a projection over a zero-column
+  input, which no executor could run. It was invisible for as long as nothing
+  looked at the schema BETWEEN the two nodes; the physical planner renders both.
+  Fixed in db25-logical-plan#180.
+
 ---
 
 ## Deferred known-gaps

@@ -1,0 +1,55 @@
+-- sql
+INSERT INTO users (id, name) VALUES (1, 'ada')
+
+-- tokens
+(tokens
+  (kw INSERT 0 6)
+  (kw INTO 7 11)
+  (ident users 12 17)
+  (punct "(" 18 19)
+  (ident id 19 21)
+  (punct "," 21 22)
+  (ident name 23 27)
+  (punct ")" 27 28)
+  (kw VALUES 29 35)
+  (punct "(" 36 37)
+  (num 1 37 38)
+  (punct "," 38 39)
+  (str "'ada'" 40 45)
+  (punct ")" 45 46)
+  (eof 46 46))
+
+-- ast
+(InsertStmt
+  (TableRef :text users)
+  (ColumnList
+    (Identifier :text id)
+    (Identifier :text name))
+  (ValuesClause
+    (Subquery
+      (IntegerLiteral :text 1)
+      (StringLiteral :text "'ada'"))))
+
+-- resolved
+(InsertStmt
+  (TableRef :text users)
+  (ColumnList
+    (Identifier :text id)
+    (Identifier :text name))
+  (ValuesClause
+    (Subquery
+      (IntegerLiteral :text 1 :type Integer :null f)
+      (StringLiteral :text "'ada'" :type Text :null f))))
+
+-- logical
+(Insert :table users :cols (id name) :out ()
+  (Values :rows (((lit 1 :type Integer :null f) (lit ada :type Text :null f))) :out ()))
+
+-- optimized
+(Insert :table users :cols (id name) :out ()
+  (Values :rows (((lit 1 :type Integer :null f) (lit ada :type Text :null f))) :out ()))
+
+-- physical
+(Insert table=users cols=[id name] out=[]
+  (ValuesScan rows=[((lit 1) (lit 'ada'))] out=[]))
+

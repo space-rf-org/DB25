@@ -1,0 +1,54 @@
+-- sql
+UPDATE emp SET salary = 100 WHERE dept = 'eng'
+
+-- tokens
+(tokens
+  (kw UPDATE 0 6)
+  (ident emp 7 10)
+  (kw SET 11 14)
+  (ident salary 15 21)
+  (op "=" 22 23)
+  (num 100 24 27)
+  (kw WHERE 28 33)
+  (ident dept 34 38)
+  (op "=" 39 40)
+  (str "'eng'" 41 46)
+  (eof 46 46))
+
+-- ast
+(UpdateStmt
+  (TableRef :text emp)
+  (SetClause
+    (BinaryExpr :text salary
+      (IntegerLiteral :text 100)))
+  (WhereClause
+    (BinaryExpr :text "="
+      (ColumnRef :text dept)
+      (StringLiteral :text "'eng'"))))
+
+-- resolved
+(UpdateStmt
+  (TableRef :text emp)
+  (SetClause
+    (BinaryExpr :text salary
+      (IntegerLiteral :text 100 :type Integer :null f)))
+  (WhereClause
+    (BinaryExpr :text "=" :type Boolean :null t
+      (ColumnRef :text dept :type Text :null t :tid 3 :cid 2)
+      (StringLiteral :text "'eng'" :type Text :null f))))
+
+-- logical
+(Update :table emp :set ((col 4 (lit 100 :type Integer :null f))) :out ()
+  (Filter :pred (binop "=" (colref 1 :tid 3 :cid 2 :type Text :null t) (lit eng :type Text :null f) :type Boolean :null t) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
+
+-- optimized
+(Update :table emp :set ((col 4 (lit 100 :type Integer :null f))) :out ()
+  (Filter :pred (binop "=" (colref 1 :tid 3 :cid 2 :type Text :null t) (lit eng :type Text :null f) :type Boolean :null t) :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4))
+    (Scan :rel emp :out ((id Integer :null f :alias emp :tid 3 :cid 1) (dept Text :null t :alias emp :tid 3 :cid 2) (region Text :null t :alias emp :tid 3 :cid 3) (salary Double :null t :alias emp :tid 3 :cid 4)))))
+
+-- physical
+(Update table=emp set=[(col4 (lit 100))] out=[]
+  (Filter pred=(= (col #1) (lit 'eng')) out=[id:Integer dept:Text? region:Text? salary:Double?]
+    (SeqScan table=emp fmt=row out=[id:Integer dept:Text? region:Text? salary:Double?])))
+

@@ -652,9 +652,34 @@ order that makes the reference query self-measuring soonest.
   types were structurally identical and would have shared one memo group - one
   recursion reading the other's rows.
 
-DML - Insert, Update, Delete and Returning - is what remains unlowered. It is
-represented in the logical IR, has no corpus fixture yet, and the gap register
-tracks it.
+- **3.9b The write path. DELIVERED.** Insert, Update and Delete, each taking one
+  input - the source query, or the scanned and filtered target rows - and emitting
+  the AFFECTED rows. The target relation is a NAME on the operator, not a child:
+  it is written, not read. Three operators rather than one with a mode, for the
+  reason semi and anti joins are four. RETURNING gets no operator at all: it is a
+  projection over the affected rows, which is what Project already is, and a
+  Project above an Insert can only be a RETURNING clause.
+
+  Freshness is a CORRECTNESS constraint here, as it was for scans. An UPDATE or a
+  DELETE reads the rows it is about to modify, and a lagging copy is not a worse
+  source - it is the wrong set of rows - so their input requirement is Fresh and a
+  target available only as a stale replica makes the statement unplannable. An
+  INSERT is exempt: its input is the SOURCE query, and reading a replica there is
+  legitimate. The write path is also the one place in the catalogue that
+  MANUFACTURES freshness, its output rows being the rows it just wrote; the
+  applicability sweep carries that as a declared exception rather than dropping
+  the check.
+
+  With this **every LogicalOp the IR defines has a physical implementation.** The
+  planner no longer has a set of statements it refuses. The corpus gained five DML
+  fixtures (39-43), which is what surfaced two defects that had nothing to do with
+  the physical planner: the umbrella's LOGICAL s-expr writer rendered DML as a
+  bare `(Update :out ())` - no target, no SET list, no ON CONFLICT - so two
+  different UPDATEs produced the same golden and a fixture pinned on it could not
+  fail; and the binder left every DML node's output EMPTY while a Returning above
+  it projected `col #0` of those columns, a projection over a zero-column input.
+  Both are fixed, and both were invisible until something rendered the schema
+  between two nodes.
 
 **Increment 4 — parallelism & distribution.**
 - Pipeline/pipeline-breaker identification (codegen-ready shape, HyPer lesson).
