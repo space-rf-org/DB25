@@ -798,6 +798,62 @@ order that makes the reference query self-measuring soonest.
    from the planning-time budget, and how is it golden-pinned at the boundary?
    *Deferred — decide when we reach tiering.*
 
+6. ~~**Degree of parallelism:** should the profiles carry one, and should the
+   cost model have a term for it?~~ **Resolved: the profiles carry it, the cost
+   model does not read it. The search is PARALLELISM-BLIND, by decision.**
+
+   *What was added.* `CalibrationProfile` gains `cores` (a machine fact, beside
+   `simd_width`); the capability profile gains `max-dop` (a capability, shipping
+   as one because there is no executor and declaring more would describe an
+   engine that does not exist); every operator declares `full` / `partitioned` /
+   `ordered` / `serial`, checked by conformance so an operator cannot be added
+   without somebody deciding. The two profiles stay separate because "this
+   machine has 64 cores" and "this engine uses at most 8 workers" are different
+   statements from different sources.
+
+   *Why the cost model does not read it.* The alternative was work-span - total
+   work and critical path instead of one scalar - and the bar it had to clear was
+   that it rank some plan pair differently from the scalar model. It does not:
+
+   - All five tree shapes over a four-way join (every one already enumerated by
+     the interval DP), costed with the real model and spanned through the
+     existing per-edge pipeline classification, at P from 1 to 64 over three data
+     shapes: **no ranking changes anywhere.** Shapes differ in WORK by three to
+     five orders of magnitude. And under morsel-driven parallelism every pipeline
+     saturates P regardless of shape - the bushy-tree advantage belongs to
+     partitioned parallelism across nodes, which is a different mechanism.
+   - Under Amdahl the costlier plan overtakes when `W2*s2 < W1*s1`, so the
+     break-even on the parallelism ratio is just the cost ratio: **13.81x** for
+     the join algorithm, **12.83x** distinct, **12.26x** aggregate, **2.86x** the
+     scan substrate. A loser would have to be twelve times as parallel.
+   - That gap is `n log n` against `n` - **the complexity class, not a
+     coefficient**. It runs from 2.30x at ten rows to 14.95x at a billion,
+     WIDENING with data, so no recalibration can close it. Which matters, because
+     recalibrating the coefficients is exactly what the execution simulator is
+     for.
+   - Window, RecursiveFixpoint, grouping sets and the write path have ONE
+     implementation each, so no ranking a span term could invert; UnionAll and
+     HashSetOp are picked by applicability, not cost.
+   - **One decision is close enough to be at risk:** an aggregate over an
+     already-sorted input, at 1.40x. If that matters, the fix is a
+     parallelism-aware coefficient on that one operator, not a second cost
+     dimension threaded through the search.
+
+   *And the error is asymmetric.* Being wrong this way costs DEFERRAL - work-span
+   later costs exactly what it costs now, and the degree of parallelism is
+   already recorded. Being wrong the other way puts a second cost dimension
+   permanently into the memo and branch-and-bound for nothing measurable.
+
+   *What reopens it, and mechanically rather than by memory.*
+   `tests/test_parallelism.cpp` guards the decision: a plan's cost must not move
+   when the core count does; the single-candidate operators must still have one
+   candidate; the operator set is watched, because a parallel-aware candidate - a
+   partitioned join, an intra-node repartition, a split-aware scan - trades work
+   for scaling, which is the one thing a scalar cost cannot express, and voids
+   the analysis; and the sort break-even is asserted, so a coefficient change
+   that makes the decision close fails rather than passing quietly.
+   `tools/parallelism_evidence.cpp` regenerates the numbers.
+
 ---
 
 ## Reference systems (rationale, not rehash)
