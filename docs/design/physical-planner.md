@@ -798,6 +798,64 @@ order that makes the reference query self-measuring soonest.
    from the planning-time budget, and how is it golden-pinned at the boundary?
    *Deferred — decide when we reach tiering.*
 
+6. **Degree of parallelism:** should the `CalibrationProfile` and the
+   `ExecutionCapabilityProfile` carry one, and should the cost model have a term
+   for it? **Open — newly raised, nothing decided.**
+
+   *What is true today.* There is no notion of intra-node parallelism anywhere in
+   the planner — not under another name either (no worker, thread, DOP, morsel or
+   batch concept in the IR, the cost model, the spec or the capability profile).
+   `CalibrationProfile` carries `simd_width`, `cache_line` and `cluster_nodes`,
+   and the first two are marked informational in their own comments; there is no
+   core count. The capability profile is a list of operator names. `Distribution`
+   (Increment 4.2) models where data *is* across nodes, which is inter-node
+   placement, not how many threads touch it. Pipelines (4.1) segment a plan but
+   carry no degree. **So every plan is currently priced as if it will execute
+   serially.**
+
+   *Why it might matter.* Operators do not parallelize alike. A hash join
+   partitions its build side and scales well; a merge join over a sorted input
+   does not, without a partitioned sort to feed it; a nested loop scales
+   trivially. Pricing all three serially systematically favours whichever has the
+   lowest *serial* cost, and that is not the same ordering as the lowest elapsed
+   time. Skew, likewise, cannot exist as a concept until there is a degree to be
+   skewed across. And having inter-node distribution while having no intra-node
+   parallelism is an odd asymmetry to leave standing.
+
+   *The real tension, which is why this is a question and not a task.* Cascades
+   costs a plan with a single scalar, and there are three honest answers.
+   **(a)** Keep cost scalar and fold parallelism into the coefficients. Cheap, but
+   the degree then cannot vary per operator — and operators differing is the whole
+   reason to care. **(b)** Make cost a pair, *work* and *span* (total work and
+   critical path). This is the model that actually lets the search prefer a plan
+   doing more total work along a shorter critical path, which is the only reason
+   the notion earns its place; it is also a large change to the search, to the
+   branch-and-bound bound, and to every cost function. **(c)** Declare plan choice
+   parallelism-blind on purpose — choose the plan serially, parallelize it
+   afterwards, as several systems do. Defensible, but it should be a **stated
+   decision** rather than the current silence.
+
+   *Where each part would live, if the answer is yes.* The two profiles carry
+   different kinds of fact and the split is load-bearing. The **capability**
+   profile is structural and static: the maximum degree the engine will use, and
+   which operators it can partition at all. The **calibration** profile is a
+   hardware fact, alongside `simd_width`: how many cores the host has. "This
+   machine has 64 cores" and "this engine uses at most 8 workers and cannot
+   parallelize a Window" are different statements from different sources, and
+   collapsing them into one number would lose the distinction the two profiles
+   exist to keep.
+
+   *What would settle it.* One prior question: do we intend the **search** to
+   choose between plans on parallelism grounds? If yes, (b) is required and should
+   be scoped as its own increment. If no, (a) or (c) suffices and the honest thing
+   is to write down that the search is parallelism-blind.
+
+   *Why it is being raised now.* The execution-simulator design assumes a
+   scheduler computing `t = (t_total / P) × skew`. There is no `P`. That also
+   limits the simulator's disagreement gate at the outset: the cost model cannot
+   *disagree* about parallelism while it is silent on parallelism, so no
+   parallelism-driven inversion could be attributed to two estimators diverging.
+
 ---
 
 ## Reference systems (rationale, not rehash)
