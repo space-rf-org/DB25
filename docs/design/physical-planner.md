@@ -798,63 +798,61 @@ order that makes the reference query self-measuring soonest.
    from the planning-time budget, and how is it golden-pinned at the boundary?
    *Deferred — decide when we reach tiering.*
 
-6. **Degree of parallelism:** should the `CalibrationProfile` and the
-   `ExecutionCapabilityProfile` carry one, and should the cost model have a term
-   for it? **Open — newly raised, nothing decided.**
+6. ~~**Degree of parallelism:** should the profiles carry one, and should the
+   cost model have a term for it?~~ **Resolved: the profiles carry it, the cost
+   model does not read it. The search is PARALLELISM-BLIND, by decision.**
 
-   *What is true today.* There is no notion of intra-node parallelism anywhere in
-   the planner — not under another name either (no worker, thread, DOP, morsel or
-   batch concept in the IR, the cost model, the spec or the capability profile).
-   `CalibrationProfile` carries `simd_width`, `cache_line` and `cluster_nodes`,
-   and the first two are marked informational in their own comments; there is no
-   core count. The capability profile is a list of operator names. `Distribution`
-   (Increment 4.2) models where data *is* across nodes, which is inter-node
-   placement, not how many threads touch it. Pipelines (4.1) segment a plan but
-   carry no degree. **So every plan is currently priced as if it will execute
-   serially.**
+   *What was added.* `CalibrationProfile` gains `cores` (a machine fact, beside
+   `simd_width`); the capability profile gains `max-dop` (a capability, shipping
+   as one because there is no executor and declaring more would describe an
+   engine that does not exist); every operator declares `full` / `partitioned` /
+   `ordered` / `serial`, checked by conformance so an operator cannot be added
+   without somebody deciding. The two profiles stay separate because "this
+   machine has 64 cores" and "this engine uses at most 8 workers" are different
+   statements from different sources.
 
-   *Why it might matter.* Operators do not parallelize alike. A hash join
-   partitions its build side and scales well; a merge join over a sorted input
-   does not, without a partitioned sort to feed it; a nested loop scales
-   trivially. Pricing all three serially systematically favours whichever has the
-   lowest *serial* cost, and that is not the same ordering as the lowest elapsed
-   time. Skew, likewise, cannot exist as a concept until there is a degree to be
-   skewed across. And having inter-node distribution while having no intra-node
-   parallelism is an odd asymmetry to leave standing.
+   *Why the cost model does not read it.* The alternative was work-span - total
+   work and critical path instead of one scalar - and the bar it had to clear was
+   that it rank some plan pair differently from the scalar model. It does not:
 
-   *The real tension, which is why this is a question and not a task.* Cascades
-   costs a plan with a single scalar, and there are three honest answers.
-   **(a)** Keep cost scalar and fold parallelism into the coefficients. Cheap, but
-   the degree then cannot vary per operator — and operators differing is the whole
-   reason to care. **(b)** Make cost a pair, *work* and *span* (total work and
-   critical path). This is the model that actually lets the search prefer a plan
-   doing more total work along a shorter critical path, which is the only reason
-   the notion earns its place; it is also a large change to the search, to the
-   branch-and-bound bound, and to every cost function. **(c)** Declare plan choice
-   parallelism-blind on purpose — choose the plan serially, parallelize it
-   afterwards, as several systems do. Defensible, but it should be a **stated
-   decision** rather than the current silence.
+   - All five tree shapes over a four-way join (every one already enumerated by
+     the interval DP), costed with the real model and spanned through the
+     existing per-edge pipeline classification, at P from 1 to 64 over three data
+     shapes: **no ranking changes anywhere.** Shapes differ in WORK by three to
+     five orders of magnitude. And under morsel-driven parallelism every pipeline
+     saturates P regardless of shape - the bushy-tree advantage belongs to
+     partitioned parallelism across nodes, which is a different mechanism.
+   - Under Amdahl the costlier plan overtakes when `W2*s2 < W1*s1`, so the
+     break-even on the parallelism ratio is just the cost ratio: **13.81x** for
+     the join algorithm, **12.83x** distinct, **12.26x** aggregate, **2.86x** the
+     scan substrate. A loser would have to be twelve times as parallel.
+   - That gap is `n log n` against `n` - **the complexity class, not a
+     coefficient**. It runs from 2.30x at ten rows to 14.95x at a billion,
+     WIDENING with data, so no recalibration can close it. Which matters, because
+     recalibrating the coefficients is exactly what the execution simulator is
+     for.
+   - Window, RecursiveFixpoint, grouping sets and the write path have ONE
+     implementation each, so no ranking a span term could invert; UnionAll and
+     HashSetOp are picked by applicability, not cost.
+   - **One decision is close enough to be at risk:** an aggregate over an
+     already-sorted input, at 1.40x. If that matters, the fix is a
+     parallelism-aware coefficient on that one operator, not a second cost
+     dimension threaded through the search.
 
-   *Where each part would live, if the answer is yes.* The two profiles carry
-   different kinds of fact and the split is load-bearing. The **capability**
-   profile is structural and static: the maximum degree the engine will use, and
-   which operators it can partition at all. The **calibration** profile is a
-   hardware fact, alongside `simd_width`: how many cores the host has. "This
-   machine has 64 cores" and "this engine uses at most 8 workers and cannot
-   parallelize a Window" are different statements from different sources, and
-   collapsing them into one number would lose the distinction the two profiles
-   exist to keep.
+   *And the error is asymmetric.* Being wrong this way costs DEFERRAL - work-span
+   later costs exactly what it costs now, and the degree of parallelism is
+   already recorded. Being wrong the other way puts a second cost dimension
+   permanently into the memo and branch-and-bound for nothing measurable.
 
-   *What would settle it.* One prior question: do we intend the **search** to
-   choose between plans on parallelism grounds? If yes, (b) is required and should
-   be scoped as its own increment. If no, (a) or (c) suffices and the honest thing
-   is to write down that the search is parallelism-blind.
-
-   *Why it is being raised now.* The execution-simulator design assumes a
-   scheduler computing `t = (t_total / P) × skew`. There is no `P`. That also
-   limits the simulator's disagreement gate at the outset: the cost model cannot
-   *disagree* about parallelism while it is silent on parallelism, so no
-   parallelism-driven inversion could be attributed to two estimators diverging.
+   *What reopens it, and mechanically rather than by memory.*
+   `tests/test_parallelism.cpp` guards the decision: a plan's cost must not move
+   when the core count does; the single-candidate operators must still have one
+   candidate; the operator set is watched, because a parallel-aware candidate - a
+   partitioned join, an intra-node repartition, a split-aware scan - trades work
+   for scaling, which is the one thing a scalar cost cannot express, and voids
+   the analysis; and the sort break-even is asserted, so a coefficient change
+   that makes the decision close fails rather than passing quietly.
+   `tools/parallelism_evidence.cpp` regenerates the numbers.
 
 ---
 
