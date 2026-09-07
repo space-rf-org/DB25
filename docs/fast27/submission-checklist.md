@@ -1,7 +1,10 @@
 # Submission checklist
 
 Mechanical checks for a USENIX double-blind submission. Venue-independent except
-where noted — most of this applies verbatim to CIDR, VLDB, and SIGMOD too.
+where noted — most of it applies verbatim to PVLDB, EDBT, and SIGMOD, which are
+also double-blind, so §2 matters there too. (CIDR is *single*-blind — names go on
+the first page — but its 2027 deadline has passed; see
+[`venue-fit.md`](venue-fit.md) §5.)
 
 Work top to bottom on the day before the deadline, not the day of.
 

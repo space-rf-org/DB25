@@ -20,13 +20,19 @@ clear-eyed about:
   researchers on a system that has no I/O in its cost model. The realistic
   outcome is a scope rejection with reviews you can use. If reviews-as-feedback
   is worth eight days to you, that's a legitimate reason to go. If you need an
-  acceptance, spend the eight days on CIDR instead.
+  acceptance, aim at one of the deadlines below instead.
 
-**The genuinely better use of these eight days:** check the CIDR 2027 deadline
-today. CIDR wants exactly this kind of architectural systems paper, does not
-require an execution engine to exist, and `docs/design/physical-planner.md` plus
-`docs/gap-register.md` are already most of the draft. Same effort, dramatically
-better odds, appropriate reviewers.
+**The genuinely better use of these eight days** is the first eight days of a
+three-week run at **PVLDB's Oct 1 deadline** (or EDBT Oct 7 / SIGMOD Round 4
+Oct 17). All three are database venues with database reviewers, all are further
+out than Sept 15, and `docs/design/physical-planner.md` plus
+`docs/gap-register.md` are already most of a draft. The tradeoff is that they are
+research tracks and need an evaluation — but one is buildable without an
+execution engine (plan comparison against PostgreSQL and DuckDB, planner
+latency, falsifiability-gate numbers). See [`venue-fit.md`](venue-fit.md) §5.
+
+CIDR 2027 would have been the ideal home and needed no evaluation at all, but its
+deadline passed on Aug 4, 2026. CIDR 2028 (~Aug 2027) is the next shot.
 
 ## The claim the short paper would make
 
@@ -46,7 +52,8 @@ rather than letting a reviewer find it.
 ## Day by day
 
 **Day 1 (Mon Sept 8) — decide, and set up.**
-- Check the CIDR 2027 deadline. If it is open, seriously reconsider. *(2h)*
+- Reconsider once more against the PVLDB Oct 1 option — three weeks and a
+  database PC beats eight days and a storage PC. *(1h)*
 - Commit to long/short. Recommendation: short, 6 pages. *(—)*
 - Download the current USENIX template; get a title page and section skeleton
   compiling. Do not reuse the IEEEtran files in these repos. *(1h)*
@@ -115,7 +122,9 @@ Under time pressure, drop in this order:
 
 ## Kill criteria
 
-Stop and redirect to CIDR if, by **end of Day 2**, the plan flip doesn't
+Stop and redirect to PVLDB if, by **end of Day 2**, the plan flip doesn't
 materialize — if adding I/O terms doesn't change any plan, there is no storage
 result and the paper has no spine. That's a clean, early, cheap decision point,
-and taking it still leaves six days for a CIDR draft.
+and taking it still leaves three full weeks before PVLDB's Oct 1 deadline — and
+the I/O cost-model work from Days 1–2 is not wasted, it goes straight into that
+paper's design section.

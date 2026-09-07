@@ -73,7 +73,7 @@ Ordered by how badly each one blocks a submission.
 
 | # | Gap | Blocks | Severity |
 |---|---|---|---|
-| 1 | **No execution engine.** `db25-execution-ref` is empty. | Any paper needing wall-clock results | **Blocking** for FAST; survivable at CIDR |
+| 1 | **No execution engine.** `db25-execution-ref` is empty. | Any paper needing wall-clock results | **Blocking** for FAST. Survivable at a database venue — plan quality can be evaluated against PostgreSQL/DuckDB *plans* without running anything |
 | 2 | **No I/O in the cost model.** `calibration.lab.sexpr` prices CPU-per-row only; no page-read, device-latency, or seq/random terms. | Any storage claim | **Blocking** for FAST |
 | 3 | **No storage layer.** No buffer pool, page layout, file format, write path, or durability mechanism anywhere. | Any storage claim | **Blocking** for FAST |
 | 4 | **No end-to-end performance evaluation.** No TPC-H/TPC-DS/JOB run, no comparison against DuckDB/SQLite/Postgres on a shared workload. `docs/engine-comparison-findings.md` is a design comparison, not a measured one. | Every venue | **Blocking** |
@@ -124,5 +124,12 @@ material right now, at the right venue:
   round-trip and injection testing, the gap register with its safety invariant.
 - Two hardware-conscious component results (tokenizer, arena) — after §4 is fixed.
 
-That is a **CIDR** paper, or a **DaMoN** paper, essentially today. It is not a
-FAST paper in any amount of time under two weeks.
+That was a **CIDR** paper essentially as-is — but CIDR 2027 closed on Aug 4,
+2026, and the database venues still open (PVLDB Oct 1, EDBT Oct 7, SIGMOD Oct 17)
+are research tracks that want an evaluation on top. The three weeks to PVLDB are
+exactly enough to add one, and it can be built without an execution engine:
+plan-quality comparison against PostgreSQL and DuckDB plans, planner latency
+against the search budget, and the falsifiability-gate numbers.
+
+It is a **DaMoN** paper today, once §4 is fixed. It is not a FAST paper in any
+amount of time under two weeks.

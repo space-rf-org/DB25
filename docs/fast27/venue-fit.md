@@ -125,22 +125,70 @@ inconsistencies in the tokenizer paper that must be fixed before it goes anywher
 
 ## 5. Where this work actually belongs
 
-Ranked by fit against what exists **today**. Confirm all deadlines — they move
-year to year and this environment could not reach the conference sites.
+Deadlines verified 2026-09-07 via search; the conference sites themselves
+(`cidrdb.org`, `wikicfp.com`) are egress-blocked from this environment, so
+**confirm each against the official CFP before planning around it.**
 
-| Venue | What you'd submit | Typical deadline | Fit |
+| Venue | What you'd submit | Next deadline | Fit |
 |---|---|---|---|
-| **CIDR 2027** | The DB25 architecture paper: spec-driven Cascades, the pure-function planner contract, capability profiles, the falsifiability gate. CIDR explicitly wants visionary systems architecture over incremental results, and short papers. | Typically ~Sept–Oct for a January conference — **check immediately, this may be the nearest live deadline** | **Excellent.** CIDR is built for exactly this kind of "here is a whole engine designed a particular way" paper. |
-| **DaMoN 2027** (with SIGMOD) | The SIMD tokenizer, the arena allocator, or both as one hardware-conscious frontend paper. Both existing PDFs are ~80% of a DaMoN submission already. | Typically ~March, workshop in June | **Excellent.** DaMoN is the home venue for SIMD-in-a-database-frontend work. |
-| **VLDB 2027** | The optimizer + falsifiability-gate methodology, with an evaluation. Rolling monthly deadlines make it schedule-friendly. | Rolling, monthly | **Good**, once there's an evaluation. |
-| **SIGMOD 2028** | Same, at a higher bar. | Typically ~Oct / ~Apr rounds | Good, once there's an evaluation. |
-| **EDBT 2027** | Any single stage as a focused contribution. | Typically ~Oct | Good. |
+| **PVLDB Vol. 20** → VLDB 2027 | The optimizer and the falsifiability-gate methodology, with an evaluation. Monthly deadlines make this the most schedule-flexible option in the field. | **Thu Oct 1, 2026** (monthly, 1st of each month; CMT opens the 20th of the prior month). Final Vol. 20 deadline Mar 1, 2027; revisions after Jun 1, 2027 roll to VLDB 2028. | **Best near-term.** ~3 weeks. Needs an evaluation — see below. |
+| **EDBT 2027** | Any single stage as a focused contribution, or the architecture paper. | **Wed Oct 7, 2026** (3rd/final cycle). Conference Apr 6–9, 2027, Lille, France. | **Good.** ~4 weeks. Last cycle for the 2027 edition. |
+| **SIGMOD 2027** | The architecture + methodology paper at the highest bar. | **Sat Oct 17, 2026** (Round 4; abstract due ~Oct 10). Conference Jun 13–19, 2027, Huntington Beach, CA. | **Good, hardest bar.** ~6 weeks. |
+| **DaMoN 2027** (with SIGMOD) | The SIMD tokenizer, the arena allocator, or both as one hardware-conscious frontend paper. Both existing PDFs are ~80% of a submission already. | **Not yet announced.** Historically ~mid-March (DaMoN '25 was Mar 14); workshop runs with SIGMOD in June. Watch <https://damon-db.org/>. | **Excellent fit**, ~6 months out. Fix the numeric problems in `readiness-assessment.md` §4 first. |
+| ~~**CIDR 2027**~~ | — | **CLOSED.** Deadline was Aug 4, 2026, 11:59pm PT — it passed ~5 weeks ago. Notifications Oct 6, 2026; conference Jan 24–27, 2027, Amsterdam. | Would have been the best fit. **CIDR 2028** (expect ~Aug 2027) is the next shot. |
 | **FAST '28** | Framing A, with the storage work in §6 actually done. | ~Sept 2027 (fall cycle) | **Achievable in a year** — see §6. |
 
-**Immediate action:** check the CIDR 2027 deadline today. If it is still open, the
-eight days currently pointed at FAST are far better spent there, and the material
-in `docs/design/physical-planner.md` plus `docs/gap-register.md` is already most of
-the paper.
+### What changed, and why it's good news
+
+CIDR 2027 — the venue this packet originally recommended — closed on Aug 4, 2026.
+That is a real loss: CIDR is built for exactly this kind of "here is a whole
+engine designed a particular way" paper, it accepts short papers, it prizes
+architecture over incremental results, and it is **single-blind** (authors put
+their names on the first page), which would have removed the entire
+anonymization problem in `submission-checklist.md` §2. Put CIDR 2028 on the
+calendar now.
+
+But the replacement options are all *better than the FAST slot in every respect
+except one*: they are 3–6 weeks out instead of 8 days, and they are reviewed by
+database people. The FAST deadline is not the last train — it is the wrong train
+that happens to be leaving first.
+
+### The catch, stated plainly
+
+PVLDB, EDBT, and SIGMOD are full research tracks. They will not accept an
+architecture paper with no evaluation, which CIDR would have. So the extra three
+to six weeks are not slack — they are exactly the time needed to build the
+evaluation that `readiness-assessment.md` §3 lists as gap #4.
+
+The good news is that a **credible evaluation is possible without an execution
+engine**, which is not true for FAST:
+
+- **Plan quality vs. real optimizers.** Run the corpus through PostgreSQL and
+  DuckDB, capture their plans, and compare join orders and access-path choices
+  against DB25's. Agreement is evidence the cost model is sane; disagreement is a
+  finding worth a subsection either way. No executor needed — only plans.
+- **Planner latency vs. query complexity**, with the search-budget guard from
+  `test_search_budget.cpp`. Already measurable today.
+- **Falsifiability-gate results**, quantified: mutants injected, mutants caught,
+  vacuous tests found and what they were. This is the most novel number in the
+  stack and nobody else reports it.
+- **Coverage**: the 344-query corpus and 47 staged fixtures against the SQL
+  surface, with the gap register as the honest limitations section.
+
+That is a real evaluation section for a planner paper. It is not a storage
+evaluation, which is precisely why these venues work and FAST does not.
+
+### Recommended plan
+
+1. **Target PVLDB Oct 1** if the evaluation above can be built in three weeks;
+   otherwise **EDBT Oct 7** or **SIGMOD Round 4 Oct 17**, in that order of
+   preference by how much time you actually have. PVLDB's monthly cadence means
+   slipping a month costs a month, not a year — start there and slide if needed.
+2. **Put CIDR 2028 (~Aug 2027) on the calendar.** It remains the single best fit
+   for the architecture paper.
+3. **Watch `damon-db.org`** for the 2027 CFP (~March) and fix the tokenizer
+   paper's numbers in the meantime.
+4. **Drop FAST '27.** Revisit for FAST '28 only if §6 gets done.
 
 ## 6. What would make a real FAST '28 submission
 
@@ -173,3 +221,17 @@ none of it is paper-only busywork.
 
 Items 1–3 are the gate. With 1–5 done, Framing A is a credible FAST '28 long
 paper with a real evaluation; add 6 and it is a strong one.
+
+---
+
+## Sources for §5
+
+Checked 2026-09-07. `cidrdb.org` and `wikicfp.com` are egress-blocked from this
+environment, so those rows come from search results rather than the pages
+themselves — verify before planning around them.
+
+- [CIDR 2027 CFP](https://www.cidrdb.org/cidr2027/cfp.html) · [CIDR 2027](https://www.cidrdb.org/cidr2027/)
+- [PVLDB Vol. 20 submission guidelines](https://www.vldb.org/2027/submission-guidelines.html) · [VLDB 2027 research track](https://vldb.org/2027/call-for-research-track.html)
+- [SIGMOD 2027 important dates](https://2027.sigmod.org/calls_papers_important_dates.shtml) · [SIGMOD 2027 research CFP](https://2027.sigmod.org/calls_papers_sigmod_research.shtml)
+- [EDBT/ICDT 2027](https://edbticdt2027.github.io/) · [EDBT 2027 CFP listing](https://www.madics.fr/event/conf615/)
+- [DaMoN](https://damon-db.org/)

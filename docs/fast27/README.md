@@ -23,10 +23,23 @@ blockers, either of which is sufficient on its own:
    and there is no storage measurement of any kind in any repo to build one from.
 
 This is a venue-fit problem, not a work-quality problem. The DB25 stack is
-substantial and unusually well-tested; it is aimed at the wrong conference. See
-[`venue-fit.md`](venue-fit.md) for the ranked alternatives — **CIDR 2027 and DaMoN
-2027 are strong, near-term, genuinely appropriate targets** for the work that
-already exists.
+substantial and unusually well-tested; it is aimed at the wrong conference.
+
+**The alternatives are all further away than Sept 15 and all better.**
+[`venue-fit.md`](venue-fit.md) §5 has the verified deadlines; the short version:
+
+| Venue | Deadline | Note |
+|---|---|---|
+| **PVLDB Vol. 20** → VLDB 2027 | **Oct 1, 2026** (~3 wks) | Monthly cadence — slipping costs a month, not a year |
+| **EDBT 2027** | **Oct 7, 2026** (~4 wks) | Final cycle for the 2027 edition |
+| **SIGMOD 2027** | **Oct 17, 2026** (~6 wks) | Round 4; abstract ~Oct 10 |
+| DaMoN 2027 | ~Mar 2027 (unannounced) | Right home for the tokenizer/arena papers |
+| ~~CIDR 2027~~ | **closed Aug 4, 2026** | Best fit, missed by 5 weeks. CIDR 2028 ≈ Aug 2027 |
+
+These are research tracks, so unlike CIDR they need an evaluation — but a
+credible one is buildable **without an execution engine** (plan comparison
+against PostgreSQL/DuckDB, planner latency, falsifiability-gate numbers), which
+is not true for FAST. See `venue-fit.md` §5, "The catch."
 
 If you disagree and want to go anyway, [`plan-8-day.md`](plan-8-day.md) is the
 honest version of that plan, including what it would cost and what it would have

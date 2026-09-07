@@ -44,7 +44,7 @@ real.
 
 ---
 
-## B. The architecture paper — the CIDR framing
+## B. The architecture paper — the database-venue framing
 
 > Query engines are typically built as a monolith and tested end to end, which
 > means the correctness of an early stage is only ever observed through the
@@ -70,8 +70,12 @@ real.
 > frontend gap is either closed or provably incapable of producing a wrong
 > result, making phase exit a checklist rather than a judgement call.
 
-**Honest read:** this one is close to true *today*. It is the paper to write if
-CIDR 2027 is still open.
+**Honest read:** this one is close to true *today* — it was written for CIDR,
+which closed Aug 4, 2026. For PVLDB (Oct 1), EDBT (Oct 7), or SIGMOD Round 4
+(Oct 17) it needs an evaluation paragraph on top: plan-quality comparison against
+PostgreSQL and DuckDB plans, planner latency against the search budget, and the
+gate numbers. Note that all three are double-blind, so keep the third-person
+phrasing above; CIDR would have been single-blind.
 
 ---
 
