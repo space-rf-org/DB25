@@ -181,6 +181,16 @@ add_test(NAME staged_inject
 # drop a field satisfy perfectly. Two defects came through that hole (the whole
 # DML payload, and a semi/anti join's match condition), so it is now a gate.
 add_test(NAME staged_fields COMMAND staged_runner --fields)
+# The same question one layer down: does a change to an EXPRESSION reach the
+# golden? The node side was guarded and the expression side was not, and that
+# asymmetry had already cost three defects that only fixtures found.
+add_test(NAME staged_exprs COMMAND staged_runner --exprs)
+
+# The super-build disables db25-physical-plan's own tests because they run in
+# its CI - true only while its logical-plan pin matches ours. See the script.
+add_test(NAME pin_agreement
+         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_pin_agreement.sh
+                 ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ---------------------------------------------------------------------------
 # corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown

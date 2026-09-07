@@ -535,6 +535,173 @@ static std::vector<plan::LogicalOp> all_logical_ops() {
     return ops;
 }
 
+// ---- the EXPRESSION sweep ------------------------------------------------
+//
+// The node sweep above asks whether a change to a plan NODE reaches the golden.
+// This asks the same of an EXPRESSION, and it exists because the node side was
+// guarded and the expression side was not - an asymmetry that had already cost
+// three defects (a semi-join predicate that rendered as nothing, a DML payload
+// that rendered as nothing, and a subquery whose inner plan was never
+// serialized). Each was found by adding a fixture and looking; none could have
+// been found by a test, because no test asked the question.
+//
+// It renders through plan_to_sexpr rather than expr_to_sexpr on purpose: the
+// GOLDEN is written by the plan writer, and some payload - a subquery's inner
+// plan - is emitted by the node layer rather than inline. Sweeping the
+// expression writer alone reports blindness that the golden does not have.
+namespace exprsweep {
+
+struct ExprCase {
+    plan::ExprKind kind;
+    const char* what;                                 // the payload it varies
+    std::function<plan::ExprPtr(int)> make;           // 0 and 1 must differ
+};
+
+static plan::ExprPtr mk(plan::ExprKind k) {
+    auto e = std::make_unique<plan::Expr>(k);
+    e->type = db25::ast::DataType::Integer;
+    return e;
+}
+static plan::ExprPtr ecol(std::uint32_t i) {
+    auto e = mk(plan::ExprKind::ColumnRef); e->input_index = i; return e;
+}
+static plan::ExprPtr elit(std::int64_t v) {
+    auto e = mk(plan::ExprKind::Literal); e->value.value = v; return e;
+}
+static plan::LogicalNodePtr escan(const std::string& t) {
+    auto s = std::make_unique<plan::LogicalNode>(plan::LogicalOp::Scan);
+    s->table_name = t;
+    s->output = {{t + "0", db25::ast::DataType::Integer, false, 0, 0, t, false}};
+    return s;
+}
+
+static const std::vector<ExprCase>& cases() {
+    static const std::vector<ExprCase> v = {
+        {plan::ExprKind::ColumnRef, "input_index",
+         [](int v) { return ecol(static_cast<std::uint32_t>(v)); }},
+        {plan::ExprKind::Literal, "value", [](int v) { return elit(v ? 7 : 9); }},
+        {plan::ExprKind::BinaryOp, "bin_op", [](int v) {
+             auto e = mk(plan::ExprKind::BinaryOp);
+             e->bin_op = v ? db25::ast::BinaryOp::Subtract : db25::ast::BinaryOp::Add;
+             e->children.push_back(ecol(0)); e->children.push_back(elit(1)); return e; }},
+        {plan::ExprKind::UnaryOp, "un_op", [](int v) {
+             auto e = mk(plan::ExprKind::UnaryOp);
+             e->un_op = v ? db25::ast::UnaryOp::Negate : db25::ast::UnaryOp::Not;
+             e->children.push_back(ecol(0)); return e; }},
+        {plan::ExprKind::ScalarFunction, "func_name", [](int v) {
+             auto e = mk(plan::ExprKind::ScalarFunction);
+             e->func_name = v ? "GEE" : "EFF"; e->children.push_back(ecol(0)); return e; }},
+        {plan::ExprKind::Aggregate, "distinct", [](int v) {
+             auto e = mk(plan::ExprKind::Aggregate);
+             e->func_name = "SUM"; e->distinct = v != 0;
+             e->children.push_back(ecol(0)); return e; }},
+        {plan::ExprKind::WindowFunction, "window.frame.spec", [](int v) {
+             auto e = mk(plan::ExprKind::WindowFunction);
+             e->func_name = "RANK"; e->window.frame.present = true;
+             e->window.frame.spec = v ? "RANGE UNBOUNDED PRECEDING"
+                                      : "ROWS UNBOUNDED PRECEDING";
+             return e; }},
+        {plan::ExprKind::Case, "branch value", [](int v) {
+             auto e = mk(plan::ExprKind::Case);
+             e->children.push_back(ecol(0)); e->children.push_back(elit(v ? 7 : 9));
+             return e; }},
+        {plan::ExprKind::Cast, "target_type", [](int v) {
+             auto e = mk(plan::ExprKind::Cast);
+             e->target_type = v ? db25::ast::DataType::Double : db25::ast::DataType::BigInt;
+             e->children.push_back(ecol(0)); return e; }},
+        {plan::ExprKind::Between, "bound", [](int v) {
+             auto e = mk(plan::ExprKind::Between);
+             e->children.push_back(ecol(0)); e->children.push_back(elit(1));
+             e->children.push_back(elit(v ? 7 : 9)); return e; }},
+        {plan::ExprKind::Like, "pattern", [](int v) {
+             auto e = mk(plan::ExprKind::Like);
+             e->children.push_back(ecol(0)); e->children.push_back(elit(v ? 7 : 9));
+             return e; }},
+        {plan::ExprKind::IsNull, "operand", [](int v) {
+             auto e = mk(plan::ExprKind::IsNull);
+             e->children.push_back(ecol(static_cast<std::uint32_t>(v))); return e; }},
+        {plan::ExprKind::BooleanTest, "bool_test", [](int v) {
+             auto e = mk(plan::ExprKind::BooleanTest);
+             e->bool_test = v ? plan::BoolTest::False : plan::BoolTest::True;
+             e->children.push_back(ecol(0)); return e; }},
+        {plan::ExprKind::Row, "component", [](int v) {
+             auto e = mk(plan::ExprKind::Row);
+             e->children.push_back(elit(1)); e->children.push_back(elit(v ? 7 : 9));
+             return e; }},
+        {plan::ExprKind::InList, "list member", [](int v) {
+             auto e = mk(plan::ExprKind::InList);
+             e->children.push_back(ecol(0)); e->children.push_back(elit(v ? 7 : 9));
+             return e; }},
+        // The inner plan, not the Subquery node's own fields: rendering the node
+        // and dropping the plan under it is precisely the defect this catches.
+        {plan::ExprKind::Subquery, "sub_plan", [](int v) {
+             auto e = mk(plan::ExprKind::Subquery);
+             e->subquery_kind = plan::SubqueryKind::Exists;
+             e->type = db25::ast::DataType::Boolean;
+             e->sub_plan = escan(v ? "zzz" : "aaa"); return e; }},
+        {plan::ExprKind::Parameter, "param_index", [](int v) {
+             auto e = mk(plan::ExprKind::Parameter);
+             e->param_index = static_cast<std::uint32_t>(v + 1); return e; }},
+        {plan::ExprKind::OuterRef, "outer_depth", [](int v) {
+             auto e = mk(plan::ExprKind::OuterRef);
+             e->outer_depth = static_cast<std::uint32_t>(v + 1); return e; }},
+    };
+    return v;
+}
+
+// Every expression kind the IR names, from its own string table - the same
+// authority the writer switches on, so a new kind is swept without anyone
+// remembering to add it.
+static std::vector<plan::ExprKind> all_expr_kinds() {
+    std::vector<plan::ExprKind> ks;
+    for (int i = 0; i < 256; ++i) {
+        const auto k = static_cast<plan::ExprKind>(i);
+        if (std::string(plan::expr_kind_to_string(k)) != "?") ks.push_back(k);
+    }
+    return ks;
+}
+
+// The expression is placed where a real one lives - a Filter's predicate - and
+// the whole PLAN is rendered, because that is what a golden pins.
+static plan::LogicalNodePtr in_a_plan(plan::ExprPtr e) {
+    auto base = escan("t");
+    auto f = std::make_unique<plan::LogicalNode>(plan::LogicalOp::Filter);
+    f->output = base->output;
+    f->predicate = std::move(e);
+    f->add_child(std::move(base));
+    return f;
+}
+
+}  // namespace exprsweep
+
+static int run_expr_sweep() {
+    long checked = 0, invisible = 0, uncovered = 0;
+    for (const exprsweep::ExprCase& c : exprsweep::cases()) {
+        const auto a = exprsweep::in_a_plan(c.make(0));
+        const auto b = exprsweep::in_a_plan(c.make(1));
+        const std::string sa = staged::plan_to_sexpr(a.get());
+        const std::string sb = staged::plan_to_sexpr(b.get());
+        ++checked;
+        if (sa == sb) {
+            ++invisible;
+            std::printf("  INVISIBLE %s.%s does not reach the rendered plan:\n    %s\n",
+                        plan::expr_kind_to_string(c.kind), c.what, sa.c_str());
+        }
+    }
+    for (const plan::ExprKind k : exprsweep::all_expr_kinds()) {
+        bool covered = false;
+        for (const exprsweep::ExprCase& c : exprsweep::cases()) covered = covered || c.kind == k;
+        if (!covered) {
+            ++uncovered;
+            std::printf("  UNCOVERED %s has no case - what distinguishes two plans "
+                        "that differ only in one?\n", plan::expr_kind_to_string(k));
+        }
+    }
+    std::printf("staged_runner --exprs: %ld payload(s) checked, %ld invisible, "
+                "%ld kind(s) uncovered\n", checked, invisible, uncovered);
+    return (invisible == 0 && uncovered == 0) ? 0 : 1;
+}
+
 static int run_field_sweep() {
     long checked = 0, invisible = 0, uncovered = 0;
     for (const fieldsweep::FieldCase& c : fieldsweep::cases()) {
@@ -572,6 +739,7 @@ int main(int argc, char** argv) {
     bool roundtrip = false;
     bool inject = false;
     bool fields = false;
+    bool exprs = false;
     std::string dir;
     for (int i = 1; i < argc; ++i) {
         const std::string a = argv[i];
@@ -580,10 +748,12 @@ int main(int argc, char** argv) {
         else if (a == "--roundtrip") roundtrip = true;
         else if (a == "--inject") inject = true;
         else if (a == "--fields") fields = true;
+        else if (a == "--exprs") exprs = true;
         else dir = a;
     }
     // --fields needs no fixture directory: it renders nodes it builds itself.
     if (fields) return run_field_sweep();
+    if (exprs) return run_expr_sweep();
     if (dir.empty()) {
         std::printf("staged_runner: usage: staged_runner "
                     "[--update|--gate|--roundtrip|--inject|--fields] <fixture-dir>\n");

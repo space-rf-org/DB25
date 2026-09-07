@@ -44,6 +44,16 @@
 //       merged column is NULL for right-only rows. Caught by the RIGHT-JOIN-USING
 //       merged-value test (literal oracle over an all-right-only join).
 //
+//   M16 outer-join eval drops null-extended rows, so LEFT/RIGHT/FULL degrade to
+//       inner. Caught by any outer-join test with an unmatched row.
+//   M17 aggregate FILTER is ignored, so a filtered aggregate degrades to an
+//       unfiltered one. Caught by the FILTER-clause value tests.
+//   M18 row comparison uses only its first component, so (1,2) = (1,9) wrongly
+//       holds. Caught by the row-comparison tests.
+//
+// `kMutants[]` below is the AUTHORITY - the gate iterates that table, not this
+// comment, and the comment had already drifted three mutants behind it once.
+//
 // A test is FALSIFIABLE iff some mutant makes it fail. The gate reports any test
 // that survives every mutant as NON-FALSIFIABLE (vacuous) and exits non-zero.
 
