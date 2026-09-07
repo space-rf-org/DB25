@@ -235,6 +235,15 @@ add_test(NAME physical_integration COMMAND physical_integration)
 # query is bench/reference_query.sql, read at runtime so the measured query and
 # the documented query cannot drift apart. Built so it cannot rot; run by hand.
 # ---------------------------------------------------------------------------
+# The declared SQL surface (docs/sql-surface.md) is executable: this drives every
+# row through the real pipeline and fails when the document and the code disagree,
+# in either direction. Before it existed the document had drifted on four rows.
+add_executable(surface_runner integration/surface_runner.cpp)
+target_link_libraries(surface_runner PRIVATE db25physicalplan)
+target_compile_options(surface_runner PRIVATE -Wall -Wextra)
+add_test(NAME sql_surface COMMAND surface_runner
+         ${CMAKE_CURRENT_SOURCE_DIR}/docs/sql-surface.md)
+
 add_executable(stage_timer
     integration/stage_timer.cpp
     integration/staged_sexpr.cpp)
