@@ -1,0 +1,201 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  USENIX FAST '27 submission skeleton --- ANONYMIZED (double-blind)
+%
+%  BEFORE USING THIS FILE:
+%    1. Download the current USENIX template + style file from the USENIX
+%       author-resources / paper-templates page and put usenix2019_v3.sty
+%       (or whatever the current version is named) next to this file.
+%       Do NOT reuse the IEEEtran setup from DB25-sql-tokenizer/papers/ ---
+%       it does not meet the USENIX format requirements.
+%    2. Confirm the page limit and format rules against the live CFP.
+%       This skeleton encodes ../cfp-facts.md, which was reconstructed from
+%       search results, not read off the official page.
+%    3. Keep it anonymous. See ../submission-checklist.md section 2.
+%
+%  Build:  pdflatex paper && bibtex paper && pdflatex paper && pdflatex paper
+%  Then:   exiftool -all= -overwrite_original paper.pdf && pdfinfo paper.pdf
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[letterpaper,twocolumn,10pt]{article}
+\usepackage{usenix2019_v3}          % <-- from the USENIX templates page
+
+\usepackage{graphicx}
+\usepackage{booktabs}               % professional tables; avoid \hline everywhere
+\usepackage{amsmath,amssymb}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[hidelinks]{hyperref}
+
+% --- Anonymization: strip every identity field from the PDF metadata. -------
+% This is necessary but NOT sufficient. pdflatex still writes /Creator and
+% /Producer, so run exiftool on the output and verify with pdfinfo.
+\hypersetup{
+  pdfauthor={},
+  pdftitle={},
+  pdfsubject={},
+  pdfkeywords={},
+  pdfcreator={},
+  pdfproducer={}
+}
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% TITLE --- no \author block. USENIX double-blind: authors must not be
+% identified explicitly or by implication. Do not write "Anonymous Authors"
+% with an affiliation, and never "reference removed for blind review."
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\title{\Large \bf TODO: a title that names the mechanism and the result}
+
+\author{}                            % intentionally empty for review
+\date{}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{abstract}
+% 150--250 words. Structure that reliably works:
+%   1 sentence  problem
+%   1 sentence  why existing approaches fall short
+%   2 sentences what you built and the key idea
+%   2 sentences the headline result, IN NUMBERS
+%   1 sentence  why it generalizes
+% Draft candidates live in abstracts.md. Do the arithmetic on every number
+% here before a reviewer does --- see ../readiness-assessment.md section 4.
+TODO
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+% Write this LAST, after the evaluation exists.
+%
+% - Establish the storage-systems problem in the first paragraph. A FAST
+%   reviewer decides in one column whether this paper is in scope; do not make
+%   them wait for section 4 to meet a storage concept.
+% - State what is new as an explicit bulleted contributions list.
+% - Forward-reference the headline number.
+
+TODO
+
+\noindent This paper makes the following contributions:
+\begin{itemize}
+  \item TODO --- the mechanism.
+  \item TODO --- the property it guarantees, and the evidence.
+  \item TODO --- the evaluation and what it shows.
+  \item TODO --- the artifact, and what a reader can independently check.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Background and Motivation}
+% What the reader must know. Assume Cascades/memo literacy for a DB audience;
+% do NOT assume it for a FAST audience --- a storage PC will need the memo, the
+% property/enforcer model, and "why the plan is the interesting artifact"
+% explained in about half a column.
+
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Design}
+% Source: docs/design/physical-planner.md --- already good prose. It needs
+% compressing, de-first-personing, and a storage framing.
+%
+% Lead with the contract, because it is the novel part:
+%   plan(logical_plan, catalog_stats, capability_profile, runtime_profile?)
+% and the invariant: one physical IR, one cost model, deterministic tier
+% selection. Then the storage substrate as a typed, versioned, external input.
+
+\subsection{The planner contract}
+TODO
+
+\subsection{Describing a storage substrate}
+TODO
+
+\subsection{Cost model}
+% Be honest about what the model prices. If the I/O terms are new as of this
+% paper, say so and say what they were calibrated against.
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Implementation}
+% Keep short. Toolchain (GCC 14, C++23, -fno-exceptions), LOC per stage, and
+% anything a reimplementer would trip over. Not a tour of the codebase.
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Methodology: falsifiability gating}
+% This is the most distinctive material in the whole stack. Do not bury it in
+% "Implementation."
+%
+%   - The suite must pass clean.
+%   - Every injected mutant must be caught by at least one test.
+%   - Any test that NO mutant can make fail is reported as a defect (vacuous).
+%
+% Plus: per-stage golden s-expressions localizing a regression to the first
+% diverging stage; lossless round-trip encoding; stage-isolated injection;
+% reference-evaluator result equivalence under 3VL.
+%
+% Report it quantitatively: mutants injected, mutants caught, vacuous tests
+% found and what they were. "We found N tests that could not fail" is a result.
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Evaluation}
+% State the questions first, then answer one per subsection.
+%
+% Every table must state: hardware, OS, compiler + flags, corpus, number of
+% runs, and the run-to-run spread. Single numbers with no variance read as
+% unserious. Baselines must be systems you measured yourself on this hardware
+% --- not figures quoted from other papers.
+
+\subsection{Experimental setup}
+TODO
+
+\subsection{Q1: TODO}
+TODO
+
+\subsection{Q2: TODO}
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Limitations}
+% Volunteer the real weaknesses; a reviewer who finds them first discounts
+% everything else. docs/gap-register.md is the model for the tone: every gap is
+% either closed or a deferred gap that provably cannot produce a wrong result.
+%
+% For DB25 as of 2026-09: no execution engine, no measured I/O, cost model not
+% calibrated against a real device, single-machine single-author evaluation.
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Related Work}
+% Currently ZERO citations exist anywhere in the DB25 docs. Budget a full day.
+% Minimum coverage:
+%   Optimizers   -- System R, Volcano/Cascades, Orca, Calcite, Starburst
+%   Engines      -- DuckDB, Umbra, Photon, SQLite, MonetDB/X100, Velox
+%   SIMD parsing -- simdjson, Mison, Sparser, FSST
+%   Storage      -- computational/near-data pushdown, ZNS, tiering,
+%                   disaggregation, LSM engineering
+%   Testing      -- mutation testing, metamorphic testing, SQLancer, RQG
+% Cite your own prior work in the THIRD PERSON. Never "our previous work."
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+% Half a column. Restate the contribution and the number. No new material.
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% NO acknowledgements section in a double-blind submission --- it de-anonymizes.
+% Add it for the camera-ready.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Availability: no GitHub URLs during review. github.com/space-rf-org/... names
+% the authors instantly. Use an anonymized mirror or withhold.
+% \section*{Availability}
+% The artifact is available at [URL withheld for double-blind review].
+
+\bibliographystyle{plain}
+\bibliography{refs}
+
+\end{document}

@@ -115,5 +115,9 @@ joins), `tests/property/` (deterministic seeded SQL fuzzer + invariants),
   with ranked, actionable inspiration for the next layers.
 - [`docs/formal-methods-proposal.md`](docs/formal-methods-proposal.md) — a proposal for
   where TLA+ and Alloy would fit across the engine's lifecycle.
+- [`docs/fast27/`](docs/fast27/) — a conference readiness packet for USENIX FAST '27:
+  CFP requirements, an honest venue-fit assessment (with alternative venues), the
+  asset/gap inventory across all stages, submission and artifact-evaluation
+  checklists, and an anonymized paper skeleton.
 - [`docs/arena-allocator/`](docs/arena-allocator/) — the arena / cache-aligned
   allocation strategy paper, a stack-wide methodology.
