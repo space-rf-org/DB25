@@ -1,0 +1,10 @@
+q1|filter|SELECT name FROM emp WHERE salary > 1000
+q2|2-way join|SELECT e.name, d.name FROM emp e JOIN dept d ON e.dept_id = d.id
+q3|4-way join|SELECT c.name FROM cust c JOIN orders o ON c.id = o.user_id JOIN items i ON o.id = i.order_id JOIN prod p ON i.prod_id = p.id
+q4|6-way join|SELECT c.name FROM cust c JOIN orders o ON c.id = o.user_id JOIN items i ON o.id = i.order_id JOIN prod p ON i.prod_id = p.id JOIN emp e ON e.id = c.id JOIN dept d ON d.id = e.dept_id
+q5|group by + agg|SELECT dept_id, COUNT(*), SUM(salary) FROM emp GROUP BY dept_id
+q6|having|SELECT dept_id, SUM(salary) FROM emp GROUP BY dept_id HAVING SUM(salary) > 100
+q7|window|SELECT name, RANK() OVER (PARTITION BY dept_id ORDER BY salary DESC) FROM emp
+q8|correlated exists|SELECT e.name FROM emp e WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = e.id)
+q9|cte + join|WITH s AS (SELECT dept_id, AVG(salary) AS a FROM emp GROUP BY dept_id) SELECT e.name FROM emp e JOIN s ON e.dept_id = s.dept_id WHERE e.salary > s.a
+q10|reference query|WITH dept_stats AS (SELECT dept_id, AVG(salary) AS avg_sal, COUNT(*) AS headcount FROM emp GROUP BY dept_id) SELECT e.name, e.salary, ds.avg_sal, RANK() OVER (PARTITION BY e.dept_id ORDER BY e.salary DESC) AS rnk, ord.total FROM emp e JOIN dept_stats ds ON e.dept_id = ds.dept_id LEFT JOIN LATERAL (SELECT SUM(o.total) AS total FROM orders o WHERE o.user_id = e.id) ord ON true WHERE e.salary > ds.avg_sal ORDER BY rnk LIMIT 10
