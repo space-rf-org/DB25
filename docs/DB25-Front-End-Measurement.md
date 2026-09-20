@@ -60,9 +60,9 @@ rest.
 
 ### Machine and versions
 
-4 × Intel Xeon @ 2.80 GHz, 15 GB RAM, Linux 6.18, gcc/g++ 13.3, everything at
-`-O2`, all in one session, with identical fixtures and `ANALYZE` run on both
-engines.
+4 × Intel Xeon @ 2.10 GHz, 15 GB RAM, Linux 6.18, gcc/g++ 13.3, everything at
+`-O2`. All three systems measured back to back in one session on an otherwise
+idle host, with identical fixtures and `ANALYZE` run on both engines.
 
 - **DB25** at `0c99641`, Release build.
 - **PostgreSQL 18.6**, built from source at `REL_18_STABLE` with `-O2`,
@@ -170,49 +170,75 @@ hard construct right.
 
 ## 3. Planning time
 
-Median of 500 runs (DB25) / 200–300 runs (others), warm, µs per query.
+### What DB25's number contains
 
-| | query | **DB25** | PG 18 parse+plan | PG 18 planner only | DuckDB |
+DB25's figure is the **whole front end**, parser included. PostgreSQL's own
+`Planning Time` is not — it measures `pg_plan_query` alone, after parse analysis
+and rewrite have already run. Comparing the two directly charges DB25 for work
+PostgreSQL is not being charged for, so both are broken out here and the stages
+are mapped onto each other:
+
+| DB25 stage | PostgreSQL equivalent | in `Planning Time`? |
+|---|---|---|
+| `parse` | `raw_parser` | no |
+| `analyze` + `bind` | parse analysis + rewrite | no |
+| logical optimize + physical lowering | the planner | **yes** |
+
+Medians over 3–5 independent repeats, warm, µs.
+
+| | query | parse | analyze+bind | **planner** | total |
 |---|---|---:|---:|---:|---:|
-| q1 | filter | 7.04 | 13.41 | **5.00** | 113.0 |
-| q2 | 2-way join | **12.33** | 38.71 | 17.00 | 306.7 |
-| q3 | 4-way join | **48.73** | 98.93 | 49.00 | 877.3 |
-| q4 | 6-way join | **74.02** | 242.63 | 161.00 | 1641.3 |
-| q5 | group by | 11.62 | 24.62 | **9.00** | 299.8 |
-| q6 | having | 13.98 | 30.61 | **11.00** | 379.3 |
-| q7 | window | 10.37 | 24.75 | **9.00** | 225.9 |
-| q8 | EXISTS | **12.92** | 51.01 | 23.00 | 367.9 |
-| q9 | CTE + join | **25.70** | 76.04 | 31.00 | 695.5 |
-| q10 | reference | **67.63** | 169.74\* | 67.50 | 1518.1 |
+| q1 | filter | 0.9 | 1.5 | 3.1 | 5.5 |
+| q2 | 2-way join | 1.8 | 2.4 | 5.1 | 9.3 |
+| q3 | 4-way join | 3.5 | 5.1 | 30.0 | 38.6 |
+| q4 | 6-way join | 5.2 | 8.4 | 45.0 | 58.6 |
+| q5 | group by | 1.5 | 2.8 | 4.1 | 8.4 |
+| q6 | having | 1.8 | 3.2 | 5.2 | 10.2 |
+| q7 | window | 1.5 | 1.9 | 4.3 | 7.7 |
+| q8 | EXISTS | 2.0 | 2.6 | 4.7 | 9.3 |
+| q9 | CTE + join | 3.4 | 5.2 | 10.2 | 18.8 |
+| q10 | reference | 8.1 | 13.4 | 26.6 | 48.1 |
 
-\* q10's wall figure still carries some inflation: the baseline subtracts a
-one-line `EXPLAIN`, and q10's plan output is thirty lines, so part of that number
-is psql formatting rather than planning. Its planner-only figure is clean.
+Parsing is 9–17% of the front end and never the story. The Cascades search is
+49–78%, and its share rises with join count — which is what it should do, and is
+the only part of this table that is really about planning.
 
-Re-running the wall measurement at N=400 instead of N=200 moved every figure by
-under 8% and none of the orderings, so these are not one-sample numbers.
+### Against the other two
 
-**Read against the column that is worst for us** — PostgreSQL planner-only, which
-excludes the parse and rewrite that DB25's number includes — DB25 wins the four
-queries with real planning in them: q4 (74.0 vs 161), q8 (12.9 vs 23), q9 (25.7
-vs 31), q2 (12.3 vs 17). It ties q3 (48.7 vs 49.0) and q10 (67.6 vs 67.5), and
-loses q1, q5, q6 and q7 — the four where PostgreSQL's planner has almost nothing
-to do and DB25 is still paying for a tokenizer and a memo. Read against
-parse+plan, which is the like-for-like boundary, DB25 wins all ten.
+| | query | **DB25 planner** | PG 18 planner | | **DB25 total** | PG 18 parse+plan | DuckDB |
+|---|---|---:|---:|---|---:|---:|---:|
+| q1 | filter | 3.1 | **3.0** | | 5.5 | **4.8** | 140 |
+| q2 | 2-way join | **5.1** | 10.0 | | **9.3** | 20.9 | 306 |
+| q3 | 4-way join | **30.0** | 37.0 | | **38.6** | 70.9 | 815 |
+| q4 | 6-way join | **45.0** | 125.0 | | **58.6** | 169.4 | 1425 |
+| q5 | group by | 4.1 | **4.0** | | **8.4** | 10.7 | 295 |
+| q6 | having | 5.2 | **5.0** | | **10.2** | 14.5 | 322 |
+| q7 | window | **4.3** | 5.0 | | **7.7** | 12.3 | 173 |
+| q8 | EXISTS | **4.7** | 12.0 | | **9.3** | 26.5 | 353 |
+| q9 | CTE + join | **10.2** | 18.0 | | **18.8** | 39.2 | 715 |
+| q10 | reference | **26.6** | 47.0 | | **48.1** | 123.3 | 1475 |
 
-DuckDB is 16–29× slower than DB25 throughout, and roughly an order of magnitude
-slower than PostgreSQL's planner. That is not a defect in DuckDB. It
-is an analytical engine whose planning cost is amortised over multi-second scans,
-and it spends the time on things — a sampling-based join-order optimiser, runtime
-re-optimisation hooks — that only pay off when there is an executor to pay them
-back. It is in the table because it is a fair third data point at this boundary,
-not because 1.6 ms is a problem for anyone running DuckDB.
+**How precise are these?** Five repeats of the DB25 harness spread about 15%
+around the median. PostgreSQL reports `Planning Time` to the microsecond and its
+run-to-run spread is similar. **Any difference under roughly 15% is not a
+claim.** On that rule: planner-to-planner, DB25 is faster on the six queries with
+real planning in them and indistinguishable on the four trivial ones; it never
+loses. End to end, it wins nine and ties q1.
+
+DuckDB is 21–38× slower than DB25 and roughly an order of magnitude slower than
+PostgreSQL's planner. That is not a defect in DuckDB. It is an analytical engine
+whose planning cost is amortised over multi-second scans, and it spends the time
+on things — a sampling-based join-order optimiser, runtime re-optimisation hooks
+— that only pay off when there is an executor to pay them back. It is in the
+table because it is a fair third data point at this boundary, not because 1.4 ms
+is a problem for anyone running DuckDB.
 
 **The honest framing of this whole table:** planning time is not why DB25 exists,
-and at execution scale it is noise. What planning time is good for is what it
-says about the *shape* of the search — DB25 explores 63 physical candidates
-across 31 optimization goals for q4, prunes 25 of them by branch-and-bound, and
-finishes in 74 µs. That is the number worth caring about, and it is in section 5.
+and at execution scale it is noise. Section 4 is the section that matters. What
+planning time is good for is what it says about the *shape* of the search — DB25
+explores 63 physical candidates across 31 optimization goals for q4, prunes 25 of
+them by branch-and-bound, and does it in 45 µs. That is the number worth caring
+about, and it is in section 5.
 
 ---
 
@@ -227,12 +253,12 @@ Top-node estimated rows against the true result size:
 |---|---:|---:|---:|---:|
 | q1 filter | 18,999 | 2,000 | **18,999** | 4,000 |
 | q2 2-way join | 19,600 | **20,000** | **20,000** | 22,222 |
-| q3 4-way join | 99,950 | 100,000 | **99,934** | 26,961 |
-| q4 6-way join | 98,000 | **100,000** | 99,934 | 15,695 |
+| q3 4-way join | 99,950 | **100,000** | **100,000** | 26,961 |
+| q4 6-way join | 98,000 | **100,000** | **100,000** | 15,695 |
 | q5 group by | 50 | 2,000 | **50** | 45 |
 | q6 having | 50 | 200 | 17 | 9 |
 | q7 window | 20,000 | **20,000** | **20,000** | **20,000** |
-| q8 EXISTS | 19,999 | 2,000 | **19,690** | 4,000 |
+| q8 EXISTS | 19,999 | 2,000 | **19,739** | 4,000 |
 | q9 CTE + join | 10,000 | 2,000 | **6,667** | 663 |
 | q10 reference | 10 | **10** | **10** | 5,000 |
 
@@ -298,7 +324,7 @@ hash key. Actual result: **10,000 rows**.
 
 ### What each system produced
 
-**PostgreSQL 18** (76.0 µs parse+plan, 31 µs planner only):
+**PostgreSQL 18** (39.2 µs parse+plan, 18 µs planner only):
 
 ```
 Hash Join  (rows=6667)
@@ -310,7 +336,7 @@ Hash Join  (rows=6667)
               ->  Seq Scan on emp  (rows=20000)
 ```
 
-**DuckDB** (695.5 µs):
+**DuckDB** (715 µs):
 
 ```
 PROJECTION (~663 rows)
@@ -322,7 +348,7 @@ PROJECTION (~663 rows)
           └── SEQ_SCAN emp (~20,000)
 ```
 
-**DB25** (25.7 µs):
+**DB25** (18.8 µs front end, 10.2 µs planner):
 
 ```
 (Project exprs=[(col #0)]
@@ -461,9 +487,19 @@ it is recorded rather than buried.
   DB25 has nothing to maintain because it has nothing to consult, and section 7
   is the bill for that.
 - **DuckDB is being measured outside its design point.** Its planning cost is
-  built to be amortised over an executor's seconds. Reading its 1.6 ms as a
+  built to be amortised over an executor's seconds. Reading its 1.4 ms as a
   weakness would be exactly the kind of meaningless number this paper opened by
   disclaiming.
+- **Absolute microseconds are a property of the host, not of the software.** An
+  earlier draft of this paper was measured on a 2.80 GHz instance and reported
+  74 µs for q4; the same binary on this 2.10 GHz instance reports 58.6, because
+  the faster-labelled host was busier. Nothing about DB25 changed. Only figures
+  taken in the same session against each other mean anything, which is why all
+  three systems here were re-measured back to back rather than carried over.
+- **PostgreSQL's estimates move slightly too.** `ANALYZE` samples, so re-running
+  it shifts the multi-way join estimate between 99,491 and 100,000 and the
+  semi-join between 19,690 and 19,739. Small, but it is the reason the q-error
+  figures are given to two decimals and not three.
 - **These numbers move.** They were taken on 2026-09-20 against
   `db25@0c99641`. They will be wrong by the next increment, and that is the
   intended failure mode — the numbers exist to be falsified, not framed.
@@ -479,7 +515,7 @@ information it needs, its output matches two mature planners decision for
 decision: same join
 algorithms, same build sides, same aggregate strategies, same CTE inlining, the
 same refusal to hash an inequality. It does that in 74 µs on the hardest join in
-the set, exploring 63 candidates and pruning 25, against PostgreSQL's 161 µs.
+the set, exploring 63 candidates and pruning 25, against PostgreSQL's 125 µs.
 
 **One bill, itemised.** Everything DB25 still gets wrong is a flat selectivity
 constant standing in for a statistic it does not have. Every join estimate is
@@ -500,6 +536,7 @@ Everything is in `docs/bench/`:
 | `queries.txt` | the ten queries, `id\|label\|sql` |
 | `db25_bench.cpp` | DB25 timing: median of N warm iterations, catalog construction hoisted out of the loop |
 | `db25_plans.cpp` | DB25 plan shape, estimated rows, memo groups, candidates, goals, pruned |
+| `db25_stages.cpp` | the same pipeline with a clock between each stage: parse, analyze+bind, logical optimize, physical lowering |
 | `pg_wall.py` | PostgreSQL both ways: `EXPLAIN (SUMMARY ON)` xN for planner time, and wall time for N `EXPLAIN`s minus N baseline statements for parse+plan |
 | `others_bench.py` | PostgreSQL planner time and DuckDB in-process `EXPLAIN`, minus the same baseline |
 
@@ -511,8 +548,9 @@ export PSQL_BIN=/opt/pg18/bin/psql PGHOST=/tmp/pgs18 PGPORT=55433
 $PSQL_BIN -h $PGHOST -p $PGPORT -U postgres -d bench -f docs/bench/schema.sql
 $PSQL_BIN -h $PGHOST -p $PGPORT -U postgres -d bench -f docs/bench/data.sql
 
-./db25_bench docs/bench/queries.txt 500      # DB25 timing
-./db25_plans docs/bench/queries.txt          # DB25 plans and estimates
+./db25_bench  docs/bench/queries.txt 500     # DB25 timing, one region
+./db25_stages docs/bench/queries.txt 500     # DB25 timing, stage by stage
+./db25_plans  docs/bench/queries.txt         # DB25 plans and estimates
 python3 docs/bench/pg_wall.py 200            # PostgreSQL, both boundaries
 python3 docs/bench/others_bench.py 300       # PostgreSQL planner + DuckDB
 ```
