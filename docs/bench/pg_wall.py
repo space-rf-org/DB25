@@ -8,7 +8,13 @@ import re, statistics, subprocess, sys, time
 S = os.path.dirname(os.path.abspath(__file__))
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 200
 QS = [l.rstrip("\n").split("|", 2) for l in open(f"{S}/queries.txt") if l.strip()]
-PSQL = ["psql","-h","/tmp/pgs","-p","55432","-U","postgres","-d","bench","-tAq","-c"]
+# Cluster location is overridable so the same harness can be pointed at a
+# different PostgreSQL build without editing it.
+PSQL = [os.environ.get("PSQL_BIN", "psql"),
+        "-h", os.environ.get("PGHOST", "/tmp/pgs"),
+        "-p", os.environ.get("PGPORT", "55432"),
+        "-U", os.environ.get("PGUSER", "postgres"),
+        "-d", os.environ.get("PGDATABASE", "bench"), "-tAq", "-c"]
 
 def wall_us(sql, n, reps=5):
     body = "\n".join([f"EXPLAIN {sql};"] * n)
