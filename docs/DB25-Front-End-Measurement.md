@@ -420,7 +420,7 @@ Look again at the cardinality table. Every DB25 miss is in one place.
 | q5 | 2,000 groups vs 50 | `group_selectivity = 0.1` |
 | q6 | 200 vs 50 | `group_selectivity = 0.1` |
 
-Every join estimate is within 2% of the truth. Every *selectivity* estimate is a
+Every join estimate is within 3% of the truth. Every *selectivity* estimate is a
 flat constant — including the semi-join's, which is the one join-shaped rule that
 still carries a bare guess, because how many left rows have a match is a fact
 about the data rather than a fact about the join.
@@ -483,7 +483,7 @@ the set, exploring 63 candidates and pruning 25, against PostgreSQL's 161 µs.
 
 **One bill, itemised.** Everything DB25 still gets wrong is a flat selectivity
 constant standing in for a statistic it does not have. Every join estimate is
-within 2%; every selectivity estimate is a guess. That is a known, bounded piece
+within 3%; every selectivity estimate is a guess. That is a known, bounded piece
 of work, and section 7 names it exactly.
 
 Neither of which is a benchmark. It was fun, and it cost an afternoon.
