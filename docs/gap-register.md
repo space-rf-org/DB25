@@ -25,6 +25,23 @@ regress into silence.
 - **CLOSE** — a correctness defect: a *legal* statement is wrongly rejected or
   mis-typed. It "causes issues" and must be closed before phase exit.
 
+### The test is "silently wrong", not "observable yet"
+
+A defect is not deferrable because nothing downstream consumes it today. The
+stages are built in order, so *every* defect in a lower stage is unobservable
+until the stage above it exists — and that reasoning, applied consistently, would
+defer everything until the system is finished, which is when defects are most
+expensive to remove.
+
+It is also usually false. A wrong number in the planner is already choosing
+plans, already pinned into goldens, and already the baseline against which the
+next coefficient is reasoned. Waiting does not hold the cost flat; it works the
+bad value into more artifacts, so the price of removing it rises with every pass.
+
+**DB25 is going to run on an executor.** A plan that will be executed wrongly is
+wrong now. The question this register asks of a gap is whether it FAILS HONESTLY
+— not whether anyone has noticed yet.
+
 ## Summary
 
 | ID | Area | Gap | Class | Honest behavior / pin |
@@ -42,7 +59,36 @@ regress into silence.
 | ~~G12~~ | harness | A subquery's INNER PLAN is not serialized by the staged writer | ✅ CLOSED | emitted by the node layer as `(subplan …)` and reattached by ONE shared collector; 92 goldens round-trip, 47 inject, **0 `-- phaseb`** · `44`–`47` |
 | ~~G11~~ | parser+binder | `LATERAL` joins unsupported (comma / `JOIN LATERAL` failed to parse) | ✅ CLOSED | `LateralJoin` node → correlated bind (`OuterRef`) + `JoinType::Lateral`/`LeftLateral`; parser #124/#125, analyzer #157/#158, LP #176/#177 · `33_lateral`, `34_left_join_lateral` |
 
+| G13 | physical planner | join cardinality is `left × right × 0.1`, so a multi-join estimate grows without bound | **CLOSE** | silently mis-shapes the plan — see below |
+
 Fixtures are under `corpus/staged/`.
+
+## G13 — join cardinality grows without bound
+
+`cost.cpp` estimates every join as `in(0) * in(1) * card.join_selectivity`. Each
+additional join therefore multiplies the estimate by `right_rows × 0.1` rather
+than settling near the size of the largest input, which is what a foreign-key
+equi-join actually produces. Measured on a six-way join over the benchmark
+fixture:
+
+| | rows |
+|---|---|
+| actual | 98,000 |
+| PostgreSQL estimate | 99,491 |
+| **DB25 estimate** | **2,000,000,000,000,000,000** |
+
+Thirteen orders of magnitude, and it is structural rather than a mistuned
+constant: no value of `join_selectivity` makes a multiplicative rule stop growing
+with join count.
+
+**It is already deciding plans.** On that query DB25 chooses MergeJoin twice with
+three Sorts where both PostgreSQL and DuckDB choose all-hash — the search working
+correctly on an input that is wrong. It also feeds the join-reordering DP, and
+the plans it produces are pinned in goldens.
+
+CLOSE rather than DEFERRED because it cannot fail honestly: there is no
+diagnostic, no rejection, and no signal of any kind. The planner returns a plan
+and the plan is mis-shaped.
 
 Two defects were found by ADDING FIXTURES rather than by an audit, when the
 physical planner learned to lower DML (increment 3.9b) and the corpus gained
