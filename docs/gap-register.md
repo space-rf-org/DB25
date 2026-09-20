@@ -25,6 +25,23 @@ regress into silence.
 - **CLOSE** — a correctness defect: a *legal* statement is wrongly rejected or
   mis-typed. It "causes issues" and must be closed before phase exit.
 
+### The test is "silently wrong", not "observable yet"
+
+A defect is not deferrable because nothing downstream consumes it today. The
+stages are built in order, so *every* defect in a lower stage is unobservable
+until the stage above it exists — and that reasoning, applied consistently, would
+defer everything until the system is finished, which is when defects are most
+expensive to remove.
+
+It is also usually false. A wrong number in the planner is already choosing
+plans, already pinned into goldens, and already the baseline against which the
+next coefficient is reasoned. Waiting does not hold the cost flat; it works the
+bad value into more artifacts, so the price of removing it rises with every pass.
+
+**DB25 is going to run on an executor.** A plan that will be executed wrongly is
+wrong now. The question this register asks of a gap is whether it FAILS HONESTLY
+— not whether anyone has noticed yet.
+
 ## Summary
 
 | ID | Area | Gap | Class | Honest behavior / pin |
@@ -42,7 +59,70 @@ regress into silence.
 | ~~G12~~ | harness | A subquery's INNER PLAN is not serialized by the staged writer | ✅ CLOSED | emitted by the node layer as `(subplan …)` and reattached by ONE shared collector; 92 goldens round-trip, 47 inject, **0 `-- phaseb`** · `44`–`47` |
 | ~~G11~~ | parser+binder | `LATERAL` joins unsupported (comma / `JOIN LATERAL` failed to parse) | ✅ CLOSED | `LateralJoin` node → correlated bind (`OuterRef`) + `JoinType::Lateral`/`LeftLateral`; parser #124/#125, analyzer #157/#158, LP #176/#177 · `33_lateral`, `34_left_join_lateral` |
 
+| ~~G13~~ | physical planner | join cardinality was `left × right × 0.1`, so a multi-join estimate grew without bound | ✅ CLOSED | an equi-join emits the larger side, not the product; physical-plan #44 — see below |
+
 Fixtures are under `corpus/staged/`.
+
+## G13 — join cardinality grows without bound
+
+`cost.cpp` estimates every join as `in(0) * in(1) * card.join_selectivity`. Each
+additional join therefore multiplies the estimate by `right_rows × 0.1` rather
+than settling near the size of the largest input, which is what a foreign-key
+equi-join actually produces. Measured on a six-way join over the benchmark
+fixture:
+
+| | rows |
+|---|---|
+| actual | 98,000 |
+| PostgreSQL estimate | 99,491 |
+| **DB25 estimate** | **2,000,000,000,000,000,000** |
+
+Thirteen orders of magnitude, and it was structural rather than a mistuned
+constant: no value of `join_selectivity` makes a multiplicative rule stop growing
+with join count.
+
+**It was already deciding plans.** On that query DB25 chose MergeJoin twice with
+three Sorts where both PostgreSQL and DuckDB choose all-hash — the search working
+correctly on an input that was wrong. It also fed the join-reordering DP, and the
+plans it produced were pinned in goldens.
+
+CLOSE rather than DEFERRED because it could not fail honestly: there was no
+diagnostic, no rejection, and no signal of any kind. The planner returned a plan
+and the plan was mis-shaped.
+
+### Closed — physical-plan #44
+
+Under the containment assumption a join emits `|L||R| / max(ndv_L, ndv_R)`, and
+there are no per-column distinct counts yet. A BOUND on that denominator needs
+none: a column has at most as many distinct values as its table has rows, and on
+an equi-join the matching values are contained in the narrower side, so
+`max(ndv_L, ndv_R) >= min(|L|, |R|)` and the single-key estimate is
+`max(|L|, |R|)` — the shape a foreign-key join actually has. Each conjunct beyond
+the one that CONTAINS the join narrows by `join_selectivity`; with no equi-key
+nothing contains the product, and a `CROSS JOIN` is estimated at `|L||R|`
+undiscounted, where it was previously scaled by a selectivity it had no predicate
+to justify.
+
+The predicate reaches the model as a `JoinSpec` rather than being read off the
+operator, so all three algorithms answer identically — otherwise the search would
+choose between them on the strength of an estimate rather than a cost. Both its
+fields are counts, which makes the estimate invariant under re-association.
+
+| | rows | plan |
+|---|---|---|
+| actual | 98,000 | — |
+| PostgreSQL | 99,491 | all hash |
+| DB25 before | 2,000,000,000,000,000,000 | MergeJoin ×2 + three Sorts |
+| **DB25 after** | **100,000** | **all hash, no Sorts** |
+
+Planning the query also got slightly faster (78.5 → 73.2 µs): the inflated
+estimate had been buying enforcer explorations.
+
+`LoweringResult::estimated_rows` now reports what the MEMO estimated. It was
+unobservable from outside — re-running the cardinality model over the returned
+plan is a second traversal of a second representation, which answers correctly
+while the search that chose the plan did not. Two wiring mutations survived the
+whole suite until it existed.
 
 Two defects were found by ADDING FIXTURES rather than by an audit, when the
 physical planner learned to lower DML (increment 3.9b) and the corpus gained
