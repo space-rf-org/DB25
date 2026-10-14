@@ -237,15 +237,49 @@ The scheduler walks them:
 - A **`Materialized` edge is a barrier** and a memory high-water contribution.
 - A **`Rescanned` edge multiplies** its subtree's cost by the outer cardinality —
   the same `input_evaluations` logic the cost model learned for recursion.
-- **Parallelism:** `P` workers per pipeline, morsel-driven. A pipeline finishes
-  when its slowest worker does, so `t = (t_total / P) × skew`, with `skew` coming
-  from the data model — not from a constant.
+- **Parallelism:** `P` workers per pipeline, where `P` is
+  `CapabilityProfile::max_dop` — a declared capability of the engine. It is `1`
+  today. See "the serial fraction" below, which is where the real content is.
 - **Contention:** concurrently running pipelines share each resource's bandwidth
   in proportion to demand, capped at that resource's peak.
 - **Spills:** when a `Materialized` edge's state exceeds the largest non-durable
   tier, it spills, and the spill is *charged at the NVMe tier's parameters*. This
   is where the memory hierarchy stops being an efficiency question and starts
   being a plan-choice question.
+
+#### The serial fraction, and why `t_total / P` is not a model
+
+`P` is `CapabilityProfile::max_dop`: a **declared capability of the engine**, not
+a number the simulator invents and not one the plan carries. It is `1` today,
+which is what DB25 actually is. A simulator that assumed more would be timing an
+execution the planner never costed, and the estimated-versus-observed comparison
+this whole document exists for would be comparing two different machines.
+
+A pipeline finishes when its slowest worker does, so:
+
+```
+t = W × (s + (1 − s) / P) × skew
+```
+
+`W` is the pipeline's total work and **`s` is its serial fraction**, derived from
+the declared `parallelism` class of the operators in it — `full` contributes 0,
+`partitioned` contributes its partitioning step, `ordered` its within-group work,
+`serial` contributes 1. `skew` comes from the data model, not from a constant.
+
+**The serial fraction is the whole point, and `t = t_total / P` is the version of
+this formula that cannot work.** Dividing by `P` makes every pipeline equally
+parallel, so it rescales all plans by the same factor and can never change which
+plan wins — and changing which plan wins is the only effect parallelism has on a
+planner. With `s` present, a costlier plan overtakes a cheaper one exactly when
+`s₂/s₁ < W₁/W₂`: the break-even is the cost ratio, so the simulator can state
+what a plan's parallelism would have to be worth before it changes the answer.
+That is a falsifiable claim about the cost model. A flat `W/P` is not a claim at
+all.
+
+The `parallelism` field this reads was declared on all 29 operators in Increment
+4 for exactly this purpose — `spec.hpp` says so in as many words — and nothing in
+the cost model reads it. The simulator is its first consumer, which makes the
+simulator its first test.
 
 ### 3.4 The data model
 
@@ -301,6 +335,13 @@ a timeline.
 *Gate:* a spill must be *visible* — a plan whose build side is grown past the
 last non-durable tier must show a discontinuity in total time, and the mutation
 that removes spill handling must be killed by that test.
+*Second gate, on the parallelism model:* at `max_dop = 1` the scheduler must
+produce exactly the serial timeline, so the parallel path cannot drift while the
+engine is serial and nobody notices. And a `MachineModel` asking for a `P` above
+the capability profile's `max_dop` must be an **error**, not a silently honoured
+request — the two profiles would otherwise describe different machines and the
+disagreement report in S6 would be measuring that difference rather than the cost
+model.
 
 **S4 — the `RuntimeProfile` producer.**
 Populate the type the planner already accepts: per-operator observed rows, wall
@@ -368,7 +409,14 @@ exhibit it.
    Does S2 model GPU kernels, or does the GPU machine exist only to make the
    *link* cost real? *Leaning: links only, until there is a reason otherwise —
    modelling GPU occupancy badly is worse than not modelling it.*
-3. **Where the data model's numbers come from.** Hand-written per corpus table
+3. **When `max_dop` moves above one.** The serial fraction `s` is derived from
+   the operators' declared `parallelism` classes, which is the most honest source
+   available and still a derivation rather than a measurement. The first engine
+   with real workers will make `s` measurable, and the reconciliation between
+   declared and measured `s` is a finding to write down — not a coefficient to
+   quietly retune. Until then `P` is 1 and `s` is inert, which is the correct
+   state for a planner whose cost model is serial by decision.
+4. **Where the data model's numbers come from.** Hand-written per corpus table
    today. Derived from the catalog's histograms when those exist — at which point
    the estimated/observed divergence narrows, which is the *intended* outcome and
    must not be mistaken for the loop breaking.

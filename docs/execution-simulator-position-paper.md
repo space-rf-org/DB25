@@ -195,11 +195,28 @@ tier it spills, and the spill is charged at the durable tier's parameters. That
 is where the memory hierarchy stops being an efficiency question and becomes a
 plan-choice question.
 
-**Parallelism and skew.** A pipeline finishes when its slowest worker does, so
-throughput is divided by workers and multiplied by skew. Skew is not a constant:
-it comes from the data's distribution, and a Zipf-distributed join key giving one
-worker forty percent of the build side is a plan-relevant fact that no
-cardinality estimate carries.
+**Parallelism and skew.** A pipeline finishes when its slowest worker does — but
+*dividing* its work by the worker count is the version of that sentence that
+cannot be right. A flat division rescales every plan by the same factor, so it
+can never change which plan wins, and changing which plan wins is the only way
+parallelism matters to a planner. What decides it is the **serial fraction**: a
+costlier plan overtakes a cheaper one exactly when the ratio of their serial
+fractions falls below the ratio of their costs, so the break-even is the cost
+ratio itself. A simulator that models the serial fraction can state what a plan's
+parallelism would have to be worth before the answer changes; one that divides by
+a worker count has made no claim at all.
+
+The worker count is also not the simulator's to choose. It is a **declared
+capability of the engine**, and in the system this paper describes it is one —
+the planner costs every plan as though it will execute serially, by an explicit
+decision taken against measurements. A simulator assuming otherwise would be
+timing an execution the planner never costed, and the estimate-versus-observation
+comparison that the whole apparatus exists to produce would be comparing two
+different machines.
+
+Skew is the remaining term, and it is not a constant: it comes from the data's
+distribution, and a Zipf-distributed join key giving one worker forty percent of
+the build side is a plan-relevant fact that no cardinality estimate carries.
 
 That last point forces a companion input. The simulator needs a **data model** —
 per-column distinct counts, distributions, null fractions, correlations, value
@@ -300,7 +317,7 @@ Six stages, each independently testable, in dependency order.
 | Machine model | A strict, unit-aware, provenance-carrying description of a machine. Unknown key is an error; a missing source is an error. Reference models for a server, a tiered-memory host, a GPU fabric, and a laptop — plus a deliberately trivial machine whose numbers make hand-computed answers possible. |
 | Resource model | Little's law capped by peak, and residency as a hit rate, in isolation, before any plan is involved. The device table in §3 becomes a test rather than a claim. |
 | Operator kernels | Per operator: what it reads, writes, and holds, and how its state's residency changes its cost. Declared so that adding an operator forces someone to state what it does to the machine. |
-| Scheduler | Pipelines, barriers, re-execution, parallelism, skew, contention, spills. A spill must be *visible* as a discontinuity in total time, or the model has not captured the thing it was built for. |
+| Scheduler | Pipelines, barriers, re-execution, parallelism, skew, contention, spills. A spill must be *visible* as a discontinuity in total time, or the model has not captured the thing it was built for. At a declared parallelism of one it must produce exactly the serial timeline, and a machine asking for more workers than the engine declares must be an error rather than a silently honoured request. |
 | Feedback profile | Observed cardinalities, timings, bytes by tier, peak memory, spilled bytes, per-pipeline skew, and the provenance decomposition. This is what unblocks adaptive re-planning. |
 | Disagreement gate | §7. The reason the other five exist. |
 
@@ -336,7 +353,10 @@ with us.
 - **Morsel-driven parallelism and data-centric compilation** (the HyPer and Umbra
   line) give the pipeline decomposition the scheduler walks; our contribution is
   to treat pipeline-breaking as a property of an *edge* rather than an operator,
-  since a hash join breaks one input and streams the other.
+  since a hash join breaks one input and streams the other. We take the
+  decomposition and not the scheduling: morsel-driven execution is a claim about
+  an engine that exists, and describing one that does not would be the precise
+  error this paper is about.
 - **Learned and adaptive cost models** attack the same problem from the opposite
   direction: fit the model to observed runtimes. That requires a running engine
   and a workload, and it produces a model that is hard to interrogate when it is
