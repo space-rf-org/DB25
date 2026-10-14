@@ -191,6 +191,11 @@ add_test(NAME staged_exprs COMMAND staged_runner --exprs)
 add_test(NAME pin_agreement
          COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_pin_agreement.sh
                  ${CMAKE_CURRENT_SOURCE_DIR})
+# 77 means the comparison could not be made (no git metadata - a source archive,
+# a vendored tree). That is a SKIP, not a pass: without this property ctest
+# reports "Passed" for a run that verified nothing, and the suite's green count
+# silently includes a test that did not execute its check.
+set_tests_properties(pin_agreement PROPERTIES SKIP_RETURN_CODE 77)
 
 # ---------------------------------------------------------------------------
 # corpus_report: replays corpus/showcase.sql and emits a human-readable Markdown
