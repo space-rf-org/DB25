@@ -25,8 +25,9 @@ believed, line by line, and hold both against systems that have been getting it
 right for thirty years. That comparison stays meaningful even where the timings
 do not, and it is worth doing in public.
 
-We also publish the numbers that make us look bad. There are several, they are
-all in one place, and section 7 says what they are.
+We also publish the numbers that make us look bad, and the two occasions on
+which this paper reported a result that was not there and had to withdraw it.
+Section 7 is where DB25 loses; section 9 is where the method did.
 
 ---
 
@@ -64,7 +65,7 @@ rest.
 `-O2`. All three systems measured back to back in one session on an otherwise
 idle host, with identical fixtures and `ANALYZE` run on both engines.
 
-- **DB25** at `0c99641`, Release build.
+- **DB25** at `673e71c`, Release build.
 - **PostgreSQL 18.6**, built from source at `REL_18_STABLE` with `-O2`,
   `--without-icu`, C locale. Stated because it matters: this is not a
   distribution build, and a distribution build with ICU, readline and a UTF-8
@@ -86,6 +87,14 @@ idle host, with identical fixtures and `ANALYZE` run on both engines.
 Every join predicate in every query is a foreign key onto a primary key. That is
 deliberate: it is the case where the right answer is *knowable*, so a wrong
 estimate has nowhere to hide.
+
+**All three systems are given statistics.** PostgreSQL and DuckDB had `ANALYZE`
+run. DB25's catalog is caller-seeded with the fixture's real distributions — per
+column: distinct values, null fraction, numeric range, and whether the column is
+unique. Those are the four numbers its estimator reads; it has no histogram and
+no most-common-value list. Seeding them by hand rather than measuring them is
+exactly what a planner with no engine must do, and section 8 records it as the
+limitation it is.
 
 ---
 
@@ -168,15 +177,15 @@ hard construct right.
 
 ---
 
-## 3. Planning time
+## 3. Planning time, and what this host can support
 
 ### What DB25's number contains
 
 DB25's figure is the **whole front end**, parser included. PostgreSQL's own
 `Planning Time` is not — it measures `pg_plan_query` alone, after parse analysis
 and rewrite have already run. Comparing the two directly charges DB25 for work
-PostgreSQL is not being charged for, so both are broken out here and the stages
-are mapped onto each other:
+PostgreSQL is not being charged for, so the stages are broken out and mapped onto
+each other:
 
 | DB25 stage | PostgreSQL equivalent | in `Planning Time`? |
 |---|---|---|
@@ -184,61 +193,82 @@ are mapped onto each other:
 | `analyze` + `bind` | parse analysis + rewrite | no |
 | logical optimize + physical lowering | the planner | **yes** |
 
-Medians over 3–5 independent repeats, warm, µs.
+### The honest precision of this section
 
-| | query | parse | analyze+bind | **planner** | total |
-|---|---|---:|---:|---:|---:|
-| q1 | filter | 0.9 | 1.5 | 3.1 | 5.5 |
-| q2 | 2-way join | 1.8 | 2.4 | 5.1 | 9.3 |
-| q3 | 4-way join | 3.5 | 5.1 | 30.0 | 38.6 |
-| q4 | 6-way join | 5.2 | 8.4 | 45.0 | 58.6 |
-| q5 | group by | 1.5 | 2.8 | 4.1 | 8.4 |
-| q6 | having | 1.8 | 3.2 | 5.2 | 10.2 |
-| q7 | window | 1.5 | 1.9 | 4.3 | 7.7 |
-| q8 | EXISTS | 2.0 | 2.6 | 4.7 | 9.3 |
-| q9 | CTE + join | 3.4 | 5.2 | 10.2 | 18.8 |
-| q10 | reference | 8.1 | 13.4 | 26.6 | 48.1 |
+**Absolute microseconds on this host are good to about a factor, not a percent.**
+Nine repeats of the same binary on the same query give totals that are not noisy
+around a mean but *bimodal* — q1 lands on either 6.4 µs or 10.8 µs, and the mode
+does not depend on anything the program does. Pinning to one core narrows it and
+does not remove it. This is a shared cloud VM; the neighbours are not ours to
+quiet.
 
-Parsing is 9–17% of the front end and never the story. The Cascades search is
-49–78%, and its share rises with join count — which is what it should do, and is
-the only part of this table that is really about planning.
+So the absolute table below carries its observed range, and **differences under
+about 2× are not claims**. What survives that rule is stated after it, and it is
+less than an earlier draft of this paper asserted.
 
-### Against the other two
+What *does* survive cleanly is any number that is a **ratio within one run**,
+because host drift cancels. The stage shares below moved by at most 2.8
+percentage points across nine repeats while the absolutes they are computed from
+swung by 50–90%.
 
-| | query | **DB25 planner** | PG 18 planner | | **DB25 total** | PG 18 parse+plan | DuckDB |
-|---|---|---:|---:|---|---:|---:|---:|
-| q1 | filter | 3.1 | **3.0** | | 5.5 | **4.8** | 140 |
-| q2 | 2-way join | **5.1** | 10.0 | | **9.3** | 20.9 | 306 |
-| q3 | 4-way join | **30.0** | 37.0 | | **38.6** | 70.9 | 815 |
-| q4 | 6-way join | **45.0** | 125.0 | | **58.6** | 169.4 | 1425 |
-| q5 | group by | 4.1 | **4.0** | | **8.4** | 10.7 | 295 |
-| q6 | having | 5.2 | **5.0** | | **10.2** | 14.5 | 322 |
-| q7 | window | **4.3** | 5.0 | | **7.7** | 12.3 | 173 |
-| q8 | EXISTS | **4.7** | 12.0 | | **9.3** | 26.5 | 353 |
-| q9 | CTE + join | **10.2** | 18.0 | | **18.8** | 39.2 | 715 |
-| q10 | reference | **26.6** | 47.0 | | **48.1** | 123.3 | 1475 |
+### Where the time goes — stable
 
-**How precise are these?** Five repeats of the DB25 harness spread about 15%
-around the median. PostgreSQL reports `Planning Time` to the microsecond and its
-run-to-run spread is similar. **Any difference under roughly 15% is not a
-claim.** On that rule: planner-to-planner, DB25 is faster on the six queries with
-real planning in them and indistinguishable on the four trivial ones; it never
-loses. End to end, it wins nine and ties q1.
+| | query | parse | analyze+bind | **planner** |
+|---|---|---:|---:|---:|
+| q1 | filter | 17% | 27% | 56% |
+| q2 | 2-way join | 19% | 25% | 56% |
+| q3 | 4-way join | 9% | 13% | **78%** |
+| q4 | 6-way join | 9% | 14% | **76%** |
+| q5 | group by | 18% | 34% | 48% |
+| q6 | having | 18% | 31% | 51% |
+| q7 | window | 21% | 25% | 54% |
+| q8 | EXISTS | 21% | 28% | 51% |
+| q9 | CTE + join | 18% | 27% | 55% |
+| q10 | reference | 16% | 28% | 55% |
 
-DuckDB is 21–38× slower than DB25 and roughly an order of magnitude slower than
-PostgreSQL's planner. That is not a defect in DuckDB. It is an analytical engine
-whose planning cost is amortised over multi-second scans, and it spends the time
-on things — a sampling-based join-order optimiser, runtime re-optimisation hooks
-— that only pay off when there is an executor to pay them back. It is in the
-table because it is a fair third data point at this boundary, not because 1.4 ms
-is a problem for anyone running DuckDB.
+Parsing is **9–21%** of the front end and never the story. The planner is
+**48–78%**, and its share rises with join count — which is what it should do, and
+is the only part of this section that is really about planning.
 
-**The honest framing of this whole table:** planning time is not why DB25 exists,
-and at execution scale it is noise. Section 4 is the section that matters. What
-planning time is good for is what it says about the *shape* of the search — DB25
-explores 63 physical candidates across 31 optimization goals for q4, prunes 25 of
-them by branch-and-bound, and does it in 45 µs. That is the number worth caring
-about, and it is in section 5.
+### Absolute times — read with the range
+
+Medians of nine repeats (DB25), five (PostgreSQL), three (DuckDB), µs. The
+bracketed figure is the observed spread as a percentage of the median.
+
+| | query | DB25 planner | DB25 total | PG 18 planner | PG 18 parse+plan | DuckDB |
+|---|---|---:|---:|---:|---:|---:|
+| q1 | filter | 3.6 | 6.5 [50%] | 4.0 | 7.5 | 248 |
+| q2 | 2-way join | 6.3 | 11.3 [2%] | 12.0 | 29.4 | 485 |
+| q3 | 4-way join | 35.9 | 46.1 [2%] | 44.0 | 93.0 | 1126 |
+| q4 | 6-way join | **55.8** | 72.8 [30%] | 158.0 | 271.0 | 1945 |
+| q5 | group by | 4.9 | 10.1 [59%] | 6.0 | 22.8 | 430 |
+| q6 | having | 6.2 | 12.2 [57%] | 7.0 | 26.5 | 594 |
+| q7 | window | 5.0 | 9.2 [63%] | 6.0 | 22.0 | 299 |
+| q8 | EXISTS | 5.8 | 11.4 [55%] | 17.0 | 37.1 | 571 |
+| q9 | CTE + join | 12.4 | 22.7 [57%] | 22.0 | 61.5 | 1302 |
+| q10 | reference | 34.2 | 62.5 [90%] | 63.5 | 201.5 | 1873 |
+
+**What survives the 2× rule.** DuckDB is 20–40× slower than DB25 and an order of
+magnitude slower than PostgreSQL's planner: that gap is far outside the noise. So
+is the six-way join, where DB25's planner is about 2.8× faster than PostgreSQL's
+(55.8 against 158.0) — the one per-query planning-time claim this host supports.
+
+**Everything else is a tie.** An earlier draft of this paper reported DB25 ahead
+on four queries and behind on four others; neither of those lists survives a
+measurement that varies by 50% between runs of the same binary. They are recorded
+as indistinguishable, which is what they are.
+
+DuckDB's 20–40× is not a defect in DuckDB. It is an analytical engine whose
+planning cost is amortised over multi-second scans, and section 4 shows what it
+spends the time on — 33 optimizer passes including statistics propagation and a
+sampling join-order search. It is in the table because it is a fair third data
+point at this boundary, not because 2 ms is a problem for anyone running DuckDB.
+
+**The framing this section earns:** planning time is not why DB25 exists, and at
+execution scale it is noise. Section 4 is the section that matters, and it has
+the advantage of being exactly reproducible — an estimate is a pure function of
+the plan and the statistics, so the same input gives the same answer on every
+run, on any host. None of the uncertainty above touches it.
 
 ---
 
@@ -247,38 +277,92 @@ about, and it is in section 5.
 A planner's speed is a convenience. Its **estimates** are what decide the plan,
 and a plan chosen from a wrong estimate is slow no matter how fast it was chosen.
 
+These numbers have a property section 3's do not: they are **exactly
+reproducible**. An estimate is a pure function of the plan and the statistics, so
+the same query gives the same answer on every run and on any host. Nine repeats
+of DB25 produced bit-identical output.
+
 Top-node estimated rows against the true result size:
 
 | | actual | **DB25** | PostgreSQL 18 | DuckDB |
 |---|---:|---:|---:|---:|
-| q1 filter | 18,999 | 2,000 | **18,999** | 4,000 |
+| q1 filter | 18,999 | **19,000** | **18,999** | 4,000 |
 | q2 2-way join | 19,600 | **20,000** | **20,000** | 22,222 |
 | q3 4-way join | 99,950 | **100,000** | **100,000** | 26,961 |
 | q4 6-way join | 98,000 | **100,000** | **100,000** | 15,695 |
-| q5 group by | 50 | 2,000 | **50** | 45 |
-| q6 having | 50 | 200 | 17 | 9 |
+| q5 group by | 50 | **50** | **50** | 45 |
+| q6 having | 50 | 17 | 17 | 9 |
 | q7 window | 20,000 | **20,000** | **20,000** | **20,000** |
-| q8 EXISTS | 19,999 | 2,000 | **19,739** | 4,000 |
-| q9 CTE + join | 10,000 | 2,000 | **6,667** | 663 |
+| q8 EXISTS | 19,999 | **20,000** | 19,739 | 4,000 |
+| q9 CTE + join | 10,000 | 6,666 | 6,667 | 663 |
 | q10 reference | 10 | **10** | **10** | 5,000 |
 
 Aggregated as q-error — the geometric mean of `max(est/act, act/est)`, the
 standard measure since Leis et al.'s *How Good Are Query Optimizers, Really?*:
 
-| system | geometric mean q-error | statistics available |
+| system | geometric mean q-error | statistics consulted |
 |---|---:|---|
-| PostgreSQL 18 | **1.17×** | full: histograms, n_distinct, MCVs, correlation |
-| **DB25 (today)** | **3.09×** | **none** |
+| **DB25** | **1.16×** | ndv, null fraction, column range, uniqueness |
+| PostgreSQL 18 | 1.17× | histograms, n_distinct, MCVs, correlation |
 | DuckDB 1.5 | 5.58× | full, with `ANALYZE` run |
 
-DB25 sits between the two mature systems while consulting **no column statistics
-at all** — and we want to be careful about what that does and does not mean. It
-does not mean DB25 estimates better than DuckDB. DuckDB deliberately leans on
-runtime adaptivity rather than static estimates: it samples and re-orders during
-execution, so a rough `EXPLAIN` cardinality costs it much less than the same
-error would cost a system that commits to a plan up front. DB25 has no executor
-to adapt with, so a static estimate is all it will ever have — which is exactly
-why these numbers get taken seriously here.
+### How it got there
+
+Three increments, each measurable on its own:
+
+| | geometric mean q-error |
+|---|---:|
+| flat constants (one selectivity for every predicate) | 3.09× |
+| + per-column statistics for filters and `GROUP BY` | 1.47× |
+| + joins and semi joins reading their keys' distinct counts | **1.16×** |
+
+The flat model's errors were concentrated and large: `WHERE salary > 1000` kept
+10% of its rows where the truth is 95%, and `GROUP BY dept_id` produced one group
+per ten input rows where the truth is fifty groups out of twenty thousand rows.
+Neither is a rule that a better rule fixes. A filter's selectivity is a property
+of the data, and only a statistic estimates it.
+
+### The tie, and why it is the interesting part
+
+**1.16× against 1.17× is a tie, not a win.** Reading it as a win would be exactly
+the number-chasing this paper opened by disclaiming — the two differ by one row
+on one query.
+
+What is worth reporting is *why* they tie. After the statistics work, DB25 and
+PostgreSQL are exactly right on eight of the ten queries, and wrong on the same
+two, by the same amounts:
+
+| | actual | DB25 | PostgreSQL | what neither can estimate |
+|---|---:|---:|---:|---|
+| q6 having | 50 | 17 | 17 | a filter over an **aggregate's output** |
+| q9 CTE + join | 10,000 | 6,666 | 6,667 | a column against **its own group mean** |
+
+Both fall back to the Selinger default of one third for an inequality that cannot
+be estimated, and both land in the same place. No histogram carries a correlation
+between a column and an aggregate computed over it; this is not a gap in either
+catalog, it is a question statistics of this kind do not answer.
+
+DB25 reaches that position consulting four numbers per column — distinct values,
+null fraction, numeric range, and a uniqueness flag — and no histogram or
+most-common-value list at all. That is the claim worth making, and it is a claim
+about how far simple statistics go, not about beating anyone.
+
+### What statistics cost
+
+Nothing measurable. Interleaved A/B over the ten queries, five pairs each, gives
+a **median planning-time delta of 0.0%**, with nine of ten inside ±2.5%. A
+predicate tree walk and a handful of hash lookups do not register against tens of
+microseconds of search.
+
+One honest note on how that was established, because it nearly went the other
+way. The first A/B showed q1 **32% faster with statistics**, consistently across
+five pairs. It was not an effect: the candidate counts were identical, and the
+*parse* stage — which statistics cannot touch — was 35% faster too. q1 is bimodal
+on this host, and the two arms had sampled different modes. The control that
+caught it was running the same setting six times and seeing both modes appear
+within it.
+
+---
 
 ## 5. Search shape
 
@@ -292,7 +376,7 @@ What DB25 is actually doing, per query:
 | q4 6-way join | 16 | 63 | 31 | 25 |
 | q8 EXISTS | 4 | 5 | 4 | 1 |
 | q9 CTE + join | 7 | 11 | 10 | 1 |
-| q10 reference | 15 | 20 | 23 | 3 |
+| q10 reference | 15 | 20 | 23 | 2 |
 
 **Goals exceeding groups is the point of the whole design.** A goal is a
 (group, required-properties) pair: the same logical subtree optimized more than
@@ -302,6 +386,12 @@ whatever came out. q4 optimizes 16 groups for 31 goals and q10 optimizes 15 for 
 top-down property-directed search visibly doing what it exists to do. q1, q5 and
 q7 have goals equal to groups, which is also correct: nothing in them demands a
 property from below.
+
+These counts are the same with statistics and without, with one exception: q10
+prunes 2 candidates instead of 3. Better estimates change the costs, and changed
+costs change which candidates lose early. It is a small thing to have noticed,
+but it is the only place in this paper where an estimate visibly changed what the
+search *did* rather than only what it believed.
 
 Pruning at q4 discards 25 of 63 candidates by branch-and-bound before they are
 fully costed. That is where the 74 µs comes from: not from being clever per
@@ -324,7 +414,7 @@ hash key. Actual result: **10,000 rows**.
 
 ### What each system produced
 
-**PostgreSQL 18** (39.2 µs parse+plan, 18 µs planner only):
+**PostgreSQL 18** (61.5 µs parse+plan, 22 µs planner only):
 
 ```
 Hash Join  (rows=6667)
@@ -336,7 +426,7 @@ Hash Join  (rows=6667)
               ->  Seq Scan on emp  (rows=20000)
 ```
 
-**DuckDB** (715 µs):
+**DuckDB** (1302 µs):
 
 ```
 PROJECTION (~663 rows)
@@ -348,7 +438,7 @@ PROJECTION (~663 rows)
           └── SEQ_SCAN emp (~20,000)
 ```
 
-**DB25** (18.8 µs front end, 10.2 µs planner):
+**DB25** (22.7 µs front end, 12.4 µs planner):
 
 ```
 (Project exprs=[(col #0)]
@@ -412,63 +502,81 @@ lowering change, not a model change.
 |---|---:|---:|---:|
 | actual | — | 10,000 | 0.50 |
 | PostgreSQL | 6,667 | | 0.333 |
-| DB25 | 2,000 | | 0.100 |
+| **DB25** | **6,666** | | **0.333** |
 | DuckDB | 663 | | 0.033 |
 
-Every system gets the join right (20,000 rows: 20,000 employees each matching
-exactly one department average) and then applies a **guess** to the inequality.
-PostgreSQL's guess is `1/3`, the Selinger default for an inequality against an
-unknown value. DB25's is its flat `filter_selectivity = 0.1`. DuckDB's works out
-around `0.033`.
+Every system gets the join right — 20,000 rows, each employee matching exactly
+one department average — and then applies a **guess** to the inequality. DB25 and
+PostgreSQL make the same guess, `1/3`, the Selinger default for an inequality
+against a value that is not a constant. DuckDB's works out around `0.033`.
 
-PostgreSQL wins this one by having the largest guess, not the smartest one.
-*Nobody* has a statistic for "compare a column against a per-group aggregate of
-that same column" — it needs a correlation between `salary` and its own group
-mean, which no histogram carries. The true answer, 0.5, is what you would get
-from knowing the distribution is roughly symmetric within each department, and
-that is an assumption none of the three is entitled to make.
+**Nobody has a statistic for this.** Comparing a column against a per-group
+aggregate *of that same column* needs a correlation between `salary` and its own
+group mean, which no histogram carries and no `ANALYZE` computes. The true answer
+of 0.5 is what you would get from knowing the distribution is roughly symmetric
+within each department, and that is an assumption none of the three is entitled
+to make.
 
-That is the honest lesson of the dissection: DB25's join estimate is as good as
-PostgreSQL's, and its *filter* estimate is a flat constant with nothing behind
-it. Which is section 7.
+So this is the query where the statistics work stops, and it stops for everyone
+at the same place. Earlier in this project DB25 answered 2,000 here — its flat
+tenth — against PostgreSQL's 6,667. It now answers 6,666. That improvement is
+**not** a statistic being consulted; it is a better default, reached by splitting
+the fallback by predicate class so an unestimable inequality gets a third rather
+than a tenth. Worth separating from q1 and q5, where real statistics really are
+doing the work. We did not solve q9. We guessed better, and we guessed the same
+as PostgreSQL.
+
+That is the honest lesson of the dissection, and it is section 7.
 
 ---
 
 ## 7. Where DB25 is worst, stated plainly
 
-Look again at the cardinality table. Every DB25 miss is in one place.
+Two queries, and PostgreSQL is wrong on both by the same amounts.
 
-| query | what it got wrong | the constant responsible |
-|---|---|---|
-| q1 | 2,000 vs 18,999 | `filter_selectivity = 0.1` |
-| q8 | 2,000 vs 19,999 | `join_selectivity = 0.1`, via the semi-join rule |
-| q9 | 2,000 vs 10,000 | `filter_selectivity = 0.1` |
-| q5 | 2,000 groups vs 50 | `group_selectivity = 0.1` |
-| q6 | 200 vs 50 | `group_selectivity = 0.1` |
+| query | actual | DB25 | PostgreSQL | why |
+|---|---:|---:|---:|---|
+| q6 having | 50 | 17 | 17 | the `HAVING` filters an **aggregate's output**, which has no statistics |
+| q9 CTE + join | 10,000 | 6,666 | 6,667 | `salary > s.a` compares a column against **its own group mean** |
 
-Every join estimate is within 3% of the truth. Every *selectivity* estimate is a
-flat constant — including the semi-join's, which is the one join-shaped rule that
-still carries a bare guess, because how many left rows have a match is a fact
-about the data rather than a fact about the join.
+Both are the same shape: a predicate whose selectivity is not a property of any
+single column, so no per-column statistic answers it. Both systems fall back to
+the Selinger third, and both land in the same wrong place. That is not a defect
+either catalog can fix by holding more numbers; it needs a correlation nobody
+computes.
 
-Those constants are honest: they are named, they live in one place, and their
-comments say they are guesses rather than derivations. But a guess is what they
-are, and `0.1` for `WHERE salary > 1000` on a column whose values run 0–20,000 is
-a guess that is wrong by 9.5×.
+Everything else in the cardinality table is exact or within 2%.
 
-No better rule fixes this. A filter's selectivity is a property of the data, and
-estimating it needs what PostgreSQL has: per-column histograms, distinct counts,
-and most-common-value lists from the catalog. That is the next piece of work, it
-is bounded, and it is the reason DB25's 3.09× does not become 1.2× by being
-clever.
+### What is still a guess, named
 
-The same applies to `group_selectivity`. There are exactly 50 departments;
-`n_distinct(dept_id)` would say so. DB25 guesses 10% of input rows and is 40×
-out.
+The estimator falls back by predicate class rather than by one flat constant, and
+those fallbacks remain guesses:
 
-**Also worth stating:** q9 showed DB25 hoisting a residual out of a join where
-both mature systems fold it in. That is a real, if small, plan-quality gap, and
-it is recorded rather than buried.
+| | value | used when |
+|---|---:|---|
+| equality | 0.005 | `col = <non-constant>`, or no ndv for the column |
+| inequality | 0.3333 | a range that cannot be interpolated — q6 and q9 above |
+| unknown | 0.1 | a `LIKE`, a function call, a `CASE` |
+
+They are named, they live in one place, and their comments say they are guesses.
+They are also the textbook values rather than invented ones, which is why DB25
+and PostgreSQL agree where both are guessing.
+
+### What the statistics deliberately do not include
+
+No histogram, and no most-common-value list. `ndv` plus a numeric range answers
+the predicates that dominate these queries, and answers them *exactly* where the
+data is uniform — which this fixture is. On skewed data a range interpolation is
+wrong in a bounded, explainable way, and an MCV list is the next thing to add.
+It is not here because a histogram nobody has measured against is a second set
+of invented numbers wearing a better hat.
+
+**Also still true:** q9 shows DB25 hoisting a residual out of a join where both
+mature systems fold it into the join condition. Semantically identical, one
+operator boundary apart, and the folded-in form is the better one. The machinery
+exists — the IR carries `residual` on the join node — and the inner-join lowering
+currently prefers to hoist. A lowering change, not a model change, and recorded
+rather than buried.
 
 ---
 
@@ -483,46 +591,77 @@ it is recorded rather than buried.
   contain — and all of those are where estimates go wrong.
 - **In-process versus not.** DB25 pays no client protocol and no catalog round
   trip. Part of its margin is architectural, not algorithmic.
-- **No statistics maintenance cost.** PostgreSQL and DuckDB paid for `ANALYZE`.
-  DB25 has nothing to maintain because it has nothing to consult, and section 7
-  is the bill for that.
+- **No statistics maintenance cost, and no statistics pipeline.** PostgreSQL and
+  DuckDB paid for `ANALYZE`. DB25's statistics were handed to it: the catalog is
+  caller-seeded, and nothing here measures, samples or refreshes anything. When
+  there is an engine, `ANALYZE` has to exist and will cost what it costs. This
+  paper measures a planner given correct statistics, not a system that maintains
+  them.
 - **DuckDB is being measured outside its design point.** Its planning cost is
   built to be amortised over an executor's seconds. Reading its 1.4 ms as a
   weakness would be exactly the kind of meaningless number this paper opened by
   disclaiming.
 - **Absolute microseconds are a property of the host, not of the software.** An
-  earlier draft of this paper was measured on a 2.80 GHz instance and reported
-  74 µs for q4; the same binary on this 2.10 GHz instance reports 58.6, because
-  the faster-labelled host was busier. Nothing about DB25 changed. Only figures
-  taken in the same session against each other mean anything, which is why all
-  three systems here were re-measured back to back rather than carried over.
+  earlier draft was measured on a 2.80 GHz instance and reported 74 µs for q4;
+  the same binary on a 2.10 GHz instance reported 58.6, because the
+  faster-labelled host was busier. Only figures taken in the same session against
+  each other mean anything, which is why all three systems here were re-measured
+  back to back rather than carried over.
+- **And this host is bimodal, not merely noisy.** Nine repeats of one binary on
+  one query give two clusters — q1 is 6.4 µs or 10.8 µs — with nothing in the
+  program selecting which. Pinning to a core narrows it and does not remove it.
+  That is why section 3 reports ranges and withdraws every per-query timing claim
+  smaller than 2×, and why an A/B measurement there nearly reported a 32% effect
+  that was two samples of two modes. Ratios *within* a run are unaffected, which
+  is why the stage shares are stated confidently and the absolutes are not.
 - **PostgreSQL's estimates move slightly too.** `ANALYZE` samples, so re-running
   it shifts the multi-way join estimate between 99,491 and 100,000 and the
   semi-join between 19,690 and 19,739. Small, but it is the reason the q-error
-  figures are given to two decimals and not three.
-- **These numbers move.** They were taken on 2026-09-20 against
-  `db25@0c99641`. They will be wrong by the next increment, and that is the
-  intended failure mode — the numbers exist to be falsified, not framed.
+  figures are given to two decimals and not three — and the reason 1.16 against
+  1.17 is read as a tie.
+- **These numbers move.** Taken on 2026-10-14 against `db25@673e71c`. They will
+  be wrong by the next increment, and that is the intended failure mode — the
+  numbers exist to be falsified, not framed.
 
 ---
 
 ## 9. Conclusion
 
-Two things came out of an afternoon of measurement.
+Three things came out of this.
 
-**One thing confirmed.** DB25's search machinery is sound. Where it has the
-information it needs, its output matches two mature planners decision for
-decision: same join
-algorithms, same build sides, same aggregate strategies, same CTE inlining, the
-same refusal to hash an inequality. It does that in 74 µs on the hardest join in
-the set, exploring 63 candidates and pruning 25, against PostgreSQL's 125 µs.
+**The search machinery is sound.** Where DB25 has the information it needs, its
+output matches two mature planners decision for decision: same join algorithms,
+same build sides, same aggregate strategies, same CTE inlining, the same refusal
+to hash an inequality. It does that on the hardest join in the set in about 56 µs
+of planning, exploring 63 candidates and pruning 25, against PostgreSQL's 158 —
+the one per-query timing claim this host can support.
 
-**One bill, itemised.** Everything DB25 still gets wrong is a flat selectivity
-constant standing in for a statistic it does not have. Every join estimate is
-within 3%; every selectivity estimate is a guess. That is a known, bounded piece
-of work, and section 7 names it exactly.
+**Simple statistics go a long way.** Four numbers per column — distinct values,
+null fraction, numeric range, a uniqueness flag — took the geometric-mean q-error
+from 3.09× to 1.16×, against PostgreSQL's 1.17× with histograms, MCV lists and
+correlation. Eight of the ten queries are now exact or within 2%. No histogram
+was needed to get there, and saying so is more useful than the tie itself.
 
-Neither of which is a benchmark. It was fun, and it cost an afternoon.
+**What is left is not a statistics problem.** The two remaining errors are a
+filter over an aggregate and a column compared against its own group mean.
+Neither is answered by any per-column statistic, both systems fall back to the
+same textbook default, and both are wrong by the same amount. The next real
+improvement on this corpus would come from correlation statistics that nobody
+computes — or from admitting that some predicates are guesses and saying so,
+which is what both planners already do.
+
+A closing note on method, since it cost more time than the code did. This paper
+twice reported a result that was not there: an earlier draft's timing wins, which
+did not survive a 50% run-to-run spread, and a 32% statistics speedup that was
+two samples of a bimodal distribution. Both were caught by checking a quantity
+that *could not* have changed — parse time, candidate counts — rather than by
+doubting the number directly. The estimates in section 4 carry none of that risk,
+because they are exactly reproducible. That is a reason to prefer them as the
+measure of a planner, quite apart from their being the measure that decides the
+plan.
+
+Neither of which is a benchmark. It was fun, and it cost rather more than an
+afternoon.
 
 ---
 
@@ -548,9 +687,11 @@ export PSQL_BIN=/opt/pg18/bin/psql PGHOST=/tmp/pgs18 PGPORT=55433
 $PSQL_BIN -h $PGHOST -p $PGPORT -U postgres -d bench -f docs/bench/schema.sql
 $PSQL_BIN -h $PGHOST -p $PGPORT -U postgres -d bench -f docs/bench/data.sql
 
-./db25_bench  docs/bench/queries.txt 500     # DB25 timing, one region
-./db25_stages docs/bench/queries.txt 500     # DB25 timing, stage by stage
-./db25_plans  docs/bench/queries.txt         # DB25 plans and estimates
+# DB25_STATS=1 seeds the column statistics; without it the estimator falls
+# back to its flat constants, which is how the 3.09x row in section 4 was taken.
+DB25_STATS=1 ./db25_stages docs/bench/queries.txt 400   # timing, stage by stage
+DB25_STATS=1 ./db25_plans  docs/bench/queries.txt       # plans and estimates
+./db25_bench docs/bench/queries.txt 500                 # timing, one region
 python3 docs/bench/pg_wall.py 200            # PostgreSQL, both boundaries
 python3 docs/bench/others_bench.py 300       # PostgreSQL planner + DuckDB
 ```
@@ -561,8 +702,15 @@ data.
 
 `pg_wall.py` builds one `psql -c` body holding N copies of the query, which is
 why N is 200 rather than larger: at N=400 the reference query overflows the
-argument list. The nine shorter queries were re-run at 400 as a stability
-check.
+argument list.
+
+**Repeat counts, and why they are what they are.** DB25's timings are medians of
+nine process invocations, PostgreSQL's of five, DuckDB's of three. Nine is not
+caution, it is the minimum that makes a bimodal distribution visible: fewer
+repeats return a median that is simply whichever mode was sampled more, which is
+how an earlier draft of section 4 came to report a 32% effect that did not exist.
+The estimates need no repeats at all — they are deterministic, and nine runs of
+`db25_plans` produce byte-identical output.
 
 ## Appendix B — DB25's plan for q10
 
