@@ -227,7 +227,7 @@ swung by 50–90%.
 | q10 | reference | 16% | 28% | 55% |
 
 Parsing is **9–21%** of the front end and never the story. The planner is
-**48–78%**, and its share rises with join count — which is what it should do, and
+**49–78%**, and its share rises with join count — which is what it should do, and
 is the only part of this section that is really about planning.
 
 ### Absolute times — read with the range
@@ -248,9 +248,9 @@ bracketed figure is the observed spread as a percentage of the median.
 | q9 | CTE + join | 12.4 | 22.7 [57%] | 22.0 | 61.5 | 1302 |
 | q10 | reference | 34.2 | 62.5 [90%] | 63.5 | 201.5 | 1873 |
 
-**What survives the 2× rule.** DuckDB is 20–40× slower than DB25 and an order of
-magnitude slower than PostgreSQL's planner: that gap is far outside the noise. So
-is the six-way join, where DB25's planner is about 2.8× faster than PostgreSQL's
+**What survives the 2× rule.** DuckDB is 24–57× slower than DB25 end to end and
+12–85× slower than PostgreSQL's planner: that gap is far outside the noise. So is
+the six-way join, where DB25's planner is about 2.8× faster than PostgreSQL's
 (55.8 against 158.0) — the one per-query planning-time claim this host supports.
 
 **Everything else is a tie.** An earlier draft of this paper reported DB25 ahead
@@ -258,7 +258,7 @@ on four queries and behind on four others; neither of those lists survives a
 measurement that varies by 50% between runs of the same binary. They are recorded
 as indistinguishable, which is what they are.
 
-DuckDB's 20–40× is not a defect in DuckDB. It is an analytical engine whose
+DuckDB's 24–57× is not a defect in DuckDB. It is an analytical engine whose
 planning cost is amortised over multi-second scans, and section 4 shows what it
 spends the time on — 33 optimizer passes including statistics propagation and a
 sampling join-order search. It is in the table because it is a fair third data
@@ -545,7 +545,8 @@ the Selinger third, and both land in the same wrong place. That is not a defect
 either catalog can fix by holding more numbers; it needs a correlation nobody
 computes.
 
-Everything else in the cardinality table is exact or within 2%.
+Everything else in the cardinality table is exact or within 3% — the two- and
+six-way joins are the widest at 2.04%, and the other six are exact or nearly so.
 
 ### What is still a guess, named
 
@@ -639,7 +640,7 @@ the one per-query timing claim this host can support.
 **Simple statistics go a long way.** Four numbers per column — distinct values,
 null fraction, numeric range, a uniqueness flag — took the geometric-mean q-error
 from 3.09× to 1.16×, against PostgreSQL's 1.17× with histograms, MCV lists and
-correlation. Eight of the ten queries are now exact or within 2%. No histogram
+correlation. Eight of the ten queries are now exact or within 3%. No histogram
 was needed to get there, and saying so is more useful than the tie itself.
 
 **What is left is not a statistics problem.** The two remaining errors are a
