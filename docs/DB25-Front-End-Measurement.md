@@ -620,9 +620,41 @@ rather than buried.
   semi-join between 19,690 and 19,739. Small, but it is the reason the q-error
   figures are given to two decimals and not three — and the reason 1.16 against
   1.17 is read as a tie.
+- **A carried-forward number is stale until recomputed.** The rule this paper
+  learned by breaking it — stated after this list, because it is a rule and not a
+  caveat.
 - **These numbers move.** Taken on 2026-10-14 against `db25@673e71c`. They will
   be wrong by the next increment, and that is the intended failure mode — the
   numbers exist to be falsified, not framed.
+
+### The staleness rule
+
+Every figure in every draft of this paper was true when it was first measured.
+The errors came from numbers that *survived* a re-measurement without being
+re-derived — and a stale figure is indistinguishable from a fresh one on the
+page, so nothing flags it.
+
+Three were caught on an adversarial pass. DuckDB's slowdown was measured once at
+20–40× on an earlier host and carried through two re-measurements before being
+re-derived at 24–57×. "Within 2%" was found and fixed once, then reintroduced by
+a later rewrite of a different section. A stage share was rounded off by a point.
+A fourth error was introduced *by* one of those corrections, and caught only
+because the script that produced the correction printed the true range beside it.
+
+> **When a measurement is re-run, every number derived from it is wrong until
+> recomputed from the new data — including the ones that did not visibly change,
+> and especially the ones in sections nobody edited.**
+
+Two corollaries this paper paid for. A correction must be propagated into every
+later edit, not only the sentence it was found in. And a fix is itself a new
+claim, needing the same check as the thing it replaced.
+
+The estimates in section 4 are exempt, and that is the one structural defence
+here rather than a procedural one. They are a pure function of the plan and the
+statistics, so re-deriving them is free and byte-comparable: there is no version
+of them that is stale without being obviously stale. A measurement you can
+cheaply recompute is a measurement that cannot go quietly out of date, which is
+an argument for preferring such measurements wherever a choice exists.
 
 ---
 
@@ -652,14 +684,19 @@ computes — or from admitting that some predicates are guesses and saying so,
 which is what both planners already do.
 
 A closing note on method, since it cost more time than the code did. This paper
-twice reported a result that was not there: an earlier draft's timing wins, which
-did not survive a 50% run-to-run spread, and a 32% statistics speedup that was
-two samples of a bimodal distribution. Both were caught by checking a quantity
-that *could not* have changed — parse time, candidate counts — rather than by
-doubting the number directly. The estimates in section 4 carry none of that risk,
-because they are exactly reproducible. That is a reason to prefer them as the
-measure of a planner, quite apart from their being the measure that decides the
-plan.
+reported results that were not there on four occasions: an earlier draft's timing
+wins, which did not survive a 50% run-to-run spread; a 32% statistics speedup
+that was two samples of a bimodal distribution; and, on an adversarial re-check,
+three carried-forward figures that had been true on a host that no longer
+existed — one of whose corrections was itself wrong. The first two were caught by
+checking a quantity that *could not* have changed, parse time and candidate
+counts, rather than by doubting the number directly. The rest were caught only by
+recomputing everything from the measurement files, which is now the rule in
+section 8.
+
+The estimates in section 4 carry none of that risk, because they are exactly
+reproducible. That is a reason to prefer them as the measure of a planner, quite
+apart from their being the measure that decides the plan.
 
 Neither of which is a benchmark. It was fun, and it cost rather more than an
 afternoon.
