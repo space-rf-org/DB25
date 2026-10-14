@@ -90,23 +90,33 @@ CLOSE rather than DEFERRED because it could not fail honestly: there was no
 diagnostic, no rejection, and no signal of any kind. The planner returned a plan
 and the plan was mis-shaped.
 
-### Closed — physical-plan #44
+### Closed — physical-plan #44, then superseded by #45/#46
 
-Under the containment assumption a join emits `|L||R| / max(ndv_L, ndv_R)`, and
-there are no per-column distinct counts yet. A BOUND on that denominator needs
-none: a column has at most as many distinct values as its table has rows, and on
-an equi-join the matching values are contained in the narrower side, so
-`max(ndv_L, ndv_R) >= min(|L|, |R|)` and the single-key estimate is
+Under the containment assumption a join emits `|L||R| / max(ndv_L, ndv_R)`. At
+the time of #44 there were no per-column distinct counts, so the denominator was
+BOUNDED instead: a column has at most as many distinct values as its table has
+rows, and on an equi-join the matching values are contained in the narrower side,
+so `max(ndv_L, ndv_R) >= min(|L|, |R|)` and the single-key estimate became
 `max(|L|, |R|)` — the shape a foreign-key join actually has. Each conjunct beyond
 the one that CONTAINS the join narrows by `join_selectivity`; with no equi-key
 nothing contains the product, and a `CROSS JOIN` is estimated at `|L||R|`
 undiscounted, where it was previously scaled by a selectivity it had no predicate
 to justify.
 
+**Since #45 and #46 the distinct counts exist and the bound is only the
+fallback.** `StatisticsCatalog` carries per-column `ndv`, and the join divides by
+`max(ndv_L, ndv_R)` whenever both are known — the formula this entry opened by
+saying could not be evaluated. The bound is what runs when a column has no
+statistics, which is still the default state for an unseeded catalog. The two
+agree on a clean foreign key and part company on a many-to-many key, where the
+bound under-estimates: 1000 x 1000 rows joined on ten distinct values is 100000
+rows and the bound says 1000.
+
 The predicate reaches the model as a `JoinSpec` rather than being read off the
 operator, so all three algorithms answer identically — otherwise the search would
-choose between them on the strength of an estimate rather than a cost. Both its
-fields are counts, which makes the estimate invariant under re-association.
+choose between them on the strength of an estimate rather than a cost. Its first
+two fields are conjunct counts, which is what makes the estimate invariant under
+re-association; #46 added two more carrying the keys' distinct counts.
 
 | | rows | plan |
 |---|---|---|
