@@ -69,3 +69,81 @@ MSG
 fi
 
 echo "pin agreement: db25-logical-plan is ${ours:0:10} in both"
+
+# ---------------------------------------------------------------------------
+# Second pin, different kind. The semantic analyzer is consumed through a
+# gitlink inside this chain, but its OWN CI builds against the parser it names
+# in a workflow variable:
+#
+#     env:
+#       PARSER_SHA: <sha>
+#
+# That job is the only thing that exercises the analyzer's find_package path -
+# the path the rest of the chain does not take. If it builds against a
+# different parser than the chain pins, it is still a green job, but it is no
+# longer evidence about the combination that ships.
+#
+# A gitlink cannot go stale unnoticed: it diffs, and the comparison above reads
+# it. A string in a YAML file can, and did - it sat four commits adrift while
+# every gitlink in the chain stayed honest. This is that comparison, so the one
+# pin in the project that is not a tree object is no longer the one pin nobody
+# checks.
+# ---------------------------------------------------------------------------
+analyzer_ci="$root/external/db25-logical-plan/external/analyzer/.github/workflows/ci.yml"
+chain_parser=$(pin_of "$root/external/db25-logical-plan" external/parser)
+
+if [ ! -r "$analyzer_ci" ] || [ -z "$chain_parser" ]; then
+    echo "parser pin: analyzer CI or chain pin unreadable - SKIPPED"
+    echo "  Submodules may be uninitialised, or this is an archived tree."
+    exit $SKIP
+fi
+
+# Every PARSER_SHA the workflow declares. One is the point of the companion
+# change; more than one that DISAGREE is the defect that change removed, so
+# catch a regression to three copies too.
+# Both spellings on purpose: `PARSER_SHA: <sha>` is the workflow-level env,
+# `PARSER_SHA=<sha>` the per-job shell assignment it replaced. Matching only the
+# new form would make this check SKIP silently against the old one - a non-check
+# that looks like a pass, which is the thing this file refuses to do.
+mapfile -t declared < <(grep -oE 'PARSER_SHA[:=][[:space:]]*[0-9a-f]{7,40}' "$analyzer_ci" \
+                        | grep -oE '[0-9a-f]{7,40}$' | sort -u)
+
+if [ ${#declared[@]} -eq 0 ]; then
+    echo "parser pin: no PARSER_SHA found in the analyzer's CI - SKIPPED"
+    echo "  The workflow no longer declares one; nothing to compare."
+    exit $SKIP
+fi
+
+if [ ${#declared[@]} -gt 1 ]; then
+    echo "PARSER PIN DISAGREEMENT - within the analyzer's own CI"
+    printf '  %s\n' "${declared[@]}"
+    echo
+    echo "The analyzer's workflow declares more than one distinct PARSER_SHA. Its"
+    echo "jobs would build against different parsers, so a gate would not be"
+    echo "gating the suite it claims to. Define it once at workflow level."
+    exit 1
+fi
+
+theirs_parser="${declared[0]}"
+# The workflow may abbreviate; compare on the shorter length, both directions.
+n=${#theirs_parser}
+if [ "${chain_parser:0:$n}" != "$theirs_parser" ]; then
+    cat <<MSG
+PARSER PIN DISAGREEMENT - db25-sql-parser
+
+  chain     db25-logical-plan/external/parser   $chain_parser
+  analyzer  .github/workflows/ci.yml PARSER_SHA $theirs_parser
+
+The analyzer's CI is the only job that builds it through find_package against an
+INSTALLED parser - the path this chain does not take and therefore cannot catch
+a break in. Against a different parser than the chain pins, that job is green
+and proves nothing about what ships.
+
+Fix by setting PARSER_SHA to the chain's pin above. Bumping it to the parser's
+main instead is the same mistake one commit later: the value that matters is
+what this chain builds against, not what the parser has moved on to.
+MSG
+    exit 1
+fi
+
+echo "parser pin: analyzer CI and chain agree on ${theirs_parser:0:10}"
