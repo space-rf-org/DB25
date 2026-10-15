@@ -1256,7 +1256,24 @@ std::optional<Table> eval(const LogicalNode* plan, const Data& data) {
 // ===========================================================================
 // bag_equal (multiset equality, NULL-aware).
 // ===========================================================================
+// Vacuity audit (opt-in, DB25_AUDIT_EMPTY=1).
+//
+// bag_equal({}, {}) and seq_equal({}, {}) are both TRUE. A comparison where
+// both sides are empty therefore establishes nothing, and the falsifiability
+// gate cannot see it: the gate asks only whether SOME mutant makes a test fail,
+// and an unrelated mutant may well do so while the comparison the test is named
+// for stays vacuous.
+//
+// Asserting emptiness against a LITERAL empty oracle (expect_empty) is a real
+// assertion - "this query must return no rows" - and shows up here too. The
+// audit reports; it does not judge. Reading it means asking, per test, whether
+// the empty side was the point or an accident of the fixture data.
+int g_cmp_total = 0;
+int g_cmp_empty = 0;
+
 bool bag_equal(const Table& a, const Table& b) {
+    ++g_cmp_total;
+    if (a.empty() && b.empty()) ++g_cmp_empty;
     if (a.size() != b.size()) return false;
     std::vector<bool> used(b.size(), false);
     for (const Row& ra : a) {
@@ -1281,6 +1298,8 @@ bool bag_equal(const Table& a, const Table& b) {
 // bag_equal (multiset) is blind to.
 // ===========================================================================
 bool seq_equal(const Table& a, const Table& b) {
+    ++g_cmp_total;
+    if (a.empty() && b.empty()) ++g_cmp_empty;
     if (a.size() != b.size()) return false;
     for (std::size_t i = 0; i < a.size(); ++i) {
         if (a[i].size() != b[i].size()) return false;
@@ -1512,7 +1531,12 @@ void check(bool cond, std::string_view what) {
 namespace {
 bool run_one(const TestCase& t) {
     g_current_failed = false;
+    const int t0 = g_cmp_total, e0 = g_cmp_empty;
     t.body();
+    if (std::getenv("DB25_AUDIT_EMPTY") != nullptr) {
+        const int n = g_cmp_total - t0, e = g_cmp_empty - e0;
+        std::printf("AUDIT\t%s\tcmp=%d\tempty=%d\n", t.name.c_str(), n, e);
+    }
     return !g_current_failed;
 }
 

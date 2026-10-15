@@ -361,7 +361,7 @@ void prop_optimizer_idempotence() {
 // ===========================================================================
 void prop_differential_equivalence() {
     const auto& cat = db25::harness::catalog();
-    long applied = 0, skipped = 0;
+    long applied = 0, skipped = 0, vacuous = 0;
     for_each_seed([&](std::uint64_t seed) {
         const std::string sql = db25::proptest::generate_query(cat, seed);
         auto st = db25::harness::run(cat, sql);
@@ -378,11 +378,23 @@ void prop_differential_equivalence() {
                              seed_tag(seed, sql) +
                                  " : optimizer changed the result multiset");
         ++applied;
+        // An application that compares NOTHING to NOTHING is not a check.
+        // bag_equal({}, {}) is true, so a seed whose query returns no rows
+        // before and after optimization confirms the property trivially - any
+        // optimizer bug that also returns no rows passes it. This suite already
+        // refuses to count a SKIP as a pass; counting an empty-vs-empty
+        // comparison as coverage is the same mistake wearing the other hat.
+        if (ev_bound->empty() && ev_opt->empty()) ++vacuous;
     });
+    const long discriminating = applied - vacuous;
     std::printf("[prop] differential equivalence: oracle applied %ld, skipped %ld "
                 "(%.1f%% covered)\n",
                 applied, skipped,
                 (applied + skipped) ? 100.0 * applied / (applied + skipped) : 0.0);
+    std::printf("[prop]   of those %ld: %ld discriminating, %ld vacuous "
+                "(empty == empty, asserts nothing) = %.1f%% real\n",
+                applied, discriminating, vacuous,
+                applied ? 100.0 * discriminating / applied : 0.0);
 }
 
 // ===========================================================================
@@ -433,7 +445,7 @@ void apply_pass(PassId p, LogicalNodePtr& root) {
 
 void run_single_pass_property(PassId pass) {
     const auto& cat = db25::harness::catalog();
-    long applied = 0, skipped = 0;
+    long applied = 0, skipped = 0, vacuous = 0;
     for_each_seed([&](std::uint64_t seed) {
         const std::string sql = db25::proptest::generate_query(cat, seed);
 
@@ -454,9 +466,12 @@ void run_single_pass_property(PassId pass) {
                              seed_tag(seed, sql) + " : pass '" + pass_name(pass) +
                                  "' changed the result multiset");
         ++applied;
+        // See prop_differential_equivalence: empty == empty is not a check.
+        if (ev_ref->empty() && ev_after->empty()) ++vacuous;
     });
-    std::printf("[prop] pass-safety[%s]: applied %ld, skipped %ld\n", pass_name(pass),
-                applied, skipped);
+    std::printf("[prop] pass-safety[%s]: applied %ld, skipped %ld; "
+                "%ld discriminating, %ld vacuous (empty == empty)\n",
+                pass_name(pass), applied, skipped, applied - vacuous, vacuous);
 }
 
 // ---------------------------------------------------------------------------
