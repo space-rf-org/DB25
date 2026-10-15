@@ -98,17 +98,15 @@ add_test(NAME db25_gate COMMAND db25_gate)
 # catalog + durable snapshot, diagnostics, transaction state). It is NOT part of
 # the mutation gate, so broad structural assertions are welcome. It drives
 # execute_ddl / the CatalogManager / snapshot persistence / CHECK evaluation /
-# the transaction manager, which the logical-plan library does not compile in,
-# so those analyzer translation units are compiled straight into this target.
+# the transaction manager. These used to be compiled straight into this target
+# from a hand-written list of analyzer source files, repeated in four places,
+# because db25logicalplan did not carry them. It links db25semantic now, which
+# compiles ALL of the analyzer - so linking db25logicalplan is enough and the
+# lists are gone. See docs/design/dependency-composition.md section 3.
 # ---------------------------------------------------------------------------
-set(ANALYZER_SRC_DIR
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/db25-logical-plan/external/analyzer/src)
 add_executable(db25_integration
     integration/full_stack_integration.cpp
-    ${ANALYZER_SRC_DIR}/ddl.cpp
-    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
-    ${ANALYZER_SRC_DIR}/check_eval.cpp
-    ${ANALYZER_SRC_DIR}/transaction.cpp)
+)
 target_link_libraries(db25_integration PRIVATE db25logicalplan)
 # -Wall/-Wextra as elsewhere, but not the harness -fno-exceptions/-Werror set:
 # these analyzer TUs are already -fno-exceptions-clean in their own build.
@@ -123,14 +121,11 @@ add_test(NAME db25_integration COMMAND db25_integration)
 # expectation (each statement's committed db25_parse / db25_analyze columns must
 # match what the frontend produces now, so behaviour cannot drift silently).
 # Statements replay per session so DDL builds the catalog later statements bind
-# against. Uses the same analyzer TUs as db25_integration.
+# against.
 # ---------------------------------------------------------------------------
 add_executable(corpus_runner
     integration/corpus_runner.cpp
-    ${ANALYZER_SRC_DIR}/ddl.cpp
-    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
-    ${ANALYZER_SRC_DIR}/check_eval.cpp
-    ${ANALYZER_SRC_DIR}/transaction.cpp)
+)
 target_link_libraries(corpus_runner PRIVATE db25logicalplan)
 target_compile_options(corpus_runner PRIVATE -fno-exceptions -Wall -Wextra)
 add_test(NAME corpus_runner
@@ -150,10 +145,7 @@ add_executable(staged_runner
     integration/staged_runner.cpp
     integration/staged_sexpr.cpp
     integration/staged_sexpr_read.cpp
-    ${ANALYZER_SRC_DIR}/ddl.cpp
-    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
-    ${ANALYZER_SRC_DIR}/check_eval.cpp
-    ${ANALYZER_SRC_DIR}/transaction.cpp)
+)
 target_link_libraries(staged_runner PRIVATE db25physicalplan)
 target_compile_options(staged_runner PRIVATE -Wall -Wextra)
 target_compile_definitions(staged_runner PRIVATE
@@ -206,10 +198,7 @@ set_tests_properties(pin_agreement PROPERTIES SKIP_RETURN_CODE 77)
 # ---------------------------------------------------------------------------
 add_executable(corpus_report
     integration/corpus_report.cpp
-    ${ANALYZER_SRC_DIR}/ddl.cpp
-    ${ANALYZER_SRC_DIR}/catalog_snapshot.cpp
-    ${ANALYZER_SRC_DIR}/check_eval.cpp
-    ${ANALYZER_SRC_DIR}/transaction.cpp)
+)
 target_link_libraries(corpus_report PRIVATE db25logicalplan)
 target_compile_options(corpus_report PRIVATE -fno-exceptions -Wall -Wextra)
 add_test(NAME corpus_report
