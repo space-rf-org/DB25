@@ -25,10 +25,14 @@ CMake ≥ 3.20 and Ninja or Make. The whole stack is `-fno-exceptions`. Other C+
 compilers (Clang, Apple Clang) may work but are not exercised in CI.
 
 ```sh
-# 1. Clone with every stage (the stages are git submodules under external/).
-git clone --recursive https://github.com/space-rf-org/db25
+# 1. Clone, then pull in the stages (they are git submodules under external/).
+#    Not --recursive: db25-physical-plan vendors its own copy of the whole
+#    logical-plan stack, which this super-build never compiles (it reuses the
+#    copy added here). bootstrap.sh skips that duplicate - see
+#    docs/design/dependency-composition.md section 4.
+git clone https://github.com/space-rf-org/db25
 cd db25
-#    (already cloned without --recursive? run: git submodule update --init --recursive)
+./scripts/bootstrap.sh
 
 # 2. Configure + build everything (stages, harnesses, examples).
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug

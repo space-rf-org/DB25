@@ -68,9 +68,9 @@ names — it reads the analyzer's results plus the catalog and assembles the pip
 ## 2. Building and running
 
 ```sh
-git clone --recurse-submodules https://github.com/space-rf-org/db25
+git clone https://github.com/space-rf-org/db25
 cd db25
-git submodule update --init --recursive
+./scripts/bootstrap.sh          # the stages, minus a duplicate nobody builds
 cmake -S . -B build && cmake --build build -j
 ```
 

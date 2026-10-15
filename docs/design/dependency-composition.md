@@ -167,11 +167,22 @@ dependency's CMake, not in a hand-maintained source list.
 
 - **The checkout holds a duplicate.** `--recursive` clones
   `db25-logical-plan` and its children twice, once under the umbrella and once
-  under db25-physical-plan: 6.6 MB of a 33 MB checkout. It is never built. A
+  under db25-physical-plan. It is never built. `scripts/bootstrap.sh` does a
   selective init (`--recursive` for logical-plan, plain `--init` for
-  physical-plan) removes it and the build and `check_pin_agreement` are
+  physical-plan) and removes it; the build and `check_pin_agreement` are
   unaffected, because the pin check reads gitlinks via `git ls-tree HEAD`
-  rather than the working tree.
+  rather than the working tree. Measured on clean clones:
+
+  |  | `external/` | whole checkout |
+  |---|---|---|
+  | `--init --recursive` | 15 MB | 41 MB |
+  | `scripts/bootstrap.sh` | 7.6 MB | 24 MB |
+
+  (An earlier revision of this document said "6.6 MB of a 33 MB checkout". 6.6
+  MB is the duplicate *working tree* only — it omitted the git objects behind
+  it under `.git/modules`, which a recursive init also fetches — and the 33 MB
+  was measured on a tree that had been built in. Both numbers are replaced by
+  the table above.)
 - **A diamond, and therefore pin drift.** Two paths reach
   `db25-logical-plan`. `scripts/check_pin_agreement.sh` is the mitigation, and
   it is a `ctest` target so it cannot be forgotten.
