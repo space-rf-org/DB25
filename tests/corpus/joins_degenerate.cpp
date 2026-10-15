@@ -103,10 +103,21 @@ static void register_joins_degenerate() {
                   "USING(id) yields exactly one fewer output column than ON u.id=o.id");
         }
         // Row-level: the surviving rows are the same on the shared key.
+        // users.id and orders.id are disjoint, so this pair is empty == empty -
+        // true for any pair of joins that both return nothing. The column-count
+        // check above is the part of this test that discriminates on this data.
         expect_bag_eq(
             "SELECT u.id FROM users u JOIN orders o USING (id)",
             "SELECT u.id FROM users u JOIN orders o ON u.id = o.id",
-            "USING(id) matches the same rows as ON u.id = o.id");
+            "USING(id) matches the same rows as ON u.id = o.id (both empty here)");
+
+        // The same claim where there ARE surviving rows to compare.
+        expect_bag_eq(
+            "SELECT t.id FROM (SELECT id FROM users) t "
+            "JOIN (SELECT id FROM emp) s USING (id)",
+            "SELECT t.id FROM (SELECT id FROM users) t "
+            "JOIN (SELECT id FROM emp) s ON t.id = s.id",
+            "USING(id) == ON t.id = s.id over OVERLAPPING keys (5 rows, not 0)");
     });
 
     // 4) NATURAL JOIN over the sole common column `id` behaves like USING(id):
@@ -114,10 +125,42 @@ static void register_joins_degenerate() {
     // NATURAL join to USING over the common columns (db25-logical-plan), so the
     // two forms produce the same rows.
     test("join.natural_equals_using", [] {
+        // users.id is 1..5 and orders.id is 100..106 - DISJOINT - so both sides
+        // of this pair are empty, and bag_equal({}, {}) is true. On its own the
+        // comparison below establishes only that two empty tables are equal: it
+        // would hold just as well for a NATURAL JOIN that never matched
+        // anything. Kept, because the empty case is worth pinning, but it is
+        // not the test this test is named for.
         expect_bag_eq(
             "SELECT u.id FROM users u NATURAL JOIN orders o",
             "SELECT u.id FROM users u JOIN orders o USING (id)",
-            "NATURAL JOIN (common col id) == USING(id)");
+            "NATURAL JOIN (common col id) == USING(id), both empty on this data");
+
+        // The discriminating form. Two derived tables whose ONLY column is `id`
+        // and whose id ranges overlap (users 1..5, emp 1..5), so both sides
+        // return five rows and the equality is about matching, not emptiness.
+        // A NATURAL JOIN that picked the wrong common column, or produced an
+        // always-false predicate, now fails here and passes above.
+        expect_bag_eq(
+            "SELECT t.id FROM (SELECT id FROM users) t "
+            "NATURAL JOIN (SELECT id FROM emp) s",
+            "SELECT t.id FROM (SELECT id FROM users) t "
+            "JOIN (SELECT id FROM emp) s USING (id)",
+            "NATURAL JOIN == USING(id) over OVERLAPPING keys (5 rows, not 0)");
+
+        // ...and against ON, which is the arm that makes this a real check.
+        // NATURAL and USING both funnel into the SAME merge-predicate loop in
+        // the binder, so a bug in that loop moves both sides of the comparison
+        // above by the same amount and cancels: changing the merge predicate
+        // from `=` to `>` leaves NATURAL == USING perfectly true. ON builds its
+        // predicate by the ordinary expression path instead, so it is an
+        // INDEPENDENT oracle rather than a second look at the same code.
+        expect_bag_eq(
+            "SELECT t.id FROM (SELECT id FROM users) t "
+            "NATURAL JOIN (SELECT id FROM emp) s",
+            "SELECT t.id FROM (SELECT id FROM users) t "
+            "JOIN (SELECT id FROM emp) s ON t.id = s.id",
+            "NATURAL JOIN == ON t.id = s.id (independent of the merge path)");
     });
 
     // 5) LEFT JOIN preserves EVERY left row (null-extending non-matches), so the
