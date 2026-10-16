@@ -172,3 +172,37 @@ jobs:
 
       - name: Coverage
         run: ./scripts/coverage.sh build-coverage
+
+  # ---------------------------------------------------------------------------
+  # Vacuity: how many tests assert NOTHING, counted every run.
+  #
+  # bag_equal({}, {}) is true, so a test whose every comparison has both sides
+  # empty establishes nothing - and the falsifiability gate cannot see it, since
+  # it only asks whether SOME mutant makes a test fail. A ratchet, not a limit:
+  # several counted tests are legitimate expect_empty assertions, so the count
+  # need not be zero, it must not GROW.
+  # ---------------------------------------------------------------------------
+  vacuity:
+    name: vacuity (ratchet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install compiler
+        run: |
+          if command -v g++-14 >/dev/null 2>&1; then
+            echo "g++-14 already present: $(g++-14 --version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y g++-14
+          fi
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=g++-14
+          cmake --build build --target db25_harness -j"$(nproc)"
+
+      - name: Vacuity ratchet
+        run: ./scripts/vacuity.sh build
