@@ -1,0 +1,15 @@
+76.3
+# Total frontend line coverage, as measured by scripts/coverage.sh over the
+# umbrella's own ctest targets. This is a RECORD of what was measured, not a
+# target anyone chose - the first such number this project has had.
+#
+# SCOPE. It covers what db25's suite executes: db25-logical-plan, the analyzer,
+# the parser and the tokenizer. It does NOT cover db25-physical-plan, whose
+# tests are switched off in the super-build (DB25_PHYSICAL_BUILD_TESTS OFF) and
+# which measures 91.9% of 2710 lines in its own build. A number here is only
+# meaningful with that scope attached.
+#
+# TO MOVE IT: change it in the same commit that changes coverage, and say why.
+# A baseline edited afterwards, to make a red job green, is a baseline nobody
+# believes - and this project already has one worked example of a confident
+# wrong number surviving a month because nothing recomputed it.

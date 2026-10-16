@@ -136,3 +136,39 @@ jobs:
       - name: Suite under sanitizers (gate excluded)
         working-directory: build-san
         run: ctest --output-on-failure -E db25_gate
+
+  # ---------------------------------------------------------------------------
+  # Line coverage, recomputed every run against a recorded baseline.
+  #
+  # This exists because the project's coverage numbers were produced by hand
+  # once and would otherwise be stale the next day - the same failure the
+  # [uncovered] line in the falsifiability gates had, where a confident wrong
+  # number sat unnoticed for a month.
+  #
+  # It is a RATCHET on one total, not a per-file target: a drop means tests were
+  # removed or unreached code was added, and moving the baseline is a deliberate
+  # edit in the commit that causes it.
+  #
+  # It does NOT judge test quality. Coverage says what was reached, never what
+  # was checked - the falsifiability gate above is what decides whether reaching
+  # a line means anything.
+  # ---------------------------------------------------------------------------
+  coverage:
+    name: line coverage (ratchet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install compiler
+        run: |
+          if command -v g++-14 >/dev/null 2>&1; then
+            echo "g++-14 already present: $(g++-14 --version | head -1)"
+          else
+            sudo apt-get update
+            sudo apt-get install -y g++-14
+          fi
+
+      - name: Coverage
+        run: ./scripts/coverage.sh build-coverage
