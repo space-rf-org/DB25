@@ -1,0 +1,7 @@
+10
+# Tests whose every multiset/sequence comparison is empty == empty, as counted
+# by scripts/vacuity.sh. A RECORD, not a target. Most of these are legitimate
+# expect_empty assertions ("this query must return no rows"); the number exists
+# so a NEW test that asserts nothing is caught on the commit that adds it.
+#
+# Lower it whenever the count drops. Raising it needs a reason in the commit.
