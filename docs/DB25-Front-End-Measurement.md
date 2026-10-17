@@ -347,6 +347,38 @@ null fraction, numeric range, and a uniqueness flag — and no histogram or
 most-common-value list at all. That is the claim worth making, and it is a claim
 about how far simple statistics go, not about beating anyone.
 
+### The measurement is now a job, not an exercise
+
+Everything in this section was produced by hand, once. That makes it a claim
+about 2026-10-14 and nothing else — and this paper has a section about exactly
+that failure mode.
+
+Since 2026-10-17 a cut-down version runs in CI on every push, as a `ctest`
+target in the umbrella repo. It is **not** these numbers and must not be read as
+them:
+
+| | this section | the CI measurement |
+|---|---|---|
+| fixture | 6 tables, 192,000 rows | the test harness fixture, 5–7 rows a table |
+| queries | the ten above | nine, spanning scan / filter / three join kinds / aggregate / semi-join |
+| compared against | PostgreSQL 18 and DuckDB 1.5.5 | nothing — DB25's own estimate against its own evaluator's actual rows |
+| run | once, by hand | every push, against a recorded baseline |
+
+Two engines and a 192,000-row fixture cannot live in a CI job. But the *other*
+half of this section needs neither: DB25 estimates a row count, and the
+reference evaluator in the test harness produces the rows the query really
+returns. The gap between those two is computable with no external system at all,
+and it is the number this paper says matters.
+
+Its geometric mean q-error is **1.267×** over its nine queries, and the job fails
+if that gets worse. The figure is not comparable with the 1.16× above — different
+fixture, different queries, no cross-engine column — and the paper reports both
+rather than blending them, because a single number covering two different
+experiments is how a measurement starts lying.
+
+**It found a real defect within an hour of existing**, and the next section
+records what it was.
+
 ### What statistics cost
 
 Nothing measurable. Interleaved A/B over the ten queries, five pairs each, gives
@@ -563,6 +595,28 @@ They are named, they live in one place, and their comments say they are guesses.
 They are also the textbook values rather than invented ones, which is why DB25
 and PostgreSQL agree where both are guessing.
 
+**And until 2026-10-17 that table described a behaviour the code did not have.**
+The equality row says the 0.005 default is used for `col = <non-constant>`. The
+implementation also used it for `col = <any non-numeric constant>` — so
+`city = 'NYC'` was priced at 0.005 however good the column's statistics were,
+because one guard required a *numeric* literal before the estimator would look
+at `ndv` at all. The range arithmetic does need a number, since it interpolates
+against a numeric minimum and maximum; the `1/ndv` equality does not.
+
+On a table where the answer is two rows in five, that is an estimate of 0.025
+rows — an 80× error on a predicate the estimator had everything it needed to get
+right. Fixed in `db25-physical-plan#54`; the guard now tests what this table
+always said it tested.
+
+**None of the ten queries above could have detected it**, because none of them
+compares a column to a string constant — there is not one string literal in the
+whole set. The defect was found by the CI measurement described in section 4,
+whose nine queries do contain two. That is the argument for having both: a
+benchmark chosen to make join estimation legible had a blind spot exactly where
+this bug lived, and a second measurement with a different query set is what saw
+it. Its own geometric mean went 3.233× → 1.267× on the fix, with the two
+affected queries going 80.00× → 1.00× and 85.71× → 1.50×.
+
 ### What the statistics deliberately do not include
 
 No histogram, and no most-common-value list. `ndv` plus a numeric range answers
@@ -623,8 +677,24 @@ rather than buried.
 - **A carried-forward number is stale until recomputed.** The rule this paper
   learned by breaking it — stated after this list, because it is a rule and not a
   caveat.
-- **These numbers move.** Taken on 2026-10-14 against `db25@673e71c`. They will
-  be wrong by the next increment, and that is the intended failure mode — the
+- **The query set has a blind spot, and it cost something.** Not one of the ten
+  queries compares a column to a string constant, so none of them exercises the
+  equality-against-text path — which is where an 80× estimation error lived
+  undetected until a different measurement with a different query set found it
+  (section 7). A fixture built to make *join* estimation legible is not a
+  fixture that exercises *predicate* estimation, and a benchmark cannot find a
+  defect in a path it never takes.
+- **The cross-engine columns were NOT re-measured for this revision.**
+  PostgreSQL 18 and DuckDB are no longer installed on the host this paper was
+  measured on, and nothing here restates a number it cannot reproduce. The DB25
+  column is unchanged for a reason stronger than a re-run: the code path that
+  changed requires a non-numeric literal on one side of a comparison, and this
+  query set contains no string literal at all, so no estimate in the section 4
+  table can have moved. Checked, not assumed.
+- **These numbers move.** The ten-query figures were taken on 2026-10-14 against
+  `db25@673e71c` and are unrevised. The CI measurement in section 4, and the
+  section 7 note, are from 2026-10-17 against `db25@6696af3`. They will all be
+  wrong by the next increment, and that is the intended failure mode — the
   numbers exist to be falsified, not framed.
 
 ### The staleness rule
@@ -648,6 +718,15 @@ because the script that produced the correction printed the true range beside it
 Two corollaries this paper paid for. A correction must be propagated into every
 later edit, not only the sentence it was found in. And a fix is itself a new
 claim, needing the same check as the thing it replaced.
+
+The second corollary collected an instance the day the CI measurement landed.
+That tool prints the figure to record as the new baseline when it improves — and
+the first version printed a *rounded* one while comparing against the unrounded
+value, so the number it told you to write down was a number that then failed its
+own check. Not an error in this paper, but the same family: an authoritative
+output with nothing cross-checking it, and caught by using the tool rather than
+by reading it. A ratchet whose advice does not pass its own gate is worse than
+one that offers none, because it teaches the reader to distrust the output.
 
 The estimates in section 4 are exempt, and that is the one structural defence
 here rather than a procedural one. They are a pure function of the plan and the
@@ -716,6 +795,20 @@ Everything is in `docs/bench/`:
 | `db25_stages.cpp` | the same pipeline with a clock between each stage: parse, analyze+bind, logical optimize, physical lowering |
 | `pg_wall.py` | PostgreSQL both ways: `EXPLAIN (SUMMARY ON)` xN for planner time, and wall time for N `EXPLAIN`s minus N baseline statements for parse+plan |
 | `others_bench.py` | PostgreSQL planner time and DuckDB in-process `EXPLAIN`, minus the same baseline |
+
+The CI measurement from section 4 needs none of that — no cluster, no fixture
+files, no external engine:
+
+```sh
+cmake -S . -B build && cmake --build build --target qerror_runner
+ctest --test-dir build -R qerror      # or ./build/qerror_runner for the table
+```
+
+It prints the per-query estimate, the actual row count, the q-error for each,
+and the geometric mean, then compares it against the baseline compiled into the
+`ctest` target. Which is the whole reason it exists: a measurement that costs one
+command is a measurement that gets re-run, and the ten-query benchmark below is
+the opposite of that.
 
 ```sh
 # Where the cluster is. The two PostgreSQL harnesses read these, so the same
