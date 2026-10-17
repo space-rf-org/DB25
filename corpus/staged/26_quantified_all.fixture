@@ -69,6 +69,6 @@ SELECT id FROM emp WHERE salary > ALL (SELECT salary FROM emp)
 
 -- physical
 (Project exprs=[(col #0)] out=[id:Integer]
-  (Filter pred=(Subquery (col #3)) out=[id:Integer dept:Text? region:Text? salary:Double?]
+  (Filter pred=(Subquery :kind quantified :sense all :op > :sub (col #3)) out=[id:Integer dept:Text? region:Text? salary:Double?]
     (SeqScan table=emp fmt=row out=[id:Integer dept:Text? region:Text? salary:Double?])))
 

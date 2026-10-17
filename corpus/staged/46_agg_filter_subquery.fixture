@@ -102,6 +102,6 @@ SELECT dept, SUM(salary) FILTER (WHERE EXISTS (SELECT 1 FROM users WHERE users.i
 
 -- physical
 (Project exprs=[(col #0) (col #1)] out=[dept:Text? SUM:Double?]
-  (HashAggregate keys=[(col #1)] aggs=[(SUM (col #3) :filter (Subquery))] out=[dept:Text? SUM:Double?]
+  (HashAggregate keys=[(col #1)] aggs=[(SUM (col #3) :filter (Subquery :kind exists :correlated :sub))] out=[dept:Text? SUM:Double?]
     (SeqScan table=emp fmt=row out=[id:Integer dept:Text? region:Text? salary:Double?])))
 
