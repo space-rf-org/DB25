@@ -46,6 +46,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -639,6 +640,43 @@ static const std::vector<ExprCase>& cases() {
              e->subquery_kind = plan::SubqueryKind::Exists;
              e->type = db25::ast::DataType::Boolean;
              e->sub_plan = escan(v ? "zzz" : "aaa"); return e; }},
+        // THE NOT-FLAVOR BITS. Every case above varies a child or a named
+        // field; none varied expr_flags, and expr_flags is where SQL keeps the
+        // difference between a predicate and its opposite. The physical writer
+        // dropped all of them - `IS NULL` and `IS NOT NULL` rendered the same
+        // string - and this sweep could not see it because it never asked.
+        {plan::ExprKind::IsNull, "negated (IS NULL / IS NOT NULL)", [](int v) {
+             auto e = mk(plan::ExprKind::IsNull);
+             e->children.push_back(ecol(0));
+             if (v) e->expr_flags |= plan::ExprFlagNegated; return e; }},
+        {plan::ExprKind::Like, "negated (LIKE / NOT LIKE)", [](int v) {
+             auto e = mk(plan::ExprKind::Like);
+             e->children.push_back(ecol(0)); e->children.push_back(elit(1));
+             if (v) e->expr_flags |= plan::ExprFlagNegated; return e; }},
+        {plan::ExprKind::Like, "case_insensitive (LIKE / ILIKE)", [](int v) {
+             auto e = mk(plan::ExprKind::Like);
+             e->children.push_back(ecol(0)); e->children.push_back(elit(1));
+             if (v) e->expr_flags |= plan::ExprFlagCaseInsensitive; return e; }},
+        {plan::ExprKind::InList, "negated (IN / NOT IN)", [](int v) {
+             auto e = mk(plan::ExprKind::InList);
+             e->children.push_back(ecol(0)); e->children.push_back(elit(1));
+             if (v) e->expr_flags |= plan::ExprFlagNegated; return e; }},
+        {plan::ExprKind::BooleanTest, "negated (IS TRUE / IS NOT TRUE)", [](int v) {
+             auto e = mk(plan::ExprKind::BooleanTest);
+             e->children.push_back(ecol(0));
+             if (v) e->expr_flags |= plan::ExprFlagNegated; return e; }},
+        {plan::ExprKind::Subquery, "subquery_kind", [](int v) {
+             auto e = mk(plan::ExprKind::Subquery);
+             e->subquery_kind = v ? plan::SubqueryKind::In : plan::SubqueryKind::Exists;
+             e->type = db25::ast::DataType::Boolean;
+             e->sub_plan = escan("s"); return e; }},
+        {plan::ExprKind::Subquery, "quant_all (ANY / ALL)", [](int v) {
+             auto e = mk(plan::ExprKind::Subquery);
+             e->subquery_kind = plan::SubqueryKind::Quantified;
+             e->bin_op = db25::ast::BinaryOp::GreaterThan;
+             e->type = db25::ast::DataType::Boolean;
+             if (v) e->expr_flags |= plan::ExprFlagQuantAll;
+             e->sub_plan = escan("s"); return e; }},
         {plan::ExprKind::Parameter, "param_index", [](int v) {
              auto e = mk(plan::ExprKind::Parameter);
              e->param_index = static_cast<std::uint32_t>(v + 1); return e; }},
@@ -674,8 +712,62 @@ static plan::LogicalNodePtr in_a_plan(plan::ExprPtr e) {
 
 }  // namespace exprsweep
 
+// Lower a logical plan through the shipped spec and render the PHYSICAL plan,
+// or return nullopt when it does not lower. A kind that cannot be lowered is
+// not blindness in the writer, and reporting it as such would be the same
+// mistake as reporting a mutation that did not apply as a mutation nobody
+// caught: two different causes, one indistinguishable symptom.
+std::optional<std::string> render_physical_plan(plan::LogicalNode* p) {
+    if (p == nullptr) return std::nullopt;
+    physical::LoweringContext pctx;
+    pctx.spec = &shipped_spec();
+    physical::LoweringResult lowered = physical::lower(*p, pctx);
+    if (!lowered.ok || lowered.plan == nullptr) return std::nullopt;
+    return trim(physical::physical_to_sexpr(*lowered.plan));
+}
+
 static int run_expr_sweep() {
     long checked = 0, invisible = 0, uncovered = 0;
+    long phys_checked = 0, phys_invisible = 0, phys_unlowerable = 0;
+    long phys_known_gap = 0;
+
+    // THE ONE PHYSICAL BLINDNESS THAT IS NOT FIXED, named instead of tolerated.
+    //
+    // physical_to_sexpr renders a Subquery's inner plan as the marker `:sub`
+    // and nothing more, so
+    //     SELECT (SELECT MAX(amount) FROM orders) FROM users
+    //     SELECT (SELECT MIN(amount) FROM orders) FROM users
+    // share a T6 golden. (An IN / EXISTS subquery is decorrelated into a semi
+    // or anti join before lowering and is unaffected; a SCALAR subquery
+    // survives, so this is reachable from real SQL, not only from this sweep.)
+    //
+    // WHY IT IS NOT FIXED HERE. The inner plan is a LOGICAL node, and the only
+    // logical renderer in the project is this repo's staged::plan_to_sexpr -
+    // which the physical-plan repo, sitting below the umbrella, cannot call.
+    // Closing it properly means lifting that renderer into db25-logical-plan as
+    // a first-class API and having both writers use it. Writing a second,
+    // partial logical renderer inside the physical writer would trade one
+    // invisible payload for an unknown number of them.
+    //
+    // WHAT LIMITS THE DAMAGE MEANWHILE: the T4 and T5 goldens in the same
+    // fixture ARE rendered by the logical writer, which has no such blindness
+    // (0 invisible above), so a fixture as a whole still distinguishes the two
+    // queries. It is the physical section alone that cannot.
+    //
+    // THE LIST IS ENFORCED IN BOTH DIRECTIONS. An invisible payload that is not
+    // on it fails. A payload ON it that has become visible fails too, with
+    // "remove the entry" - which is what keeps this from becoming the allowlist
+    // nobody maintains.
+    struct KnownGap { plan::ExprKind kind; const char* what; };
+    static const KnownGap kKnownPhysicalGaps[] = {
+        {plan::ExprKind::Subquery, "sub_plan"},
+    };
+    const auto is_known_gap = [&](const exprsweep::ExprCase& c) {
+        for (const KnownGap& g : kKnownPhysicalGaps) {
+            if (g.kind == c.kind && std::string(g.what) == c.what) return true;
+        }
+        return false;
+    };
     for (const exprsweep::ExprCase& c : exprsweep::cases()) {
         const auto a = exprsweep::in_a_plan(c.make(0));
         const auto b = exprsweep::in_a_plan(c.make(1));
@@ -684,8 +776,44 @@ static int run_expr_sweep() {
         ++checked;
         if (sa == sb) {
             ++invisible;
-            std::printf("  INVISIBLE %s.%s does not reach the rendered plan:\n    %s\n",
+            std::printf("  INVISIBLE [logical] %s.%s does not reach the rendered plan:\n    %s\n",
                         plan::expr_kind_to_string(c.kind), c.what, sa.c_str());
+        }
+
+        // THE SAME QUESTION OF THE PHYSICAL WRITER, which is the half this
+        // sweep did not ask. Both writers produce goldens (T4/T5 are logical,
+        // T6 is physical), so a payload the physical writer drops leaves the
+        // physical golden just as unfalsifiable as a logical one. The asymmetry
+        // was not theoretical: physical_to_sexpr sent IsNull, Like, InList,
+        // BooleanTest, Cast and Parameter to a generic `(<kind> <child>...)`
+        // branch, so `age IS NULL` and `age IS NOT NULL`, `LIKE` and `ILIKE`,
+        // `CAST(x AS TEXT)` and `CAST(x AS BIGINT)`, `$1` and `$2` each shared
+        // a rendering. Three of those are cases this sweep ALREADY had - it
+        // simply never pointed them at the second writer.
+        const auto pa = render_physical_plan(a.get());
+        const auto pb = render_physical_plan(b.get());
+        if (!pa.has_value() || !pb.has_value()) {
+            ++phys_unlowerable;
+        } else {
+            ++phys_checked;
+            const bool known = is_known_gap(c);
+            if (*pa == *pb) {
+                if (known) {
+                    ++phys_known_gap;
+                    std::printf("  KNOWN GAP [physical] %s.%s does not reach the lowered "
+                                "plan (see kKnownPhysicalGaps)\n",
+                                plan::expr_kind_to_string(c.kind), c.what);
+                } else {
+                    ++phys_invisible;
+                    std::printf("  INVISIBLE [physical] %s.%s does not reach the lowered plan:\n    %s\n",
+                                plan::expr_kind_to_string(c.kind), c.what, pa->c_str());
+                }
+            } else if (known) {
+                ++phys_invisible;
+                std::printf("  CLOSED [physical] %s.%s now reaches the lowered plan - "
+                            "remove it from kKnownPhysicalGaps\n",
+                            plan::expr_kind_to_string(c.kind), c.what);
+            }
         }
     }
     for (const plan::ExprKind k : exprsweep::all_expr_kinds()) {
@@ -699,7 +827,15 @@ static int run_expr_sweep() {
     }
     std::printf("staged_runner --exprs: %ld payload(s) checked, %ld invisible, "
                 "%ld kind(s) uncovered\n", checked, invisible, uncovered);
-    return (invisible == 0 && uncovered == 0) ? 0 : 1;
+    // The physical count is reported separately rather than folded in, because
+    // the two writers are different artifacts with different coverage, and one
+    // number would hide which of them is blind. `unlowerable` is reported for
+    // the same reason a mutation that does not apply is reported: a payload the
+    // planner cannot lower was never asked the question.
+    std::printf("staged_runner --exprs [physical writer]: %ld payload(s) checked, "
+                "%ld invisible, %ld known gap(s), %ld not lowerable\n",
+                phys_checked, phys_invisible, phys_known_gap, phys_unlowerable);
+    return (invisible == 0 && phys_invisible == 0 && uncovered == 0) ? 0 : 1;
 }
 
 static int run_field_sweep() {
