@@ -71,18 +71,64 @@ using db25::harness::Table;
 // exists to produce.
 struct Case { const char* name; const char* sql; };
 const Case kCases[] = {
+    // --- shape: the plan tree ------------------------------------------------
     {"scan",            "SELECT id FROM users"},
-    {"filter_eq",       "SELECT id FROM users WHERE city = 'NYC'"},
-    {"filter_range",    "SELECT id FROM users WHERE age > 20"},
     {"join_fk",         "SELECT u.id, o.id FROM users u JOIN orders o ON o.user_id = u.id"},
-    {"join_filtered",   "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id "
-                        "WHERE o.status = 'paid'"},
     {"left_join",       "SELECT u.id, o.id FROM users u LEFT JOIN orders o ON o.user_id = u.id"},
+    {"three_way",       "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id "
+                        "JOIN products p ON p.id = o.product_id"},
     {"group_by",        "SELECT city, COUNT(*) FROM users GROUP BY city"},
     {"semi_join",       "SELECT id FROM users u WHERE EXISTS "
                         "(SELECT 1 FROM orders o WHERE o.user_id = u.id)"},
-    {"three_way",       "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id "
-                        "JOIN products p ON p.id = o.product_id"},
+    {"join_filtered",   "SELECT u.id FROM users u JOIN orders o ON o.user_id = u.id "
+                        "WHERE o.status = 'paid'"},
+
+    // --- shape: the PREDICATE ------------------------------------------------
+    //
+    // One case per branch of selectivity_of(), because a query set chosen to
+    // make JOIN estimation legible does not exercise PREDICATE estimation at
+    // all - and that is not a hypothetical. The ten-query benchmark behind
+    // docs/DB25-Front-End-Measurement.md contains no string literal anywhere,
+    // so it could not see an 80x error in equality-against-text that sat in the
+    // estimator until the first run of this tool.
+    //
+    // HOW BIG THAT HOLE WAS, measured rather than argued. Line coverage of
+    // db25-physical-plan/src/selectivity.cpp, driven by this file alone:
+    //
+    //     the first nine queries   50.00% of 158 lines
+    //     these twenty-three       84.81% of 158 lines
+    //
+    // Half the estimator was never executed by the measurement whose job was to
+    // measure it, and the defect lived in the unexecuted half. So these are
+    // enumerated from the estimator's BRANCHES, not from a sense of what looks
+    // typical: a measurement cannot find a defect in a path it never takes.
+    //
+    // What is still unreached is worth naming. The unique-key join path, because
+    // this fixture declares no primary keys and asserting uniqueness from five
+    // rows that happen not to repeat would hand the estimator a promise the data
+    // cannot keep. And a few defensive `default:` arms no admissible query
+    // reaches. Neither is closed by adding a query.
+    {"eq_text",         "SELECT id FROM users WHERE city = 'NYC'"},
+    {"eq_numeric",      "SELECT id FROM users WHERE id = 3"},
+    {"ne_text",         "SELECT id FROM users WHERE city <> 'NYC'"},
+    {"range_numeric",   "SELECT id FROM users WHERE age > 20"},
+    {"range_closed",    "SELECT id FROM users WHERE age BETWEEN 20 AND 40"},
+    {"in_list",         "SELECT id FROM users WHERE city IN ('NYC', 'LA')"},
+    {"not_in_list",     "SELECT id FROM users WHERE id NOT IN (1, 2)"},
+    {"is_null",         "SELECT id FROM users WHERE city IS NULL"},
+    {"is_not_null",     "SELECT id FROM users WHERE age IS NOT NULL"},
+    {"not_of_range",    "SELECT id FROM users WHERE NOT (age > 30)"},
+    {"conjunction",     "SELECT id FROM users WHERE city = 'NYC' AND age > 20"},
+    {"disjunction",     "SELECT id FROM users WHERE city = 'NYC' OR age > 30"},
+    {"col_vs_col",      "SELECT id FROM users WHERE age > manager_id"},
+    {"like_default",    "SELECT id FROM users WHERE name LIKE 'a%'"},
+    // Constant on the LEFT. Not a stylistic variant: it takes the other arm of
+    // the which-side-is-the-column test and runs the comparison through
+    // mirror(), code the nine-query set never reached.
+    {"mirrored",        "SELECT id FROM users WHERE 20 < age"},
+    // A floating-point literal, which is a different arm of literal_number from
+    // every integer above.
+    {"double_literal",  "SELECT id FROM products WHERE price > 9.5"},
 };
 
 // Base cardinalities taken from the fixture itself rather than typed in. A
