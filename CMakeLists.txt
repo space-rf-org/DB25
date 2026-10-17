@@ -242,7 +242,7 @@ target_compile_definitions(qerror_runner PRIVATE
     DB25_PHYSICAL_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/spec")
 target_compile_options(qerror_runner PRIVATE ${HARNESS_COMPILE_OPTS})
 add_test(NAME qerror COMMAND qerror_runner
-         --baseline=1.268)
+         --baseline=1.233)
 
 # ---------------------------------------------------------------------------
 # stage_timer: a lab tool (not a gate) - times each frontend stage in isolation
