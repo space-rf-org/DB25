@@ -46,20 +46,29 @@ using db25::harness::Table;
 // The queries. Chosen to span the shapes whose estimates come from DIFFERENT
 // parts of the model - a scan, a filter, each join flavour, an aggregate, a
 // semi-join - so that a regression in one rule cannot hide behind the others.
-// WHAT THE FIRST RUN FOUND. Two cases - filter_eq and join_filtered, both
-// equality against a STRING literal - estimate ~0 rows where the answer is 2
-// and 3. The cause is in db25-physical-plan's selectivity_of(): it reads the
-// column statistics, then discards them because the guard
+// WHAT THE FIRST RUN FOUND, and what came of it. Two cases - filter_eq and
+// join_filtered, both equality against a STRING literal - estimated ~0 rows
+// where the answers are 2 and 3, for an 80x and an 86x error. The cause was in
+// db25-physical-plan's selectivity_of(): it read the column statistics and then
+// discarded them, because one guard
 //
 //     if (!literal_number(*other, v)) return equality ? defaults.equality : ...
 //
-// rejects any non-numeric constant before the equality branch is reached. That
-// guard exists for a comparison between two COLUMNS, where constant
-// selectivity does not apply - but it also catches `city = 'NYC'`, where
-// 1/ndv is exactly the right answer and ndv is known. So a text equality is
-// priced at the 0.005 Selinger default no matter how good the statistics are.
-// Filed separately; the baseline below records the planner as it stands, not
-// as it will be once that is fixed.
+// covered two different requirements. The RANGE arithmetic needs a number, to
+// interpolate against a numeric min/max; ndv-based EQUALITY does not. So every
+// text equality was priced at the 0.005 Selinger default however good the
+// statistics were.
+//
+// Fixed in db25-physical-plan#54, which narrowed the guard to the case it was
+// written for - a comparison between two COLUMNS - and left literal_number
+// gating only the range branch. The geometric mean went 3.233x -> 1.267x, and
+// filter_eq is now exact.
+//
+// The point for anyone reading this later: NOTHING ELSE SAW IT. Eighteen tests
+// in the physical planner, a hundred and three here, five falsifiability gates,
+// all green before and after - because estimates do not change answers. This
+// file is the only thing in the project that looks at the number the planner
+// exists to produce.
 struct Case { const char* name; const char* sql; };
 const Case kCases[] = {
     {"scan",            "SELECT id FROM users"},
@@ -255,7 +264,15 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (geo < baseline - 1e-9) {
-        std::printf("  IMPROVED: lower the baseline to %.3f to lock it in.\n", geo);
+        // Round UP to the precision this tool prints. The obvious version
+        // suggested "%.3f of the measured value" - and recording that number
+        // then FAILED the next run, because 1.2674 displays as 1.267 while
+        // being greater than it. A tool whose advice does not pass its own
+        // check is worse than one that gives none, so the suggestion is a true
+        // upper bound on what was measured rather than a prettier rendering of
+        // it.
+        const double suggest = std::ceil(geo * 1000.0) / 1000.0;
+        std::printf("  IMPROVED: lower the baseline to %.3f to lock it in.\n", suggest);
     }
     std::printf("  OK: no worse than baseline.\n");
     return 0;
