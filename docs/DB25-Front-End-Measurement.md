@@ -360,7 +360,7 @@ them:
 | | this section | the CI measurement |
 |---|---|---|
 | fixture | 6 tables, 192,000 rows | the test harness fixture, 5–7 rows a table |
-| queries | the ten above | nine, spanning scan / filter / three join kinds / aggregate / semi-join |
+| queries | the ten above | twenty-three: seven for plan shape, sixteen enumerated from the estimator's own branches |
 | compared against | PostgreSQL 18 and DuckDB 1.5.5 | nothing — DB25's own estimate against its own evaluator's actual rows |
 | run | once, by hand | every push, against a recorded baseline |
 
@@ -370,11 +370,18 @@ reference evaluator in the test harness produces the rows the query really
 returns. The gap between those two is computable with no external system at all,
 and it is the number this paper says matters.
 
-Its geometric mean q-error is **1.267×** over its nine queries, and the job fails
-if that gets worse. The figure is not comparable with the 1.16× above — different
-fixture, different queries, no cross-engine column — and the paper reports both
-rather than blending them, because a single number covering two different
-experiments is how a measurement starts lying.
+Its geometric mean q-error is **1.233×** over its twenty-three queries, and the
+job fails if that gets worse. The figure is not comparable with the 1.16× above —
+different fixture, different queries, no cross-engine column — and the paper
+reports both rather than blending them, because a single number covering two
+different experiments is how a measurement starts lying.
+
+The same caution applies *within* this column. It read 1.267× over nine queries
+before the set was extended and 1.233× over twenty-three after, and that is not
+the estimator improving: it is a different measurement. Fourteen queries were
+added, most of them estimated exactly, and the mean moved accordingly. A ratchet
+figure is only comparable against itself at a fixed query set, which is why
+extending the set resets the baseline rather than claiming a gain.
 
 **It found a real defect within an hour of existing**, and the next section
 records what it was.
@@ -614,8 +621,10 @@ whole set. The defect was found by the CI measurement described in section 4,
 whose nine queries do contain two. That is the argument for having both: a
 benchmark chosen to make join estimation legible had a blind spot exactly where
 this bug lived, and a second measurement with a different query set is what saw
-it. Its own geometric mean went 3.233× → 1.267× on the fix, with the two
-affected queries going 80.00× → 1.00× and 85.71× → 1.50×.
+it. On the nine-query set it then had, its geometric mean went 3.233× → 1.267×
+on the fix, with the two affected queries going 80.00× → 1.00× and
+85.71× → 1.50×. (Those figures are that set's; the set has since been extended
+to twenty-three queries and its baseline reset — see section 4.)
 
 ### What the statistics deliberately do not include
 
@@ -677,13 +686,37 @@ rather than buried.
 - **A carried-forward number is stale until recomputed.** The rule this paper
   learned by breaking it — stated after this list, because it is a rule and not a
   caveat.
-- **The query set has a blind spot, and it cost something.** Not one of the ten
+- **The query set had a blind spot, and it cost something.** Not one of the ten
   queries compares a column to a string constant, so none of them exercises the
   equality-against-text path — which is where an 80× estimation error lived
   undetected until a different measurement with a different query set found it
   (section 7). A fixture built to make *join* estimation legible is not a
   fixture that exercises *predicate* estimation, and a benchmark cannot find a
   defect in a path it never takes.
+
+  **How big the hole was, measured rather than guessed.** Line coverage of the
+  estimator, `db25-physical-plan/src/selectivity.cpp`, driven by the query set
+  alone: the original nine-query CI set reached **50.00%** of its 158 lines.
+  Half the estimator was never executed by the measurement whose job was to
+  measure it, and the 80× defect lived in the unexecuted half.
+
+  The CI set is now built from the estimator's **branches** rather than from a
+  sense of what looks typical — one case per arm of `selectivity_of()`:
+  equality against text, against a number, against NULL; `<>`; an interpolated
+  range and a closed one; `IN` and `NOT IN`; `IS NULL` and `IS NOT NULL`; `NOT`
+  of a range; a conjunction; a disjunction; a column against another column; a
+  `LIKE` that must fall through to the "no idea" constant; the mirrored
+  spelling with the constant on the left, which takes the other arm of the
+  which-side-is-the-column test; and a floating-point literal. Twenty-three
+  queries, **84.81%** of the same 158 lines.
+
+  What remains unreached is named rather than left blank: the unique-key join
+  path, because this fixture's catalog declares no primary keys and asserting
+  uniqueness from five rows with no duplicates would hand the estimator a
+  promise the data cannot keep; and two or three defensive `default:` arms that
+  no admissible query reaches. The ten-query benchmark in this paper is
+  unchanged and still has the gap — it is a once-measured artifact — which is
+  the argument for the CI set existing beside it rather than instead of it.
 - **The cross-engine columns were NOT re-measured for this revision.**
   PostgreSQL 18 and DuckDB are no longer installed on the host this paper was
   measured on, and nothing here restates a number it cannot reproduce. The DB25
