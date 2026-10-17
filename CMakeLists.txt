@@ -224,6 +224,27 @@ target_compile_definitions(physical_integration PRIVATE
 add_test(NAME physical_integration COMMAND physical_integration)
 
 # ---------------------------------------------------------------------------
+# qerror_runner: the planner's cardinality estimates against the rows the query
+# actually produces. Reuses the harness TU as a library (DB25_HARNESS_NO_MAIN)
+# because the reference evaluator and the fixture data are the only source of
+# "actual" in this project - and links the physical planner, which is the only
+# source of "estimated".
+#
+# Every other test here asserts on RESULTS, which estimates do not affect: a
+# cost-model change could halve the quality of every estimate and the suite
+# would stay green. This is the one check that would notice.
+# ---------------------------------------------------------------------------
+add_executable(qerror_runner integration/qerror_runner.cpp ${HARNESS_SOURCES})
+target_include_directories(qerror_runner PRIVATE ${HARNESS_INCLUDE_DIRS})
+target_link_libraries(qerror_runner PRIVATE db25physicalplan)
+target_compile_definitions(qerror_runner PRIVATE
+    DB25_HARNESS_NO_MAIN
+    DB25_PHYSICAL_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external/db25-physical-plan/spec")
+target_compile_options(qerror_runner PRIVATE ${HARNESS_COMPILE_OPTS})
+add_test(NAME qerror COMMAND qerror_runner
+         --baseline=3.233)
+
+# ---------------------------------------------------------------------------
 # stage_timer: a lab tool (not a gate) - times each frontend stage in isolation
 # and dumps each stage artifact, including the physical stage (T6). The headline
 # query is bench/reference_query.sql, read at runtime so the measured query and
